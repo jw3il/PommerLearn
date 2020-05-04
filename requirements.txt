@@ -1,0 +1,2 @@
+-e ./deps/playground
+numpy

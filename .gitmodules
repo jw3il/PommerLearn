@@ -1,0 +1,3 @@
+[submodule "playground"]
+	path = deps/playground
+	url = https://github.com/MultiAgentLearning/playground
