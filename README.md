@@ -16,7 +16,7 @@ Before installing this project, you'll need
 This repository depends on submodules. Clone it recursively with
 
 ```
-git clone --recurse-submodules git@gitlab.com:tomatenbrei/PommerLearn.git
+git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 ```
 
 ### Installation
@@ -25,5 +25,4 @@ Install all dependencies and the project itself (in editable mode) with
 
 ```
 pip install -r requirements.txt
-pip install -e .
 ```
