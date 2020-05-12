@@ -1,21 +1,58 @@
 import pommerman
-from pommerman import agents
 import numpy as np
 
+import util
 
-def ffa_eval(agent: agents.base_agent, enemy_class=agents.SimpleAgent, episodes=100, visualize=False):
+
+def ffa_eval_pooled(agent_classes, episodes, verbose):
+    """
+    Evaluates the given agents in the Free For All (FFA) pommerman environment using parallel workers.
+
+    :param agent_classes: The classes of the individual agents (has to contain four elements)
+    :param episodes: The number of episodes
+    :param verbose: Whether to print verbose status information
+    :return: The results of the evaluation of shape (episodes, 5) where the first column [:, 0] contains the result
+             of the match (tie, win, incomplete) and the remaining columns contain the individual (final) rewards.
+    """
+    def status(tmp_res):
+        if verbose:
+            print("Completed {}/{} episodes.".format(len(tmp_res), episodes))
+
+    # gather the results of ..
+    results = np.concatenate(
+        # .. "episode" jobs for the free for all evaluation
+        util.pooled_multi_run(ffa_eval, [agent_classes, 1, False, False], episodes, status_fun=status)
+    )
+
+    if verbose:
+        ffa_print_stats(results, episodes)
+
+    return results
+
+
+def ffa_eval(agent_classes, episodes, verbose, visualize):
+    """
+    Evaluates the given agents in the Free For All (FFA) pommerman environment.
+
+    :param agent_classes: The classes of the individual agents (has to contain four elements)
+    :param episodes: The number of episodes
+    :param verbose: Whether to print verbose status information
+    :param visualize: Whether to visualize the execution
+    :return: The results of the evaluation of shape (episodes, 5) where the first column [:, 0] contains the result
+             of the match (tie, win, incomplete) and the remaining columns contain the individual (final) rewards.
+    """
     # Create a set of agents (exactly four)
     agent_list = [
-        agent,
-        enemy_class(),
-        enemy_class(),
-        enemy_class(),
+        agent_classes[0](),
+        agent_classes[1](),
+        agent_classes[2](),
+        agent_classes[3](),
     ]
     # Make the "Free-For-All" environment using the agent list
     env = pommerman.make('PommeFFACompetition-v0', agent_list)
 
-    results = np.empty(episodes)
-    rewards = np.empty((episodes, len(agent_list)))
+    # first element: result, additional elements: rewards
+    results = np.empty((episodes, 1 + len(agent_list)))
 
     # Run the episodes just like OpenAI Gym
     for i_episode in range(episodes):
@@ -31,20 +68,24 @@ def ffa_eval(agent: agents.base_agent, enemy_class=agents.SimpleAgent, episodes=
 
         result = info['result']
         # save the result
-        results[i_episode] = result.value
-        rewards[i_episode, :] = reward
+        results[i_episode, 0] = result.value
+        results[i_episode, 1:] = reward
 
-        print('\r> Episode {} finished with {} ({}) | Stats: {}'.format(
-            i_episode, result, reward, ffa_get_stats_inline(results, rewards, i_episode + 1)
-        ))
+        if verbose:
+            print('\r> Episode {} finished with {} ({}) | Stats: {}'.format(
+                i_episode, result, reward, ffa_get_stats_inline(results, i_episode + 1)
+            ))
 
     env.close()
 
-    ffa_print_stats(results, rewards, episodes)
+    if verbose:
+        ffa_print_stats(results, episodes)
+
+    return results
 
 
-def ffa_print_stats(results, final_rewards, episodes):
-    num_won, num_ties = ffa_get_stats(results, final_rewards, episodes)
+def ffa_print_stats(results, episodes):
+    num_won, num_ties = ffa_get_stats(results, episodes)
 
     print("Evaluated {} episodes".format(episodes))
 
@@ -53,21 +94,21 @@ def ffa_print_stats(results, final_rewards, episodes):
     for a in range(len(num_won)):
         print("> Agent {}: {} ({:.2f}%)".format(a, num_won[a], num_won[a] / total_won * 100))
 
-    num_ties = np.sum(results == pommerman.constants.Result.Tie.value)
+    num_ties = np.sum(results[:, 0] == pommerman.constants.Result.Tie.value)
     print("Ties: {} ({:.2f}%)".format(num_ties, num_ties / episodes * 100))
 
 
-def ffa_get_stats_inline(results, final_rewards, episodes):
-    num_won, num_ties = ffa_get_stats(results, final_rewards, episodes)
+def ffa_get_stats_inline(results, episodes):
+    num_won, num_ties = ffa_get_stats(results, episodes)
 
     return "{} ({})".format(num_won, num_ties)
 
 
-def ffa_get_stats(results, final_rewards, episodes):
+def ffa_get_stats(results, episodes):
     # Count how often each agent achieved a final reward of "1"
-    num_won = np.sum(final_rewards[0:episodes, :] == 1, axis=0)
+    num_won = np.sum(results[0:episodes, 1:] == 1, axis=0)
     # In a tie, every player receives -1 reward
-    num_ties = np.sum(results[0:episodes] == pommerman.constants.Result.Tie.value)
+    num_ties = np.sum(results[0:episodes, 0] == pommerman.constants.Result.Tie.value)
 
     assert np.sum(num_won) + num_ties == episodes
 

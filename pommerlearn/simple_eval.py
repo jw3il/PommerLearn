@@ -3,9 +3,16 @@ import util_eval
 
 
 def main():
-    # util_eval.ffa_eval(agents.SimpleAgent(), episodes=1, visualize=True)
-    util_eval.ffa_eval(agents.SimpleAgent(), episodes=100)
-    util_eval.ffa_eval(agents.RandomAgent(), episodes=100)
+    agent_classes = [
+        agents.SimpleAgent,
+        agents.SimpleAgent,
+        agents.SimpleAgent,
+        agents.SimpleAgent
+    ]
+    util_eval.ffa_eval_pooled(agent_classes, episodes=100, verbose=True)
+
+    agent_classes[0] = agents.RandomAgent
+    util_eval.ffa_eval_pooled(agent_classes, episodes=100, verbose=True)
 
 
 if __name__ == '__main__':
