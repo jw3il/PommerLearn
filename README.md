@@ -4,10 +4,15 @@ Idea: Combine Multi-Agent Reinforcement Learning and Monte-Carlo Tree Search (MC
 
 ## Prerequisites
 
-Before installing this project, you'll need
-
-* `python 3.7` (it is recommend to use virtual environments, e.g. with conda)
+For the python side:
+* `python 3.7` (it is recommend to use virtual environments, e.g. with [Anaconda](https://www.anaconda.com/))
 * `pip`
+
+For the C++ side:
+ * `gcc`
+ * `make`
+ 
+(Tested on Ubuntu 20.04 LTS)
 
 ## Setup
 
@@ -19,9 +24,15 @@ This repository depends on submodules. Clone it recursively with
 git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 ```
 
-### Installation
+### Build and Installation
 
-Install all dependencies and the project itself (in editable mode) with
+First, you have to build the C++ components and corresponding dependencies with
+
+```
+bash build.sh
+```
+
+The python dependencies can be installed with
 
 ```
 pip install -r requirements.txt
