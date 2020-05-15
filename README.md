@@ -29,7 +29,7 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 First, you have to build the C++ components and corresponding dependencies with
 
 ```
-bash build.sh
+make
 ```
 
 The python dependencies can be installed with
