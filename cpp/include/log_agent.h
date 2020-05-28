@@ -38,7 +38,7 @@ public:
     bboard::Move act(const bboard::State* state) override;
 
     /**
-     * @brief reset Reset the agent with a new controlling agent.
+     * @brief reset Reset the agent with a new controlling agent. Has to be called after Environment::MakeGame so that the id can be set correctly.
      * @param agent The agent which decides which actions this LogAgent will use.
      */
     void reset(bboard::Agent* agent);

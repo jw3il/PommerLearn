@@ -10,18 +10,15 @@ Runner::Runner()
     // TODO maybe create persistent environment and reset it?
 }
 
-EpisodeInfo Runner::run(std::array<bboard::Agent*, 4> agents, int maxSteps)
+EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps)
 {
-    bboard::Environment env;
-    env.MakeGame(agents, true);
-
     int step = 0;
     while (!env.IsDone() && step < maxSteps) {
         env.Step(false);
         step++;
     }
 
-    return (EpisodeInfo){env.GetWinner(), step};
+    return (EpisodeInfo){env.GetWinner(), env.IsDraw(), env.IsDone(), step};
 }
 
 void _polulate_with_simple_agents(LogAgent* logAgents, int count) {
@@ -42,12 +39,16 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxSteps
     std::array<bboard::Agent*, 4> agents = {&logAgents[0], &logAgents[1], &logAgents[2], &logAgents[3]};
 
     for (int e = 0; e < episodes; e++) {
-        // pupulate the log agents with simple agents
+        bboard::Environment env;
+        env.MakeGame(agents, true);
+
+        // populate the log agents with simple agents
         _polulate_with_simple_agents(logAgents, 4);
 
-        EpisodeInfo result = run(agents, maxSteps);
+        EpisodeInfo result = run(env, maxSteps);
 
-        std::cout << "Episode: " << e << ": " << result.steps << ", " << result.winner << std::endl;
+        std::cout << "Episode " << e << ": steps " << result.steps << ", winner " << result.winner << ", is draw "
+                  << result.isDraw << ", is done " << result.isDone << std::endl;
 
         // write the episode logs
         for (int i = 0; i < 4; i++) {

@@ -9,6 +9,8 @@
  */
 struct EpisodeInfo {
     int winner;
+    bool isDraw;
+    bool isDone;
     int steps;
 };
 
@@ -20,12 +22,12 @@ class Runner
 public:
     Runner();
     /**
-     * @brief run Simulate a single episode with the given agents and maximum steps.
-     * @param agents The agents used in the episode.
+     * @brief run Simulate a single episode with the given environment and maximum steps.
+     * @param env The environment to use. Must be initialized.
      * @param maxSteps The maximum number of steps of the episode.
      * @return The result of the episode.
      */
-    EpisodeInfo run(std::array<bboard::Agent*, 4> agents, int maxSteps);
+    EpisodeInfo run(bboard::Environment& env, int maxSteps);
 
     /**
      * @brief generateSupervisedTrainingData Generate a traning dataset for supervised training.
