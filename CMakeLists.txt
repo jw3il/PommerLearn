@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 2.8)
 
-set (CMAKE_CXX_STANDARD 14)
+set (CMAKE_CXX_STANDARD 17)
 project(PommerLearn CXX)
+
+if(DEFINED ENV{CONDA_INCLUDE_PATH})
+    MESSAGE(STATUS "CONDA_INCLUDE_PATH set to: $ENV{CONDA_INCLUDE_PATH}")
+else()
+    MESSAGE(SEND_ERROR "CONDA_INCLUDE_PATH not set")
+endif()
 
 # For now, just directly include the pomcpp code
 file(GLOB source_files
@@ -13,6 +19,7 @@ file(GLOB source_files
 
 include_directories("cpp/include/")
 include_directories("deps/pomcpp/include")
+include_directories($ENV{CONDA_INCLUDE_PATH})
 
 find_package (Threads)
 

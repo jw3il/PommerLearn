@@ -3,9 +3,8 @@
 #include "runner.h"
 #include "ipc_manager.h"
 
-
 int main() {
-    FileBasedIPCManager ipcManager;
+    FileBasedIPCManager ipcManager("data.zr");
     Runner runner;
 
     runner.generateSupervisedTrainingData(&ipcManager, 500, 100);

@@ -26,9 +26,16 @@ public:
  */
 class FileBasedIPCManager : public IPCManager {
 public:
-    FileBasedIPCManager();
+    /**
+     * @brief FileBasedIPCManager Create an IPCManager which stores the logs in files.
+     * @param fileName The basepath/archive name for the logs.
+     */
+    FileBasedIPCManager(std::string fileName);
     void writeEpisode(LogAgent* logAgent);
     void flush();
+private:
+    int episode;
+    std::string fileName;
 };
 
 #endif // IPCMANAGER_H

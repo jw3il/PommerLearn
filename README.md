@@ -5,13 +5,43 @@ Idea: Combine Multi-Agent Reinforcement Learning and Monte-Carlo Tree Search (MC
 ## Prerequisites
 
 For the python side:
-* `python 3.7` (it is recommend to use virtual environments, e.g. with [Anaconda](https://www.anaconda.com/))
+
+* `python 3.7` 
+
+    It is recommend to use virtual environments. This guide will use [Anaconda](https://www.anaconda.com/). Create an environment named `pommer` with
+
+    ```
+    conda create -n pommer python=3.7
+    ```
+
 * `pip`
 
 For the C++ side:
- * `gcc`
- * `make`
- 
+
+* `gcc`
+
+* `make`
+
+* [z5](https://github.com/constantinpape/z5)
+
+    Install in the pommer env:
+
+    ```
+    conda install -c conda-forge z5py
+    ```
+
+* [xtensor](https://github.com/xtensor-stack/xtensor)
+
+    ```
+    conda install -c conda-forge xtensor
+    ```
+
+* [boost](boost.org)
+
+    ```
+    conda install -c conda-forge boost
+    ```
+
 (Tested on Ubuntu 20.04 LTS)
 
 ## Setup
@@ -26,14 +56,12 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 
 ### Build and Installation
 
-First, you have to build the C++ components and corresponding dependencies with
+* Build the C++ environment with the provided `CMakeLists.txt`.
 
-```
-make
-```
+    The current version requires you to set the env variable CONDA_INCLUDE_PATH to your conda include path (e.g. `~/conda/envs/pommer/include`)
 
-The python dependencies can be installed with
+* The python dependencies can be installed with
 
-```
-pip install -r requirements.txt
-```
+    ```
+    pip install -r requirements.txt
+    ```

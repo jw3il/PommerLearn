@@ -5,7 +5,9 @@
 #include "agents.hpp"
 
 const int PLANE_COUNT = 11;
-const int PLANE_SIZE = 11 * 11;
+const int PLANE_WIDTH = 11;
+const int PLANE_HEIGHT = 11;
+const int PLANE_SIZE = PLANE_WIDTH * PLANE_HEIGHT;
 
 const int STATE_FLOAT_COUNT = PLANE_COUNT * PLANE_SIZE;
 
