@@ -1,2 +1,5 @@
 -e ./deps/playground
 numpy
+matplotlib
+imageio
+torch
