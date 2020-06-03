@@ -22,25 +22,14 @@ For the C++ side:
 
 * `make`
 
-* [z5](https://github.com/constantinpape/z5)
+* [z5](https://github.com/constantinpape/z5), [xtensor](https://github.com/xtensor-stack/xtensor), [boost](boost.org), [json by nlohmann](https://github.com/nlohmann/json/)
 
-    Install in the pommer env:
-
-    ```
-    conda install -c conda-forge z5py
-    ```
-
-* [xtensor](https://github.com/xtensor-stack/xtensor)
+    You can directly install these libraries with conda in the pommer env:
 
     ```
-    conda install -c conda-forge xtensor
+    conda install -c conda-forge z5py xtensor boost nlohmann_json
     ```
 
-* [boost](boost.org)
-
-    ```
-    conda install -c conda-forge boost
-    ```
 
 (Tested on Ubuntu 20.04 LTS)
 
