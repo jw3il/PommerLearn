@@ -7,7 +7,8 @@ int main() {
     FileBasedIPCManager ipcManager("data.zr");
     Runner runner;
 
-    runner.generateSupervisedTrainingData(&ipcManager, 500, 100);
+    runner.generateSupervisedTrainingData(&ipcManager, 500, 10);
+    ipcManager.flush();
 
     return 0;
 }
