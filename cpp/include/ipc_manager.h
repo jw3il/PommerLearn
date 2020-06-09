@@ -3,6 +3,10 @@
 
 #include "log_agent.h"
 
+// adds compression to z5
+#define WITH_BLOSC
+#include "z5/types/types.hxx"
+
 /**
  * @brief The abstract IPCManager class provides an interface to save/transmit (called "write" from now on) training data.
  */
@@ -36,6 +40,8 @@ public:
 private:
     int episode;
     std::string fileName;
+    std::string compressor;
+    z5::types::CompressionOptions compressionOptions;
 };
 
 #endif // IPCMANAGER_H

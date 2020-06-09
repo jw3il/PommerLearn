@@ -24,6 +24,13 @@ FileBasedIPCManager::FileBasedIPCManager(std::string fileName) {
     // for debugging: only create one dataset
     if(f.exists())
         f.remove();
+
+    // use compression (fixed value for now)
+    this->compressor = "blosc";
+    // default compression options
+    this->compressionOptions["codec"] = (std::string)"lz4";
+    this->compressionOptions["level"] = (int)5;
+    this->compressionOptions["shuffle"] = (int)1;
 }
 
 void FileBasedIPCManager::writeEpisode(LogAgent* logAgent) {
@@ -43,10 +50,9 @@ void FileBasedIPCManager::writeEpisode(LogAgent* logAgent) {
     std::vector<size_t> obs_shape = { episodeSteps, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
     std::vector<size_t> obs_chunks = { 100, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
 
-    // TODO: Add compression
     // TODO: Use 16 bit floats?
     std::string ds_obs_name = prefix + std::to_string(this->episode) + "_obs";
-    auto ds_obs = z5::createDataset(f, ds_obs_name, "float32", obs_shape, obs_chunks);
+    auto ds_obs = z5::createDataset(f, ds_obs_name, "float32", obs_shape, obs_chunks, this->compressor, this->compressionOptions);
 
     z5::types::ShapeType obs_offset = { 0, 0, 0, 0, 0 };
     xt::xarray<float> obs_array(obs_shape, 42);
@@ -63,9 +69,8 @@ void FileBasedIPCManager::writeEpisode(LogAgent* logAgent) {
     std::vector<size_t> act_shape = { episodeSteps };
     std::vector<size_t> act_chunks = { 100 };
 
-    // TODO: Add compression
     std::string ds_act_name = prefix + std::to_string(this->episode) + "_act";
-    auto ds_act = z5::createDataset(f, ds_act_name, "int8", act_shape, act_chunks);
+    auto ds_act = z5::createDataset(f, ds_act_name, "int8", act_shape, act_chunks, this->compressor, this->compressionOptions);
 
     z5::types::ShapeType act_offset = { 0 };
     xt::xarray<int8_t> act_array(act_shape);

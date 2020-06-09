@@ -27,7 +27,7 @@ For the C++ side:
     You can directly install these libraries with conda in the pommer env:
 
     ```
-    conda install -c conda-forge z5py xtensor boost nlohmann_json
+    conda install -c conda-forge z5py xtensor boost nlohmann_json blosc
     ```
 
 
@@ -47,7 +47,7 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 
 * Build the C++ environment with the provided `CMakeLists.txt`.
 
-    The current version requires you to set the env variable CONDA_INCLUDE_PATH to your conda include path (e.g. `~/conda/envs/pommer/include`)
+    The current version requires you to set the env variable CONDA_ENV_PATH to the path of your conda environment (e.g. `~/conda/envs/pommer`)
 
 * The python dependencies can be installed with
 

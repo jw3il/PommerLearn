@@ -1,4 +1,4 @@
-import z5py
+import zarr
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -68,9 +68,8 @@ def save_episode_obs_gif(obs_array, filename, verbose=True, fps=10):
 
 def main():
     # Note: You have to create that dataset first
-    f = z5py.File('data.zr', use_zarr_format=True)
+    f = zarr.open('data.zr', 'r')
     print("Container content: {} episodes".format(len(f) / 2))
-
     print("Printing first episode info")
     ep_0_obs = f['data_ep0_obs']
     ep_0_act = f['data_ep0_act']
@@ -80,7 +79,6 @@ def main():
 
     print("Actions")
     print(ep_0_act[:])
-
     print("Observations of first step:")
     print("Shape", ep_0_obs[0].shape)
     # plot_obs(ep_0_obs[0])
