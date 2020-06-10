@@ -3,16 +3,7 @@
 
 #include "bboard.hpp"
 #include "ipc_manager.h"
-
-/**
- * @brief Contains metadata about a single episode.
- */
-struct EpisodeInfo {
-    int winner;
-    bool isDraw;
-    bool isDone;
-    int steps;
-};
+#include "episode_info.h"
 
 /**
  * @brief The Runner class povides utilities for running simulations in the pommerman environment.
@@ -32,10 +23,11 @@ public:
     /**
      * @brief generateSupervisedTrainingData Generate a traning dataset for supervised training.
      * @param ipcManager The IPCManager which is used to save/transmit the episode logs.
-     * @param maxSteps The maximum number of steps per episode.
-     * @param episodes The number of episodes.
+     * @param maxEpisodeSteps The maximum number of steps per episode.
+     * @param maxEpisodes The maximum number of episodes. Ignored if -1.
+     * @param maxTotalSteps The (minimum) total number of simulated steps. Starts new episodes when this limit is not reached. Ignored if -1.
      */
-    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxSteps, int episodes);
+    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, int maxEpisodes, int maxTotalSteps);
 
 private:
 

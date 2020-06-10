@@ -66,25 +66,61 @@ def save_episode_obs_gif(obs_array, filename, verbose=True, fps=10):
         print("\rDone")
 
 
+def get_agent_episode_slice(attrs, agent_episode):
+    # sum up all steps up to our episode
+    start_index = int(np.sum(attrs['AgentSteps'][0:agent_episode]))
+    # add the amount of steps of the episode
+    end_index = start_index + attrs['AgentSteps'][agent_episode]
+    return slice(start_index, end_index)
+
+
+def last_episode_is_cut(f):
+    return np.sum(f.attrs.get('AgentSteps')) != f.attrs.get('Steps')
+
+
 def main():
     # Note: You have to create that dataset first
-    f = zarr.open('data.zr', 'r')
-    print("Container content: {} episodes".format(len(f) / 2))
-    print("Printing first episode info")
-    ep_0_obs = f['data_ep0_obs']
-    ep_0_act = f['data_ep0_act']
+    f = zarr.open('data_0.zr', 'r')
 
-    steps = len(ep_0_act)
-    print("Steps: {} (consistent: {})".format(steps, len(ep_0_act) == len(ep_0_obs)))
+    print("Info:")
+    print(f.info)
+
+    attrs = f.attrs.asdict()
+    print("Attributes: {}".format(attrs.keys()))
+
+    dataset_size = len(f['act'])
+    actual_steps = attrs['Steps']
+    print("Dataset size: {}, actual steps: {}".format(dataset_size, actual_steps))
+
+    print("Environment runs: {}, total agent episodes: {}, last episode is cut {}"
+          .format(len(attrs['EpisodeSteps']), len(attrs['AgentSteps']), last_episode_is_cut(f)))
+
+    agent_episode = 0
+    episode_slice = get_agent_episode_slice(attrs, agent_episode)
+
+    obs = f['obs'][episode_slice]
+    act = f['act'][episode_slice]
+    val = f['val'][episode_slice]
+
+    # Warning: The last episode may have been cut
+    obs_len = len(obs)
+    agent_len = attrs['AgentSteps'][agent_episode]
+    if obs_len == agent_len:
+        print("Steps: {} = {}".format(obs_len, agent_len))
+    else:
+        print("Steps: {} != {} -- is last episode {}"
+              .format(obs_len, agent_len, agent_episode == -1 or agent_episode == len(attrs['AgentSteps']) - 1))
 
     print("Actions")
-    print(ep_0_act[:])
+    print(act)
+    print("Values:")
+    print(val)
     print("Observations of first step:")
-    print("Shape", ep_0_obs[0].shape)
+    print("Shape", obs[0].shape)
     # plot_obs(ep_0_obs[0])
 
-    print("Creating gif of episode 0")
-    save_episode_obs_gif(ep_0_obs, "./episode_0.gif")
+    print("Creating gif of observations")
+    save_episode_obs_gif(obs, "./episode_obs.gif")
 
 
 if __name__ == '__main__':

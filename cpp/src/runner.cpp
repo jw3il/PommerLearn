@@ -28,35 +28,38 @@ void _polulate_with_simple_agents(LogAgent* logAgents, int count) {
     }
 }
 
-void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxSteps, int episodes) {
+void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, int maxEpisodes, int maxTotalSteps) {
     // create log agents to log the episodes
     LogAgent logAgents[4] = {
-        LogAgent(maxSteps),
-        LogAgent(maxSteps),
-        LogAgent(maxSteps),
-        LogAgent(maxSteps)
+        LogAgent(maxEpisodeSteps),
+        LogAgent(maxEpisodeSteps),
+        LogAgent(maxEpisodeSteps),
+        LogAgent(maxEpisodeSteps)
     };
     std::array<bboard::Agent*, 4> agents = {&logAgents[0], &logAgents[1], &logAgents[2], &logAgents[3]};
 
-    for (int e = 0; e < episodes; e++) {
+    long totalEpisodeSteps = 0;
+    for (int e = 0; (maxEpisodes == -1 || e < maxEpisodes) && (totalEpisodeSteps == -1 || totalEpisodeSteps < maxTotalSteps); e++) {
         bboard::Environment env;
         env.MakeGame(agents, true);
 
         // populate the log agents with simple agents
         _polulate_with_simple_agents(logAgents, 4);
 
-        EpisodeInfo result = run(env, maxSteps);
+        EpisodeInfo result = run(env, maxEpisodeSteps);
 
-        std::cout << "Episode " << e << ": steps " << result.steps << ", winner " << result.winner << ", is draw "
-                  << result.isDraw << ", is done " << result.isDone << std::endl;
+        ipcManager->writeEpisodeInfo(result);
 
         // write the episode logs
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 4 && (totalEpisodeSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
             LogAgent a = logAgents[i];
-            a.won = (result.winner == a.id);
 
-            ipcManager->writeEpisode(&a);
+            ipcManager->writeAgentExperience(&a, result);
+            totalEpisodeSteps += a.step;
         }
+
+        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << e << ": steps " << result.steps << ", winner " << result.winner << ", is draw "
+                  << result.isDraw << ", is done " << result.isDone << std::endl;
     }
 }
 

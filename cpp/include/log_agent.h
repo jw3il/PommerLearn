@@ -28,12 +28,7 @@ public:
     /**
      * @brief step The number of steps of the current/last episode.
      */
-    int step;
-
-    /**
-     * @brief won Whether this agent has won its last episode.
-     */
-    bool won;
+    uint step;
 
     bboard::Move act(const bboard::State* state) override;
 

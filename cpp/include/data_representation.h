@@ -67,8 +67,9 @@ Scalar Feature Planes:
  * @brief StateToPlanes Converts the given state variable to input planes from the perspective of the given player id. Directly saves these planes in the given xarray.
  * @param state The state of the board (including the current step in the episode used for the plane index).
  * @param id The id of the player.
- * @param allInputPlanes The input planes of shape (TotalEpisodeSteps, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE).
+ * @param allInputPlanes The input planes of shape (DATASET_SIZE, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE).
+ * @param inputIndex The input index at which the current state should be saved (0 <= inputIndex < DATASET_SIZE)
  */
-void StateToPlanes(bboard::State state, int id, xt::xarray<float>& allInputPlanes);
+void StateToPlanes(bboard::State state, int id, xt::xarray<float>& allInputPlanes, uint inputIndex);
 
 #endif // DATA_REPRESENTATION_H
