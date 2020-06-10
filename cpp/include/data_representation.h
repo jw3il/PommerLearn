@@ -4,7 +4,7 @@
 #include "bboard.hpp"
 #include "xtensor/xarray.hpp"
 
-const int PLANE_COUNT = 16;
+const int PLANE_COUNT = 18;
 const int PLANE_SIZE = bboard::BOARD_SIZE;
 const int PLANES_TOTAL_FLOATS = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
 

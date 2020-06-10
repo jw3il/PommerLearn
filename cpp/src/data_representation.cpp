@@ -45,15 +45,47 @@ void StateToPlanes(bboard::State state, int id, xt::xarray<float>& allInputPlane
     // bomb planes (lifetime & strength)
     int bombTimePlane = planeIndex++;
     int bombStrengthPlane = planeIndex++;
+    int bombMovementHorizontalPlane = planeIndex++;
+    int bombMovementVerticalPlane = planeIndex++;
     xt::view(allInputPlanes, inputIndex, bombTimePlane, xt::all(), xt::all()) = 0;
     xt::view(allInputPlanes, inputIndex, bombStrengthPlane, xt::all(), xt::all()) = 0;
+    xt::view(allInputPlanes, inputIndex, bombMovementHorizontalPlane, xt::all(), xt::all()) = 0;
+    xt::view(allInputPlanes, inputIndex, bombMovementVerticalPlane, xt::all(), xt::all()) = 0;
 
     for (int i = 0; i < state.bombs.count; i++) {
         bboard::Bomb bomb = state.bombs[i];
+        int x = bboard::BMB_POS_X(bomb);
+        int y = bboard::BMB_POS_Y(bomb);
 
         // bombs explode at BMB_TIME == 0, we invert that to get values from 0->1 until the bombs explode
-        xt::view(allInputPlanes, inputIndex, bombTimePlane, bboard::BMB_POS_Y(bomb), bboard::BMB_POS_X(bomb)) = 1 - ((float)bboard::BMB_TIME(bomb) / bboard::BOMB_LIFETIME);
-        xt::view(allInputPlanes, inputIndex, bombStrengthPlane, bboard::BMB_POS_Y(bomb), bboard::BMB_POS_X(bomb)) = _getNormalizedBombStrength(bboard::BMB_STRENGTH(bomb));
+        xt::view(allInputPlanes, inputIndex, bombTimePlane, y, x) = 1 - ((float)bboard::BMB_TIME(bomb) / bboard::BOMB_LIFETIME);
+        xt::view(allInputPlanes, inputIndex, bombStrengthPlane, y, x) = _getNormalizedBombStrength(bboard::BMB_STRENGTH(bomb));
+
+        // bomb movement
+        bboard::Move bombMovement = bboard::Move(bboard::BMB_DIR(bomb));
+
+        /*
+        if (bombMovement != bboard::Move::IDLE && bombMovement != bboard::Move::BOMB) {
+            std::cout << "Bomb moves: " << (int)bombMovement << std::endl;
+        }
+        */
+
+        switch (bombMovement) {
+            case bboard::Move::UP:
+                xt::view(allInputPlanes, inputIndex, bombMovementVerticalPlane, y, x) = 1.0f;
+                break;
+            case bboard::Move::DOWN:
+                xt::view(allInputPlanes, inputIndex, bombMovementVerticalPlane, y, x) = -1.0f;
+                break;
+            case bboard::Move::LEFT:
+                xt::view(allInputPlanes, inputIndex, bombMovementHorizontalPlane, y, x) = -1.0f;
+                break;
+            case bboard::Move::RIGHT:
+                xt::view(allInputPlanes, inputIndex, bombMovementHorizontalPlane, y, x) = 1.0f;
+                break;
+
+            default: break;
+        }
     }
 
     // flame plane (lifetime)
