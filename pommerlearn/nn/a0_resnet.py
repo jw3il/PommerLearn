@@ -97,19 +97,12 @@ class ResidualBlock(torch.nn.Module):
         super(ResidualBlock, self).__init__()
         self.act_type = act_type
 
-        self.body = Sequential()
-
-        self.body.add(
-            Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False)
-        )
-        self.body.add(BatchNorm2d(momentum=bn_mom, num_features=channels))
-        self.body.add(get_act(act_type))
-
-        self.body.add(
-            Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False)
-        )
-        self.body.add(BatchNorm2d(momentum=bn_mom, num_features=channels))
-        self.activate = get_act(act_type)
+        self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               get_act(act_type),
+                               Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               get_act(act_type))
 
     def forward(self, x):
         """
@@ -118,7 +111,7 @@ class ResidualBlock(torch.nn.Module):
         :param x: Input to the ResidualBlock
         :return: Sum of the shortcut and the computed residual block computation
         """
-        return self.activate(x + self.body(x))
+        return x + self.body(x)
 
 
 class _PolicyHeadAlphaZero(torch.nn.Module):
@@ -137,20 +130,20 @@ class _PolicyHeadAlphaZero(torch.nn.Module):
         self.body = Sequential()
         self.select_policy_from_plane = select_policy_from_plane
 
-        with self.name_scope():
-            if self.select_policy_from_plane:
-                self.body.add(Conv2d(in_channels=channels, out_channels=channels, padding=1, kernel_size=(3, 3), bias=False))
-                self.body.add(BatchNorm2d(momentum=bn_mom, num_features=channels))
-                self.body.add(get_act(act_type))
-                self.body.add(Conv2d(in_channels=channels, out_channels=policy_channels, padding=1, kernel_size=(3, 3), bias=False))
-            else:
-                self.body.add(Conv2d(in_channels=channels, out_channels=policy_channels, kernel_size=(1, 1), bias=False))
-                self.body.add(BatchNorm2d(momentum=bn_mom, num_features=policy_channels))
-                # if not self.select_policy_from_plane:
-                self.body.add(get_act(act_type))
+        if self.select_policy_from_plane:
+            self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels, padding=1, kernel_size=(3, 3), bias=False),
+                                   BatchNorm2d(momentum=bn_mom, num_features=channels),
+                                   get_act(act_type),
+                                   Conv2d(in_channels=channels, out_channels=policy_channels, padding=1, kernel_size=(3, 3), bias=False))
+            self.nb_flatten = policy_channels*board_width*policy_channels
 
-                self.body2 = Sequential()
-                self.body2.add(Linear(in_features=board_height*board_width*policy_channels, out_features=n_labels))
+        else:
+            self.body = Sequential(Conv2d(in_channels=channels, out_channels=policy_channels, kernel_size=(1, 1), bias=False),
+                                   BatchNorm2d(momentum=bn_mom, num_features=policy_channels),
+                                   get_act(act_type))
+
+            self.nb_flatten = board_height*board_width*policy_channels
+            self.body2 = Sequential(Linear(in_features=self.nb_flatten, out_features=n_labels))
 
     def forward(self, x):
         """
@@ -159,18 +152,19 @@ class _PolicyHeadAlphaZero(torch.nn.Module):
         :return: Activation maps of the block
         """
         if self.select_policy_from_plane:
-            return torch.flatten(self.body(x))
+            return self.body(x).view(-1, self.nb_flatten)
         else:
-            return self.body2(torch.flatten(self.body(x)))
-
+            x = self.body(x).view(-1, self.nb_flatten)
+            return self.body2(x)
 
 class _ValueHeadAlphaZero(torch.nn.Module):
-    def __init__(self, board_height=11, board_width=11, channels=1, fc0=256, bn_mom=0.9, act_type="relu"):
+    def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, bn_mom=0.9, act_type="relu"):
         """
         Definition of the value head proposed by the alpha zero authors
         :param board_height: Height of the board
         :param board_width: Width of the board
-        :param channels: Number of channels for 1st conv operation in branch 0
+        :param channels: Number of channels as input
+        :param channels_value_head: Number of channels for 1st conv operation in branch 0
         :param fc0: Number of units in Dense/Fully-Connected layer
         :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
@@ -178,19 +172,15 @@ class _ValueHeadAlphaZero(torch.nn.Module):
 
         super(_ValueHeadAlphaZero, self).__init__()
 
-        self.body = Sequential()
+        self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_value_head, kernel_size=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels_value_head),
+                               get_act(act_type))
 
-        with self.name_scope():
-            self.body.add(Conv2d(out_channels=channels, kernel_size=(1, 1), bias=False))
-            self.body.add(BatchNorm2d(momentum=bn_mom, num_features=channels))
-
-            self.body.add(get_act(act_type))
-
-            self.body2 = Sequential()
-            self.body2.add(Linear(in_features=board_height*board_width*channels, out_features=fc0))
-            self.body2.add(get_act(act_type))
-            self.body2.add(Linear(in_features=fc0, out_features=1))
-            self.body2.add(get_act("tanh"))
+        self.nb_flatten = board_height*board_width*channels_value_head
+        self.body2 = Sequential(Linear(in_features=self.nb_flatten, out_features=fc0),
+                                get_act(act_type),
+                                Linear(in_features=fc0, out_features=1),
+                                get_act("tanh"))
 
     def forward(self, x):
         """
@@ -199,7 +189,7 @@ class _ValueHeadAlphaZero(torch.nn.Module):
         :param x: Input data to the block
         :return: Activation maps of the block
         """
-        x = torch.flatten(self.body(x))
+        x = self.body(x).view(-1, self.nb_flatten)
         return self.body2(x)
 
 
@@ -215,13 +205,9 @@ class _StemAlphaZero(torch.nn.Module):
 
         super(_StemAlphaZero, self).__init__()
 
-        self.body = Sequential()
-
-        with self.name_scope():
-            # add all layers to the stem
-            self.body.add(Conv2d(in_channels=nb_input_channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False))
-            self.body.add(BatchNorm2d(momentum=bn_mom, num_features=channels))
-            self.body.add(get_act(act_type))
+        self.body = Sequential(Conv2d(in_channels=nb_input_channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               get_act(act_type))
 
     def forward(self, x):
         """
@@ -240,7 +226,7 @@ class AlphaZeroResnet(torch.nn.Module):
         self,
         n_labels=6,
         channels=256,
-        nb_input_channels=11,
+        nb_input_channels=18,
         board_height=11,
         board_width=11,
         channels_value_head=1,
@@ -264,17 +250,16 @@ class AlphaZeroResnet(torch.nn.Module):
 
         super(AlphaZeroResnet, self).__init__()
 
-        self.body = Sequential()
-
-        with self.name_scope():
-            self.body.add(_StemAlphaZero(channels=channels, bn_mom=bn_mom, act_type=act_type,
-                                         nb_input_channels=nb_input_channels))
-
+        res_blocks = []
         for i in range(num_res_blocks):
-            self.body.add(ResidualBlock(channels, bn_mom, act_type))
+            res_blocks.append(ResidualBlock(channels, bn_mom, act_type))
+
+        self.body = Sequential(_StemAlphaZero(channels=channels, bn_mom=bn_mom, act_type=act_type,
+                                     nb_input_channels=nb_input_channels),
+                               *res_blocks)
 
         # create the two heads which will be used in the hybrid fwd pass
-        self.value_head = _ValueHeadAlphaZero(board_height, board_width, channels_value_head, value_fc_size, bn_mom, act_type)
+        self.value_head = _ValueHeadAlphaZero(board_height, board_width, channels, channels_value_head, value_fc_size, bn_mom, act_type)
         self.policy_head = _PolicyHeadAlphaZero(board_height, board_width, channels, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
