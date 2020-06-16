@@ -24,6 +24,8 @@ include_directories("$ENV{CONDA_ENV_PATH}/include")
 find_package (Threads)
 
 add_executable(${PROJECT_NAME} ${source_files})
+# include filesystem (needed for z5)
+target_link_libraries(${PROJECT_NAME} stdc++fs)
 
 find_library(BLOSC_LIB blosc "$ENV{CONDA_ENV_PATH}/lib")
 target_link_libraries(${PROJECT_NAME} "${BLOSC_LIB}")
