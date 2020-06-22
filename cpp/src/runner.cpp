@@ -18,7 +18,18 @@ EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps)
         step++;
     }
 
-    return (EpisodeInfo){env.GetWinner(), env.IsDraw(), env.IsDone(), step};
+    EpisodeInfo info;
+    info.winner = env.GetWinner();
+    info.isDraw = env.IsDraw();
+    info.isDone = env.IsDone();
+    info.steps = step;
+
+    bboard::AgentInfo* agentInfos = env.GetState().agents;
+    for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+        info.dead[i] = agentInfos[i].dead;
+    }
+
+    return info;
 }
 
 void _polulate_with_simple_agents(LogAgent* logAgents, int count) {
@@ -28,7 +39,7 @@ void _polulate_with_simple_agents(LogAgent* logAgents, int count) {
     }
 }
 
-void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, int maxEpisodes, int maxTotalSteps) {
+void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps) {
     // create log agents to log the episodes
     LogAgent logAgents[4] = {
         LogAgent(maxEpisodeSteps),
@@ -39,7 +50,7 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
     std::array<bboard::Agent*, 4> agents = {&logAgents[0], &logAgents[1], &logAgents[2], &logAgents[3]};
 
     long totalEpisodeSteps = 0;
-    for (int e = 0; (maxEpisodes == -1 || e < maxEpisodes) && (totalEpisodeSteps == -1 || totalEpisodeSteps < maxTotalSteps); e++) {
+    for (int e = 0; (maxEpisodes == -1 || e < maxEpisodes) && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); e++) {
         bboard::Environment env;
         env.MakeGame(agents, true);
 
@@ -53,7 +64,6 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
         // write the episode logs
         for (int i = 0; i < 4 && (totalEpisodeSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
             LogAgent a = logAgents[i];
-
             ipcManager->writeAgentExperience(&a, result);
             totalEpisodeSteps += a.step;
         }

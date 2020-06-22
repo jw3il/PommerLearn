@@ -108,7 +108,7 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
     uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->stepCount));
-    float value = info.winner == logAgent->id ? 1.0f : 0.0f;
+    float value = info.winner == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
 
     // TODO: Maybe add steps to a buffer first
     _writeEpisodeSteps(file, logAgent, this->stepCount, 0, trimmedSteps, value);

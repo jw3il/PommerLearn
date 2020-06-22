@@ -27,7 +27,7 @@ public:
      * @param maxEpisodes The maximum number of episodes. Ignored if -1.
      * @param maxTotalSteps The (minimum) total number of simulated steps. Starts new episodes when this limit is not reached. Ignored if -1.
      */
-    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, int maxEpisodes, int maxTotalSteps);
+    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps);
 
 private:
 
