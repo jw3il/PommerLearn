@@ -62,8 +62,8 @@ def main():
     policy_loss = nn.CrossEntropyLoss()
     value_loss = nn.MSELoss()
 
-    run_training(model, train_config["nb_epochs"], optimizer, policy_loss, train_loader, use_cuda, val_loader, value_loss,
-                 train_config["value_loss_ratio"])
+    run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
+                 use_cuda)
 
 
 class Metrics:
