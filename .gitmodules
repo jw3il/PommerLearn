@@ -3,4 +3,4 @@
 	url = https://github.com/MultiAgentLearning/playground
 [submodule "deps/pomcpp"]
 	path = deps/pomcpp
-	url = https://github.com/m2q/pomcpp
+	url = https://github.com/tomatenbrei/pomcpp
