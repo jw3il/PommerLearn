@@ -1,18 +1,7 @@
 #include "data_representation.h"
 
 #include "xtensor/xview.hpp"
-
-int8_t MoveToInt(bboard::Move move) {
-    switch (move) {
-        case bboard::Move::IDLE: return 0;
-        case bboard::Move::UP: return 1;
-        case bboard::Move::LEFT: return 2;
-        case bboard::Move::DOWN: return 3;
-        case bboard::Move::RIGHT: return 4;
-        case bboard::Move::BOMB: return 5;
-        default: return -1;
-    }
-}
+#include <sstream>
 
 float inline _getNormalizedBombStrength(int stength) {
     float val = (float)stength / bboard::BOARD_SIZE;
@@ -141,4 +130,48 @@ void StateToPlanes(bboard::State state, int id, xt::xarray<float>& allInputPlane
     xt::view(allInputPlanes, inputIndex, planeIndex++, xt::all(), xt::all()) = (float)info.bombCount / bboard::MAX_BOMBS_PER_AGENT;
     xt::view(allInputPlanes, inputIndex, planeIndex++, xt::all(), xt::all()) = (float)info.maxBombCount / bboard::MAX_BOMBS_PER_AGENT;
     xt::view(allInputPlanes, inputIndex, planeIndex++, xt::all(), xt::all()) = info.canKick ? 1 : 0;
+}
+
+std::string InitialStateToString(bboard::State state) {
+    std::stringstream stream;
+
+    for (int y = 0; y < bboard::BOARD_SIZE; y++) {
+        for (int x = 0; x < bboard::BOARD_SIZE; x++) {
+            int elem = state.board[y][x];
+
+            switch (elem) {
+                case bboard::Item::PASSAGE: stream << "0"; break;
+                case bboard::Item::RIGID:   stream << "1"; break;
+                case bboard::Item::WOOD:    stream << "2"; break;
+                case bboard::Item::AGENT0:  stream << "A"; break;
+                case bboard::Item::AGENT1:  stream << "B"; break;
+                case bboard::Item::AGENT2:  stream << "C"; break;
+                case bboard::Item::AGENT3:  stream << "D"; break;
+                default:
+                    if (bboard::IS_WOOD(elem)) {
+                        int item = state.FlagItem(bboard::WOOD_POWFLAG(elem));
+                        switch (item) {
+                            case bboard::EXTRABOMB: stream << "3"; break;
+                            case bboard::INCRRANGE: stream << "4"; break;
+                            case bboard::KICK:      stream << "5"; break;
+                            // when we do not know this item, treat it like a regular wood (should not happen!)
+                            default:
+                                std::cerr << "Error: Encountered unknown item at (" << x << ", " << y << "): " << std::hex << elem << ", item:" << std::dec << item << std::endl;
+                                // treat as regular wood
+                                stream << "2";
+                                break;
+                        }
+                    }
+                    else {
+                        std::cerr << "Error: Encountered unknown element at (" << x << ", " << y << "): " << std::hex << elem << std::endl;
+                        // ignore everything else
+                        stream << "0";
+                    }
+
+                    break;
+            }
+        }
+    }
+
+    return stream.str();
 }

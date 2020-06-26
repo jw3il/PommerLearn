@@ -5,20 +5,38 @@
 
 #include "agents.hpp"
 
+#include <thread>
+#include <chrono>
+
 Runner::Runner()
 {
     // TODO maybe create persistent environment and reset it?
 }
 
-EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps)
+EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps=false)
 {
+    EpisodeInfo info;
+    info.initialState = env.GetState();
+
     int step = 0;
+
+    if (printSteps) {
+        std::cout << "Step " << step << std::endl;
+        bboard::PrintState(&env.GetState(), false);
+        std::cout << std::endl;
+    }
+
     while (!env.IsDone() && step < maxSteps) {
         env.Step(false);
         step++;
+
+        if (printSteps) {
+            std::cout << "Step " << step << std::endl;
+            bboard::PrintState(&env.GetState(), false);
+            std::cout << std::endl;
+        }
     }
 
-    EpisodeInfo info;
     info.winner = env.GetWinner();
     info.isDraw = env.IsDraw();
     info.isDone = env.IsDone();
@@ -57,12 +75,12 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
         // populate the log agents with simple agents
         _polulate_with_simple_agents(logAgents, 4);
 
-        EpisodeInfo result = run(env, maxEpisodeSteps);
+        EpisodeInfo result = run(env, maxEpisodeSteps, false);
 
         ipcManager->writeEpisodeInfo(result);
 
         // write the episode logs
-        for (int i = 0; i < 4 && (totalEpisodeSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
+        for (int i = 0; i < 4 && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
             LogAgent a = logAgents[i];
             ipcManager->writeAgentExperience(&a, result);
             totalEpisodeSteps += a.step;

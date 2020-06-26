@@ -16,9 +16,10 @@ public:
      * @brief run Simulate a single episode with the given environment and maximum steps.
      * @param env The environment to use. Must be initialized.
      * @param maxSteps The maximum number of steps of the episode.
+     * @param printSteps Whether to print the steps.
      * @return The result of the episode.
      */
-    EpisodeInfo run(bboard::Environment& env, int maxSteps);
+    EpisodeInfo run(bboard::Environment& env, int maxSteps, bool printSteps);
 
     /**
      * @brief generateSupervisedTrainingData Generate a traning dataset for supervised training.

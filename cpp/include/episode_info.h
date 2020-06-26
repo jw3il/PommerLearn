@@ -7,6 +7,7 @@
  * @brief Contains metadata for an episode.
  */
 struct EpisodeInfo {
+    bboard::State initialState;
     int winner;
     bool isDraw;
     bool isDone;
