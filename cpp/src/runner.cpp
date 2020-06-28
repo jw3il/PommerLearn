@@ -13,7 +13,7 @@ Runner::Runner()
     // TODO maybe create persistent environment and reset it?
 }
 
-EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps=false)
+EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps)
 {
     EpisodeInfo info;
     info.initialState = env.GetState();
@@ -57,7 +57,7 @@ void _polulate_with_simple_agents(LogAgent* logAgents, int count) {
     }
 }
 
-void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps) {
+void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, bool printSteps) {
     // create log agents to log the episodes
     LogAgent logAgents[4] = {
         LogAgent(maxEpisodeSteps),
@@ -75,7 +75,7 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
         // populate the log agents with simple agents
         _polulate_with_simple_agents(logAgents, 4);
 
-        EpisodeInfo result = run(env, maxEpisodeSteps, false);
+        EpisodeInfo result = run(env, maxEpisodeSteps, printSteps);
 
         ipcManager->writeEpisodeInfo(result);
 
@@ -86,8 +86,8 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
             totalEpisodeSteps += a.step;
         }
 
-        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << e << ": steps " << result.steps << ", winner " << result.winner << ", is draw "
-                  << result.isDraw << ", is done " << result.isDone << std::endl;
+        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << e << ": steps " << result.steps << ", winner "
+                  << result.winner << ", is draw " << result.isDraw << ", is done " << result.isDone << std::endl;
     }
 }
 

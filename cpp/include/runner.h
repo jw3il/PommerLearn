@@ -19,7 +19,7 @@ public:
      * @param printSteps Whether to print the steps.
      * @return The result of the episode.
      */
-    EpisodeInfo run(bboard::Environment& env, int maxSteps, bool printSteps);
+    EpisodeInfo run(bboard::Environment& env, int maxSteps, bool printSteps=false);
 
     /**
      * @brief generateSupervisedTrainingData Generate a traning dataset for supervised training.
@@ -27,8 +27,9 @@ public:
      * @param maxEpisodeSteps The maximum number of steps per episode.
      * @param maxEpisodes The maximum number of episodes. Ignored if -1.
      * @param maxTotalSteps The (minimum) total number of simulated steps. Starts new episodes when this limit is not reached. Ignored if -1.
+     * @param printSteps Whether to print the steps.
      */
-    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps);
+    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, bool printSteps=false);
 
 private:
 
