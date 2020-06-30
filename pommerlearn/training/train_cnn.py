@@ -50,7 +50,8 @@ def main():
 
     train_loader, val_loader = prepare_dataset(f, train_config["test_size"], train_config["batch_size"], random_state)
 
-    model = AlphaZeroResnet(num_res_blocks=3)
+    input_shape = (18, 11, 11)
+    model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2])
     init_weights(model)
 
     if use_cuda:
@@ -64,6 +65,22 @@ def main():
 
     run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
                  use_cuda)
+
+    export_to_onnx(model, input_shape, use_cuda)
+
+
+def export_to_onnx(model, input_shape, use_cuda) -> None:
+    """
+    Exports the model to
+    :param model: Pytorch model
+    :param input_shape: Input shape of the model
+    :param use_cuda: Whether cuda is enabled
+    :return:
+    """
+    dummy_input = torch.ones(1, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
+    if use_cuda:
+        dummy_input = dummy_input.cuda()
+    torch.onnx.export(model, dummy_input, "model.onnx", verbose=True)
 
 
 class Metrics:
