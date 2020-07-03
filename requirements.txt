@@ -5,3 +5,6 @@ imageio
 torch
 zarr
 numcodecs
+tqdm
+sklearn
+tensorboard
