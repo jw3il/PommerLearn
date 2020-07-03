@@ -66,21 +66,27 @@ def main():
     run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
                  use_cuda)
 
-    export_to_onnx(model, input_shape, use_cuda)
+    # export a model with batch size 1 and 8
+    export_to_onnx(model, 1, input_shape, use_cuda)
+    export_to_onnx(model, 8, input_shape, use_cuda)
 
 
-def export_to_onnx(model, input_shape, use_cuda) -> None:
+def export_to_onnx(model, batch_size: int, input_shape: tuple, use_cuda: bool) -> None:
     """
     Exports the model to
     :param model: Pytorch model
+    :param batch_size: Batch size to use for export
     :param input_shape: Input shape of the model
     :param use_cuda: Whether cuda is enabled
     :return:
     """
-    dummy_input = torch.ones(1, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
+    dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
     if use_cuda:
         dummy_input = dummy_input.cuda()
-    torch.onnx.export(model, dummy_input, "model.onnx", verbose=True)
+    input_names = ["data"]
+    output_names = ["value_out", "policy_out"]
+    torch.onnx.export(model, dummy_input, f"model-bsize-{batch_size}.onnx", input_names=input_names,
+                      output_names=output_names, verbose=True)
 
 
 class Metrics:
