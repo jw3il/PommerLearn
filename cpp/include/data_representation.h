@@ -13,19 +13,13 @@ Action Space
 
 0 = Stop: This action is a pass.
 1 = Up: Move up on the board.
-2 = Left: Move left on the board.
-3 = Down: Move down on the board.
+2 = Down: Move left on the board.
+3 = Left: Move down on the board.
 4 = Right: Move right on the board.
 5 = Bomb: Lay a bomb.
 
+See bboard::Move
 */
-
-/**
- * @brief MoveToInt Converts the given move to an integer.
- * @param move The move.
- * @return An int value which represents the given move.
- */
-int8_t MoveToInt(bboard::Move move);
 
 /*
 Observation Space
@@ -71,5 +65,12 @@ Scalar Feature Planes:
  * @param inputIndex The input index at which the current state should be saved (0 <= inputIndex < DATASET_SIZE)
  */
 void StateToPlanes(bboard::State state, int id, xt::xarray<float>& allInputPlanes, uint inputIndex);
+
+/**
+ * @brief InitialStateString Converts an initial state to a string representation. Warning: Has to be the initial state, does not handle bombs or flames.
+ * @param state An initial state of the board.
+ * @return A string which represents the given state.
+ */
+std::string InitialStateToString(bboard::State state);
 
 #endif // DATA_REPRESENTATION_H

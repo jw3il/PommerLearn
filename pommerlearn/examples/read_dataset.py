@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import math
 import imageio
 
+from dataset_util import get_agent_episode_slice, last_episode_is_cut
+
 
 def create_obs_fig(obs, show_plane_title=True):
     num_planes = obs.shape[0]
@@ -66,41 +68,29 @@ def save_episode_obs_gif(obs_array, filename, verbose=True, fps=10):
         print("\rDone")
 
 
-def get_agent_episode_slice(attrs, agent_episode):
-    # sum up all steps up to our episode
-    start_index = int(np.sum(attrs['AgentSteps'][0:agent_episode]))
-    # add the amount of steps of the episode
-    end_index = start_index + attrs['AgentSteps'][agent_episode]
-    return slice(start_index, end_index)
-
-
-def last_episode_is_cut(f):
-    return np.sum(f.attrs.get('AgentSteps')) != f.attrs.get('Steps')
-
-
 def main():
     # Note: You have to create that dataset first
-    f = zarr.open('data_0.zr', 'r')
+    z = zarr.open('data_0.zr', 'r')
 
     print("Info:")
-    print(f.info)
+    print(z.info)
 
-    attrs = f.attrs.asdict()
+    attrs = z.attrs.asdict()
     print("Attributes: {}".format(attrs.keys()))
 
-    dataset_size = len(f['act'])
+    dataset_size = len(z['act'])
     actual_steps = attrs['Steps']
     print("Dataset size: {}, actual steps: {}".format(dataset_size, actual_steps))
 
     print("Environment runs: {}, total agent episodes: {}, last episode is cut {}"
-          .format(len(attrs['EpisodeSteps']), len(attrs['AgentSteps']), last_episode_is_cut(f)))
+          .format(len(attrs['EpisodeSteps']), len(attrs['AgentSteps']), last_episode_is_cut(z)))
 
     agent_episode = 0
     episode_slice = get_agent_episode_slice(attrs, agent_episode)
 
-    obs = f['obs'][episode_slice]
-    act = f['act'][episode_slice]
-    val = f['val'][episode_slice]
+    obs = z['obs'][episode_slice]
+    act = z['act'][episode_slice]
+    val = z['val'][episode_slice]
 
     # Warning: The last episode may have been cut
     obs_len = len(obs)

@@ -5,20 +5,38 @@
 
 #include "agents.hpp"
 
+#include <thread>
+#include <chrono>
+
 Runner::Runner()
 {
     // TODO maybe create persistent environment and reset it?
 }
 
-EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps)
+EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps)
 {
+    EpisodeInfo info;
+    info.initialState = env.GetState();
+
     int step = 0;
+
+    if (printSteps) {
+        std::cout << "Step " << step << std::endl;
+        bboard::PrintState(&env.GetState(), false);
+        std::cout << std::endl;
+    }
+
     while (!env.IsDone() && step < maxSteps) {
         env.Step(false);
         step++;
+
+        if (printSteps) {
+            std::cout << "Step " << step << std::endl;
+            bboard::PrintState(&env.GetState(), false);
+            std::cout << std::endl;
+        }
     }
 
-    EpisodeInfo info;
     info.winner = env.GetWinner();
     info.isDraw = env.IsDraw();
     info.isDone = env.IsDone();
@@ -39,7 +57,7 @@ void _polulate_with_simple_agents(LogAgent* logAgents, int count) {
     }
 }
 
-void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps) {
+void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, bool printSteps) {
     // create log agents to log the episodes
     LogAgent logAgents[4] = {
         LogAgent(maxEpisodeSteps),
@@ -57,19 +75,19 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
         // populate the log agents with simple agents
         _polulate_with_simple_agents(logAgents, 4);
 
-        EpisodeInfo result = run(env, maxEpisodeSteps);
+        EpisodeInfo result = run(env, maxEpisodeSteps, printSteps);
 
         ipcManager->writeEpisodeInfo(result);
 
         // write the episode logs
-        for (int i = 0; i < 4 && (totalEpisodeSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
+        for (int i = 0; i < 4 && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
             LogAgent a = logAgents[i];
             ipcManager->writeAgentExperience(&a, result);
             totalEpisodeSteps += a.step;
         }
 
-        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << e << ": steps " << result.steps << ", winner " << result.winner << ", is draw "
-                  << result.isDraw << ", is done " << result.isDone << std::endl;
+        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << e << ": steps " << result.steps << ", winner "
+                  << result.winner << ", is draw " << result.isDraw << ", is done " << result.isDone << std::endl;
     }
 }
 

@@ -62,7 +62,7 @@ void _writeEpisodeSteps(z5::filesystem::handle::File &file, LogAgent* logAgent, 
     xt::xarray<int8_t> act_array(act_shape);
 
     for (uint i = 0; i < count; i++) {
-        act_array[i] = MoveToInt(logAgent->actionBuffer[agentStepOffset + i]);
+        act_array[i] = (uint8_t)logAgent->actionBuffer[agentStepOffset + i];
     }
 
     auto ds_act = z5::openDataset(file, "act");
@@ -165,6 +165,7 @@ void FileBasedIPCManager::flush() {
     attributes["AgentEpisode"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.episode;});
 
     // episodes
+    attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
     attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winner;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
 
