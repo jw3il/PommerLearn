@@ -86,7 +86,7 @@ def main():
           .format(len(attrs['EpisodeSteps']), len(attrs['AgentSteps']), last_episode_is_cut(z)))
 
     agent_episode = 0
-    episode_slice = get_agent_episode_slice(attrs, agent_episode)
+    episode_slice = get_agent_episode_slice(z, agent_episode)
 
     obs = z['obs'][episode_slice]
     act = z['act'][episode_slice]
