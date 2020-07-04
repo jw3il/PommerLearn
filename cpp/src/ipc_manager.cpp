@@ -1,121 +1,116 @@
 #include "ipc_manager.h"
 #include "data_representation.h"
 
-#include "nlohmann/json.hpp"
-#include "xtensor/xarray.hpp"
-#include "xtensor/xview.hpp"
-
 #include <algorithm>
 
-#include "z5/dataset.hxx"
-// factory functions to create files, groups and datasets
-#include "z5/factory.hxx"
-// handles for z5 filesystem objects
-#include "z5/filesystem/handle.hxx"
-// io for xtensor multi-arrays
-#include "z5/multiarray/xtensor_access.hxx"
-// attribute functionality
-#include "z5/attributes.hxx"
-
+#include "xtensor/xarray.hpp"
+#include "xtensor/xview.hpp"
 #include "xtensor/xadapt.hpp"
 
+#include "nlohmann/json.hpp"
+
+#include "z5/dataset.hxx"
+#include "z5/factory.hxx"
+#include "z5/multiarray/xtensor_access.hxx"
+#include "z5/attributes.hxx"
+
 FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount)
-    : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount) {
+    : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount),
+      sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename()) {
 
     this->maxStepCount = chunkSize * chunkCount;
-    this->nextFileId = 0;
-    this->stepCount = 0;
-
-    this->activeFileName = getNewFileName();
+    this->processedSteps = 0;
+    this->datasetStepCount = 0;
 }
 
-/**
- * @brief _writeEpisodeSteps Converts and copies the collected experience of the logAgent at slice [agentStepOffset, agentStepOffset + count] into the datasets at [datasetStepOffset, datasetStepOffset + count].
- * @param file A file which contains the datasets
- * @param logAgent The agent which holds the log information
- * @param datasetStepOffset The step offset in the datasets
- * @param agentStepOffset The step offset in the agent's experience
- * @param count The number of steps
- * @param value The value of the episode (to be replaced by individual values for each step)
- */
-void _writeEpisodeSteps(z5::filesystem::handle::File &file, LogAgent* logAgent, uint datasetStepOffset, uint agentStepOffset, uint count, float value) {
+void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
+    SampleBuffer& buffer = this->sampleBuffer;
+    ulong count = buffer.getCount();
+
+    // only write when we actually got new data
+    if (count <= 0)
+        return;
+
+    if (!file.exists()) {
+        // create a new dataset when we just started logging and there is no file yet
+        createDatasets(file);
+    }
 
     // observations
 
-    std::vector<size_t> obs_shape = { count, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
-    z5::types::ShapeType obs_offset = { datasetStepOffset, 0, 0, 0, 0 };
-    xt::xarray<float> obs_array(obs_shape);
+    std::vector<size_t> obsShape = { count, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
+    z5::types::ShapeType obsOffset = { this->datasetStepCount, 0, 0, 0, 0 };
 
-    std::vector<size_t> state_obs_shape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
-    xt::xarray<float> state_obs_buffer(state_obs_shape);
-
-    for (uint i = 0; i < count; i++) {
-        // convert observation planes for state at index (agentStepOffset + i)
-        bboard::State& state = logAgent->stateBuffer[agentStepOffset + i];
-        // and insert them at position i into obs_array
-        float* dataPointer = &obs_array.data()[i * PLANE_COUNT * PLANE_SIZE * PLANE_SIZE];
-        StateToPlanes(&state, logAgent->id, dataPointer);
-    }
-
-    // TODO: Maybe keep datasets open?
-    auto ds_obs = z5::openDataset(file, "obs");
-    z5::multiarray::writeSubarray<float>(ds_obs, obs_array, obs_offset.begin());
+    auto xtObs = xt::adapt(buffer.getObs(), buffer.getTotalObsValCount(), xt::no_ownership(), obsShape);
+    auto obsDataset = z5::openDataset(file, "obs");
+    z5::multiarray::writeSubarray<float>(obsDataset, xtObs, obsOffset.begin());
 
     // actions
 
-    std::vector<size_t> act_shape = { count };
-    z5::types::ShapeType act_offset = { datasetStepOffset };
+    std::vector<size_t> actShape = { count };
+    z5::types::ShapeType actOffset = { this->datasetStepCount };
 
-    auto xtActionBuffer = xt::adapt(&logAgent->actionBuffer[agentStepOffset], count, xt::no_ownership(), act_shape);
-    xt::xarray<int8_t> act_array = xt::cast<uint8_t>(xtActionBuffer);
-
-    auto ds_act = z5::openDataset(file, "act");
-    z5::multiarray::writeSubarray<int8_t>(ds_act, act_array, act_offset.begin());
+    auto xtAct = xt::adapt(buffer.getAct(), count, xt::no_ownership(), actShape);
+    auto actDataset = z5::openDataset(file, "act");
+    z5::multiarray::writeSubarray<int8_t>(actDataset, xtAct, actOffset.begin());
 
     // values
 
-    std::vector<size_t> val_shape = { count };
-    z5::types::ShapeType val_offset = { datasetStepOffset };
-    xt::xarray<float> val_array(val_shape, value);
+    std::vector<size_t> valShape = { count };
+    z5::types::ShapeType valOffset = { this->datasetStepCount };
 
-    auto ds_val = z5::openDataset(file, "val");
-    z5::multiarray::writeSubarray<float>(ds_val, val_array, val_offset.begin());
+    auto xtVal = xt::adapt(buffer.getVal(), count, xt::no_ownership(), valShape);
+    auto valDataset = z5::openDataset(file, "val");
+    z5::multiarray::writeSubarray<float>(valDataset, xtVal, valOffset.begin());
+
+    // remember that we added the samples and clear the buffer
+    this->datasetStepCount += buffer.getCount();
+    buffer.clear();
 }
 
 void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo info) {
     if (logAgent->step == 0)
         return;
 
-    if (this->stepCount == this->maxStepCount) {
+    if (this->processedSteps == this->maxStepCount) {
         // when the current dataset is full and we want to add more data..
 
         // first flush the current content/metainformation
         flush();
 
         // obtain the name of the next file
-        this->activeFileName = getNewFileName();
+        this->activeFile = z5::filesystem::handle::File(getNewFilename());
 
         // clear meta information
         this->agentEpisodeInfos.clear();
         this->episodeInfos.clear();
 
-        this->stepCount = 0;
-    }
-
-    z5::filesystem::handle::File file(this->activeFileName);
-
-    if (this->stepCount == 0 && !file.exists()) {
-        // create a new dataset when we just started logging and there is no file yet
-        createDatasets(this->activeFileName);
+        this->processedSteps = 0;
+        this->datasetStepCount = 0;
     }
 
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
-    uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->stepCount));
+    uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->processedSteps));
     float value = info.winner == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
 
-    // TODO: Maybe add steps to a buffer first
-    _writeEpisodeSteps(file, logAgent, this->stepCount, 0, trimmedSteps, value);
+    ulong currentStep = 0;
+    ulong remainingSteps = trimmedSteps;
+    while (remainingSteps > 0) {
+        bboard::State* states = &logAgent->stateBuffer[currentStep];
+        bboard::Move* moves = &logAgent->actionBuffer[currentStep];
+
+        // add the samples to the buffer
+        ulong steps = sampleBuffer.addSamples(states, moves, value, logAgent->id, remainingSteps);
+
+        if (steps < remainingSteps) {
+            // buffer is full, flush it
+            this->flushSampleBuffer(this->activeFile);
+        }
+
+        currentStep += steps;
+        remainingSteps -= steps;
+    }
 
     // add meta information
     AgentEpisodeInfo agentEpisodeInfo;
@@ -124,13 +119,12 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
     agentEpisodeInfo.episode = this->episodeInfos.size() - 1;
     this->agentEpisodeInfos.push_back(agentEpisodeInfo);
 
-    this->stepCount += trimmedSteps;
+    this->processedSteps += trimmedSteps;
 }
 
 void FileBasedIPCManager::writeEpisodeInfo(EpisodeInfo info) {
     this->episodeInfos.push_back(info);
 }
-
 
 template<typename A, typename B>
 /**
@@ -152,12 +146,11 @@ std::vector<B> _mapVector(std::vector<A> vectorA, std::function<B(A&)> mapAToB) 
     return vectorB;
 }
 
-
 void FileBasedIPCManager::flush() {
-    z5::filesystem::handle::File f(this->activeFileName);
-
-    if (!f.exists())
+    if (!this->activeFile.exists())
         return;
+
+    this->flushSampleBuffer(this->activeFile);
 
     nlohmann::json attributes;
 
@@ -174,32 +167,35 @@ void FileBasedIPCManager::flush() {
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
 
     // total steps
-    attributes["Steps"] = this->stepCount;
+    attributes["Steps"] = this->processedSteps;
 
-    z5::writeAttributes(f, attributes);
+    z5::writeAttributes(this->activeFile, attributes);
 }
 
-std::string FileBasedIPCManager::getNewFileName() {
-    std::string fileName = this->activeFileName;
+std::string FileBasedIPCManager::getNewFilename() {
+    std::string currentFilename;
 
-    // obtain a new unique filename which does not exist yet (and has a higher fileCount number)
-    while (fileName.size() == 0 || std::filesystem::exists(fileName)) {
-        fileName = this->fileNamePrefix + "_" + std::to_string(this->nextFileId) + ".zr";
-        // remember the current filecount so that the next call will be faster
-        this->nextFileId++;
-    }
+    do {
+        // if the filename is not empty, this must be at least the second iteration of the loop
+        // => there exists a file with name currentFilename
+        if (currentFilename.size() != 0) {
+            this->nextFileId++;
+        }
 
-    return fileName;
+        // generate new filename
+        currentFilename = this->fileNamePrefix + "_" + std::to_string(this->nextFileId) + ".zr";
+
+    } while (std::filesystem::exists(currentFilename));
+
+    return currentFilename;
 }
 
-void FileBasedIPCManager::createDatasets(std::string fileName) {
-    z5::filesystem::handle::File f(fileName);
-
-    if (f.exists()) {
-        throw "Datasets at '" + fileName + "' already exist!";
+void FileBasedIPCManager::createDatasets(z5::filesystem::handle::File file) {
+    if (file.exists()) {
+        throw "Datasets at '" + file.path().string() + "' already exist!";
     }
 
-    z5::createFile(f, true);
+    z5::createFile(file, true);
 
     // use compression (fixed value for now)
     std::string compressor = "blosc";
@@ -214,18 +210,19 @@ void FileBasedIPCManager::createDatasets(std::string fileName) {
 
     // observations
 
-    std::vector<size_t> obs_shape = { this->maxStepCount, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
-    std::vector<size_t> obs_chunks = { this->chunkSize, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
+    std::vector<size_t> obsShape = { this->maxStepCount, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
+    std::vector<size_t> obsChunks = { this->chunkSize, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
+    z5::createDataset(file, "obs", "float32", obsShape, obsChunks, compressor, compressionOptions);
 
-    std::unique_ptr<z5::Dataset> ds_obs = z5::createDataset(f, "obs", "float32", obs_shape, obs_chunks, compressor, compressionOptions);
+    // actions
 
-    // actions (not chunked)
+    std::vector<size_t> actShape = { this->maxStepCount };
+    std::vector<size_t> actChunks = { this->chunkSize };
+    z5::createDataset(file, "act", "int8", actShape, actChunks, compressor, compressionOptions);
 
-    std::vector<size_t> act_shape = { this->maxStepCount };
-    z5::createDataset(f, "act", "int8", act_shape, act_shape, compressor, compressionOptions);
+    // values
 
-    // values (not chunked)
-
-    std::vector<size_t> val_shape = { this->maxStepCount };
-    z5::createDataset(f, "val", "float32", val_shape, val_shape, compressor, compressionOptions);
+    std::vector<size_t> valShape = { this->maxStepCount };
+    std::vector<size_t> valChunks = { this->chunkSize };
+    z5::createDataset(file, "val", "float32", valShape, valChunks, compressor, compressionOptions);
 }

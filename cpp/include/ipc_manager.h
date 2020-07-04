@@ -3,10 +3,12 @@
 
 #include "log_agent.h"
 #include "episode_info.h"
+#include "sample_buffer.h"
 
 // adds compression to z5
 #define WITH_BLOSC
 #include "z5/types/types.hxx"
+#include "z5/filesystem/handle.hxx"
 
 /**
  * @brief The abstract IPCManager class provides an interface to save/transmit (called "write" from now on) training data.
@@ -53,20 +55,27 @@ private:
     std::string fileNamePrefix;
     unsigned long chunkSize, chunkCount, maxStepCount;
 
-    /**
-     * @brief stepCount The current number of steps in the active file.
-     */
-    unsigned long stepCount;
+    SampleBuffer sampleBuffer;
 
     /**
-     * @brief fileCount The id of the next file. Used to accelerate getNewFileName.
+     * @brief datasetStepCount The number of steps which were inserted into the datatset.
+     */
+    unsigned long datasetStepCount;
+
+    /**
+     * @brief processedSteps The total number of processed steps for this dataset.
+     */
+    unsigned long processedSteps;
+
+    /**
+     * @brief fileCount The id of the next file. Used to accelerate getNewFilename.
      */
     unsigned long nextFileId;
 
     /**
-     * @brief activeFileName The name of the currently active file (you have to create a new one when the current dataset is full).
+     * @brief activeFile The currently active file (you have to create a new one when the current dataset is full).
      */
-    std::string activeFileName;
+    z5::filesystem::handle::File activeFile;
 
     /**
      * @brief agentEpisodeInfos Stores meta-information for each collected agent experience.
@@ -82,13 +91,19 @@ private:
      * @brief getNewFileName Get a unique filename for storing dataset containers.
      * @return A filename which starts with fileNamePrefix
      */
-    std::string getNewFileName();
+    std::string getNewFilename();
 
     /**
      * @brief createDatasets Creates a zarr group container and initializes the datasets.
-     * @param fileName The filename which defines where the zarr group container should be created.
+     * @param file The file which defines where the zarr group container should be created.
      */
-    void createDatasets(std::string fileName);
+    void createDatasets(z5::filesystem::handle::File file);
+
+    /**
+     * @brief flushBuffer Write the content of the sample buffer to the datasets.
+     * @param file The file which points to the datasets.
+     */
+    void flushSampleBuffer(z5::filesystem::handle::File file);
 };
 
 #endif // IPCMANAGER_H
