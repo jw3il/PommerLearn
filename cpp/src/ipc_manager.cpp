@@ -17,6 +17,8 @@
 // attribute functionality
 #include "z5/attributes.hxx"
 
+#include "xtensor/xadapt.hpp"
+
 FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount)
     : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount) {
 
@@ -44,11 +46,15 @@ void _writeEpisodeSteps(z5::filesystem::handle::File &file, LogAgent* logAgent, 
     z5::types::ShapeType obs_offset = { datasetStepOffset, 0, 0, 0, 0 };
     xt::xarray<float> obs_array(obs_shape);
 
+    std::vector<size_t> state_obs_shape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
+    xt::xarray<float> state_obs_buffer(state_obs_shape);
+
     for (uint i = 0; i < count; i++) {
         // convert observation planes for state at index (agentStepOffset + i)
+        bboard::State& state = logAgent->stateBuffer[agentStepOffset + i];
         // and insert them at position i into obs_array
-        bboard::State state = logAgent->stateBuffer[agentStepOffset + i];
-        StateToPlanes(state, logAgent->id, obs_array, i);
+        float* dataPointer = &obs_array.data()[i * PLANE_COUNT * PLANE_SIZE * PLANE_SIZE];
+        StateToPlanes(&state, logAgent->id, dataPointer);
     }
 
     // TODO: Maybe keep datasets open?
@@ -59,11 +65,9 @@ void _writeEpisodeSteps(z5::filesystem::handle::File &file, LogAgent* logAgent, 
 
     std::vector<size_t> act_shape = { count };
     z5::types::ShapeType act_offset = { datasetStepOffset };
-    xt::xarray<int8_t> act_array(act_shape);
 
-    for (uint i = 0; i < count; i++) {
-        act_array[i] = (uint8_t)logAgent->actionBuffer[agentStepOffset + i];
-    }
+    auto xtActionBuffer = xt::adapt(&logAgent->actionBuffer[agentStepOffset], count, xt::no_ownership(), act_shape);
+    xt::xarray<int8_t> act_array = xt::cast<uint8_t>(xtActionBuffer);
 
     auto ds_act = z5::openDataset(file, "act");
     z5::multiarray::writeSubarray<int8_t>(ds_act, act_array, act_offset.begin());

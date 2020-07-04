@@ -58,13 +58,12 @@ Scalar Feature Planes:
 
 // TODO: Change from all planes to single plane array (for the current step/state) -> maybe with xt::xview
 /**
- * @brief StateToPlanes Converts the given state variable to input planes from the perspective of the given player id. Directly saves these planes in the given xarray.
+ * @brief StateToPlanes Converts the given state variable to input planes from the perspective of the given player id. Directly saves these planes in the given float array.
  * @param state The state of the board (including the current step in the episode used for the plane index).
  * @param id The id of the player.
- * @param allInputPlanes The input planes of shape (DATASET_SIZE, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE).
- * @param inputIndex The input index at which the current state should be saved (0 <= inputIndex < DATASET_SIZE)
+ * @param planes A float pointer to a buffer of size PLANE_COUNT * PLANE_SIZE * PLANE_SIZE.
  */
-void StateToPlanes(bboard::State state, int id, xt::xarray<float>& allInputPlanes, uint inputIndex);
+void StateToPlanes(const bboard::State* state, int id, float* planes);
 
 /**
  * @brief InitialStateString Converts an initial state to a string representation. Warning: Has to be the initial state, does not handle bombs or flames.
