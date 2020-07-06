@@ -23,7 +23,10 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
 
     // obstacle planes
     xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::RIGID));
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::WOOD));
+    // wood blocks can also contain an item (+0, +1, +2, +3)
+    auto isWood = xt::equal(board, bboard::Item::WOOD) + xt::equal(board, bboard::Item::WOOD + 1)
+            + xt::equal(board, bboard::Item::WOOD + 2) + xt::equal(board, bboard::Item::WOOD + 3);
+    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(isWood);
 
     // item planes
     xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::EXTRABOMB));
@@ -149,14 +152,14 @@ std::string InitialStateToString(bboard::State state) {
                             case bboard::KICK:      stream << "5"; break;
                             // when we do not know this item, treat it like a regular wood (should not happen!)
                             default:
-                                std::cerr << "Error: Encountered unknown item at (" << x << ", " << y << "): " << std::hex << elem << ", item:" << std::dec << item << std::endl;
+                                std::cerr << "Error: Encountered unknown item at (" << x << ", " << y << "): " << elem << ", item:" << item << std::endl;
                                 // treat as regular wood
                                 stream << "2";
                                 break;
                         }
                     }
                     else {
-                        std::cerr << "Error: Encountered unknown element at (" << x << ", " << y << "): " << std::hex << elem << std::endl;
+                        std::cerr << "Error: Encountered unknown element at (" << x << ", " << y << "): " << elem << std::endl;
                         // ignore everything else
                         stream << "0";
                     }
