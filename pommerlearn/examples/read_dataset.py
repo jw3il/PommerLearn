@@ -20,7 +20,7 @@ def create_obs_fig(obs, show_plane_title=True):
         if show_plane_title:
             plt.title("Plane {}".format(i + 1))
 
-        plt.imshow(obs[i, :, :], origin='lower', vmin=0, vmax=1)
+        plt.imshow(obs[i, :, :], origin='upper', vmin=0, vmax=1)
 
     return fig
 
