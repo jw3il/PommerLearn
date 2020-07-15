@@ -157,6 +157,7 @@ class _PolicyHeadAlphaZero(torch.nn.Module):
             x = self.body(x).view(-1, self.nb_flatten)
             return self.body2(x)
 
+
 class _ValueHeadAlphaZero(torch.nn.Module):
     def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, bn_mom=0.9, act_type="relu"):
         """

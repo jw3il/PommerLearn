@@ -31,27 +31,19 @@ def main():
         "nb_epochs":  10,
     }
 
-    random_state = 42
+    z = zarr.open('data_0.zr', 'r')
 
-    # Note: You have to create that dataset first
-    f = zarr.open('data_0.zr', 'r')
-
-    print("Info:")
-    print(f.info)
-
-    attrs = f.attrs.asdict()
-    print("Attributes: {}".format(attrs.keys()))
-
-    dataset_size = len(f['act'])
-    actual_steps = attrs['Steps']
-    print("Dataset size: {}, actual steps: {}".format(dataset_size, actual_steps))
+    print(f"Opened dataset with {len(z['act'])} samples from {len(z.attrs['EpisodeSteps'])} episodes")
 
     use_cuda = torch.cuda.is_available()
+    print(f"CUDA enabled: {use_cuda}")
 
-    train_loader, val_loader = prepare_dataset(f, train_config["test_size"], train_config["batch_size"], random_state)
+    train_loader, val_loader = prepare_dataset(z, train_config["test_size"], train_config["batch_size"],
+                                               train_config["random_state"])
 
     input_shape = (18, 11, 11)
-    model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2])
+    model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
+                            board_height=input_shape[2])
     init_weights(model)
 
     if use_cuda:
@@ -63,8 +55,8 @@ def main():
     policy_loss = nn.CrossEntropyLoss()
     value_loss = nn.MSELoss()
 
-    run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
-                 use_cuda)
+    run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"],
+                 train_loader, val_loader, use_cuda, comment="")
 
     # export a model with batch size 1 and 8
     export_to_onnx(model, 1, input_shape, use_cuda)
@@ -123,7 +115,7 @@ class Metrics:
 
 
 def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_loss_ratio, train_loader, val_loader,
-                 use_cuda):
+                 use_cuda, comment=''):
     """
     Trains a given model for a number of epochs
     :param model: Model to optimize
@@ -135,16 +127,22 @@ def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_los
     :param train_loader: Training data loader
     :param val_loader: Validation data loader
     :param use_cuda: True, when GPU should be used
+    :param comment: Comment for the summary writers
     :return:
     """
 
     m_train = Metrics()
     global_step = 0
-    writer = SummaryWriter()
+
+    writer_train = SummaryWriter(comment=f'-train{comment}')
+    writer_val = SummaryWriter(comment=f'-val{comment}')
+
+    # TODO: Nested progress bars would be ideal
+    progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
 
     for epoch in range(nb_epochs):
         # training
-        for batch_idx, (x_train, yv_train, yp_train) in tqdm(enumerate(train_loader)):
+        for batch_idx, (x_train, yv_train, yp_train) in enumerate(train_loader):
             optimizer.zero_grad()
             if use_cuda:
                 x_train, yv_train, yp_train = x_train.cuda(), yv_train.cuda(), yp_train.cuda()
@@ -155,35 +153,42 @@ def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_los
             combined_loss.backward()
             optimizer.step()
 
+            global_step += 1
+
+            progress.update(1)
+
             if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) == len(train_loader):
                 m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, val_loader)
-                print(f'epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'
+                print(f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'
                       f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'
                       f' train value loss: {m_train.value_loss():5f}, val value loss: {m_val.value_loss():5f},'
                       f' val policy loss: {m_train.policy_loss():5f}, val policy acc: {m_val.policy_acc():5f}')
-                log_to_tensorboard(global_step, m_train, m_val, writer)
+
+                log_to_tensorboard(writer_train, m_train, global_step)
+                log_to_tensorboard(writer_val, m_val, global_step)
+
                 m_train.reset()
 
-            global_step += 1
+    progress.close()
 
 
-def log_to_tensorboard(global_step, m_train, m_val, writer) -> None:
+def log_to_tensorboard(writer, metrics, global_step) -> None:
     """
-    Logs all metrics to Tensorboard at the current global step
+    Logs all metrics to Tensorboard at the current global step.
+
     :param global_step: Global step of batch update
-    :param m_train: Metrics for training dataset
-    :param m_val: Metrics for validation dataset
+    :param metrics: Metrics which shall be logged
     :param writer: Tensorobard writer handle
     :return:
     """
-    writer.add_scalars('Combined Loss', {'train': m_train.combined_loss(),
-                                         'val': m_val.combined_loss()}, global_step)
-    writer.add_scalars('Value Loss', {'train': m_train.value_loss(),
-                                      'val': m_val.value_loss()}, global_step)
-    writer.add_scalars('Policy Loss', {'train': m_train.policy_loss(),
-                                       'val': m_val.policy_loss()}, global_step)
-    writer.add_scalars('Policy Accuracy', {'train': m_train.policy_acc(),
-                                           'val': m_val.policy_acc()}, global_step)
+
+    writer.add_scalar('Loss/Value', metrics.value_loss(), global_step)
+    writer.add_scalar('Loss/Policy', metrics.policy_loss(), global_step)
+    writer.add_scalar('Loss/Combined', metrics.combined_loss(), global_step)
+
+    writer.add_scalar('Policy Accuracy', metrics.policy_acc(), global_step)
+
+    writer.flush()
 
 
 def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_train, yp_train, yv_train):
@@ -197,19 +202,24 @@ def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_t
     :param x_train: Training samples
     :param yp_train: Target labels for policy
     :param yv_train: Target labels for value
-    :return:
+    :return: The combined loss
     """
+
+    # get the combined loss
     value_out, policy_out = model(x_train)
     cur_policy_loss = policy_loss(policy_out, yp_train)
-    cur_value_loss = value_loss(value_out, yv_train)
+    cur_value_loss = value_loss(value_out.view(-1), yv_train)
+    combined_loss = cur_policy_loss + value_loss_ratio * cur_value_loss
+
+    # update metrics
     _, pred_label = torch.max(policy_out.data, 1)
     metric.total_cnt += x_train.data.size()[0]
     metric.correct_cnt += float((pred_label == yp_train.data).sum())
-    combined_loss = cur_policy_loss + value_loss_ratio * cur_value_loss
     metric.sum_policy_loss += float(cur_policy_loss.data)
     metric.sum_value_loss += float(cur_value_loss.data)
     metric.sum_combined_loss += float(combined_loss.data)
     metric.steps += 1
+
     return combined_loss
 
 
@@ -235,27 +245,31 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, dat
     return m_val
 
 
-def prepare_dataset(f, test_size: float, batch_size: int, random_state: int) -> [DataLoader, DataLoader]:
+def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given zarr dataset object
-    :param f: Loaded zarr dataset object
+    :param z: Loaded zarr dataset object
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
     :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
-    x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(f['obs'][:], f['val'][:], f['act'][:],
-                                                                          test_size=test_size, random_state=random_state)
+    x_train, x_val, yv_train, yv_val, yp_train, yp_val = \
+        train_test_split(z['obs'][:], z['val'][:], z['act'][:], test_size=test_size, random_state=random_state)
+
     x_train = torch.Tensor(x_train)
     yp_train = torch.Tensor(yp_train).long()
     yv_train = torch.Tensor(yv_train)
     x_val = torch.Tensor(x_val)
     yp_val = torch.Tensor(yp_val).long()
     yv_val = torch.Tensor(yv_val)
+
     data_train = TensorDataset(x_train, yv_train, yp_train)
     data_val = TensorDataset(x_val, yv_val, yp_val)
+
     train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(data_val, batch_size=batch_size, shuffle=True)
+
     return train_loader, val_loader
 
 
