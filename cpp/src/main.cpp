@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
     Runner runner;
 
     // generate enough steps (chunkSize * chunkCount) to fill one dataset
-    runner.generateSupervisedTrainingData(&ipcManager, 800, -1, chunkSize * chunkCount);
+    runner.generateSupervisedTrainingData(&ipcManager, 800, -1, chunkSize * chunkCount, false);
     ipcManager.flush();
 
     return 0;

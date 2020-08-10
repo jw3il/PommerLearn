@@ -92,7 +92,8 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
     uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->processedSteps));
-    float value = info.winner == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
+    // TODO: Adapt value for team mode
+    float value = info.winningAgent == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
 
     ulong currentStep = 0;
     ulong remainingSteps = trimmedSteps;
@@ -163,7 +164,7 @@ void FileBasedIPCManager::flush() {
 
     // episodes
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
-    attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winner;});
+    attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningAgent;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
 
     // total steps

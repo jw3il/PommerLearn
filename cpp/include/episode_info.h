@@ -8,7 +8,8 @@
  */
 struct EpisodeInfo {
     bboard::State initialState;
-    int winner;
+    int winningAgent;
+    int winningTeam;
     bool isDraw;
     bool isDone;
     int steps;
