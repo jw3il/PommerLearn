@@ -4,3 +4,6 @@
 [submodule "deps/pomcpp"]
 	path = deps/pomcpp
 	url = https://github.com/tomatenbrei/pomcpp
+[submodule "deps/pomcpp"]
+	path = deps/CrazyAra
+	url = https://github.com/QueensGambit/CrazyAra.git
