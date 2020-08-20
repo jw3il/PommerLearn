@@ -2,7 +2,9 @@
 #define POMCPP_UTIL_H
 
 #include "bboard.hpp"
+#include "step_utility.hpp"
 #include "nlohmann/json.hpp"
+#include <unordered_set>
 
 using namespace bboard;
 
@@ -73,7 +75,7 @@ void PyToAgentInfo(const nlohmann::json& pyInfo, AgentInfo& info)
     info.x = pyInfo["position"][1];
     info.y = pyInfo["position"][0];
 
-    info.dead = !pyInfo["is_alive"];
+    info.dead = !pyInfo.value("is_alive", true);
 
     info.canKick = pyInfo["can_kick"];
     info.maxBombCount = pyInfo["ammo"];
@@ -101,7 +103,6 @@ void PyToBomb(const nlohmann::json& pyBomb, Bomb& bomb)
     }
 
     SetBombMovedFlag(bomb, false);
-    // TODO: Check for inconsistency
     SetBombTime(bomb, pyBomb["life"]);
 }
 
@@ -116,11 +117,6 @@ void PyToFlame(const nlohmann::json& pyFlame, Flame& flame)
     flame.timeLeft = pyFlame["life"];
 }
 
-bool sortByTimeLeft(const Flame &lhs, const Flame &rhs)
-{
-    return lhs.timeLeft < rhs.timeLeft;
-}
-
 template <int count>
 void printFlames(FixedQueue<Flame, count>& flames)
 {
@@ -130,28 +126,6 @@ void printFlames(FixedQueue<Flame, count>& flames)
     }
 
     std::cout << std::endl;
-}
-
-int OptimizeFlameQueue(State& s)
-{
-    // sort flames
-    std::sort(s.flames.queue, s.flames.queue + s.flames.count, sortByTimeLeft);
-
-    // modify timeLeft (additive)
-    int timeLeft = 0;
-    for(int i = 0; i < s.flames.count; i++)
-    {
-        Flame& f = s.flames[i];
-        int oldVal = f.timeLeft;
-        f.timeLeft -= timeLeft;
-        timeLeft = oldVal;
-
-        // set flame ids to allow for faster lookup
-        s.board[f.position.y][f.position.x] += (i << 3);
-    }
-
-    // return total time left
-    return timeLeft;
 }
 
 void PyStringToState(const std::string& string, State& state, GameMode gameMode)
@@ -195,6 +169,7 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
 
     // set bombs
     const nlohmann::json& pyBombs = pyState["bombs"];
+    state.bombs.count = 0;
     for(uint i = 0; i < pyBombs.size(); i++)
     {
         Bomb bomb;
@@ -207,6 +182,7 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
 
     // set flames
     const nlohmann::json& pyFlames = pyState["flames"];
+    state.flames.count = 0;
     for(uint i = 0; i < pyFlames.size(); i++)
     {
         Flame flame;
@@ -245,7 +221,7 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
     }
 
     // optimize flames for faster steps
-    state.currentFlameTime = OptimizeFlameQueue(state);
+    state.currentFlameTime = util::OptimizeFlameQueue(state.board, state.flames);
 }
 
 State PyStringToState(const std::string& string, GameMode gameMode)
@@ -255,22 +231,123 @@ State PyStringToState(const std::string& string, GameMode gameMode)
     return state;
 }
 
-void PyStringToObservation(const std::string& string, Observation& obs)
+void PyStringToObservation(const std::string& string, int agentId, Observation& obs)
 {
-    nlohmann::json jstate = nlohmann::json::parse(string);
+    nlohmann::json pyState = nlohmann::json::parse(string);
 
     // attributes:
     // - game_type (int), game_env (string), step_count (int)
     // - alive (list with ids), enemies (list with ids),
     // - position (int pair), blast_strength (int), can_kick (bool), teammate (list with ids), ammo (int),
     // - board (int matrix), bomb_blast_strength (float matrix), bomb_life (float matrix), bomb_moving_direction (float matrix), flame_life (float matrix)
+    const nlohmann::json& alive = pyState["alive"];
+    std::fill_n(obs.isAlive, AGENT_COUNT, false);
+    for(uint i = 0; i < alive.size(); i++)
+    {
+        obs.isAlive[alive[i].get<int>()] = true;
+    }
 
+    const nlohmann::json& enemies = pyState["enemies"];
+    std::fill_n(obs.isEnemy, AGENT_COUNT, false);
+    for(uint i = 0; i < enemies.size(); i++)
+    {
+        obs.isEnemy[enemies[i].get<int>()] = true;
+    }
+
+    // we only observe ourself
+    std::fill_n(obs.agentIDMapping, AGENT_COUNT, -1);
+    obs.agentIDMapping[agentId] = 0;
+    obs.agentInfos.count = 1;
+    AgentInfo& info = obs.agentInfos[0];
+
+    // set agent info
+    PyToAgentInfo(pyState, info);
+    info.dead = obs.isAlive[agentId];
+
+    // set board
+
+    // try to reconstruct own bombs from given observation
+    std::unordered_set<Position> ownBombs;
+    for(int i = 0; i < obs.bombs.count; i++)
+    {
+        Bomb& b = obs.bombs[i];
+        if(BMB_ID(b) == agentId)
+        {
+            ownBombs.insert({BMB_POS_X(b), BMB_POS_Y(b)});
+        }
+    }
+
+    obs.bombs.count = 0;
+    obs.flames.count = 0;
+    const nlohmann::json& pyBoard = pyState["board"];
+    for(int y = 0; y < BOARD_SIZE; y++)
+    {
+        for(int x = 0; x < BOARD_SIZE; x++)
+        {
+            Item item = mapPyToBoard(pyBoard[y][x].get<int>());
+            obs.board[y][x] = item;
+
+            switch (item)
+            {
+                case Item::FLAME:
+                {
+                    Flame& f = obs.flames.NextPos();
+                    f.position.x = x;
+                    f.position.y = y;
+                    f.timeLeft = (int)pyState["flame_life"][y][x].get<float>();
+                    obs.flames.count++;
+                    break;
+                }
+                case Item::BOMB:
+                {
+                    Bomb& b = obs.bombs.NextPos();
+                    SetBombPosition(b, x, y);
+
+                    // is that necessary?
+                    SetBombMovedFlag(b, false);
+
+                    // WARNING: Bomber Id is not not known! This means based on a single observation,
+                    // we do not know when our ammo fills back up in the future.
+
+                    // because of this, we try to reconstruct our own bombs based on the last observation
+                    // idea: when performing an action, remember agent ids in the last observation struct
+
+                    // TODO: This simple approximation breaks when bombs move. Maybe one could include
+                    // the moving direction to reconstruct agent ids of moving bombs.
+                    if(ownBombs.find({x, y}) != ownBombs.end())
+                    {
+                        SetBombID(b, agentId);
+                    }
+                    else
+                    {
+                        // illegal agent id
+                        SetBombID(b, AGENT_COUNT);
+                    }
+
+                    int blastStrength = (int)pyState["bomb_blast_strength"][y][x].get<float>();
+                    SetBombStrength(b, blastStrength);
+
+                    Direction direction = mapPyToDir((int)pyState["bomb_moving_direction"][y][x].get<float>());
+                    SetBombDirection(b, direction);
+
+                    int life = (int)pyState["bomb_life"][y][x].get<float>();
+                    SetBombTime(b, life);
+
+                    obs.bombs.count++;
+                    break;
+                }
+                default: break;
+            }
+        }
+    }
+
+    obs.currentFlameTime = util::OptimizeFlameQueue(obs.board, obs.flames);
 }
 
-Observation PyStringToObservation(const std::string& string)
+Observation PyStringToObservation(const std::string& string, int agentId)
 {
     Observation obs;
-    PyStringToObservation(string, obs);
+    PyStringToObservation(string, agentId, obs);
     return obs;
 }
 
