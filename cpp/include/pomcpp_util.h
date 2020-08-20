@@ -16,23 +16,40 @@ inline void check_key_value(const nlohmann::json& j, const std::string& key, con
     }
 }
 
-const std::map<int, Item> mapPyToBoard
+Item mapPyToBoard(int py)
 {
-    {0, Item::PASSAGE},
-    {1, Item::RIGID},
-    {2, Item::WOOD},
-    {3, Item::BOMB},
-    {4, Item::FLAMES},
-    {5, Item::FOG},
-    {6, Item::EXTRABOMB},
-    {7, Item::INCRRANGE},
-    {8, Item::KICK},
-    {9, Item::AGENTDUMMY},
-    {10, Item::AGENT0},
-    {11, Item::AGENT1},
-    {12, Item::AGENT2},
-    {13, Item::AGENT3},
-};
+    switch (py)
+    {
+        case 0: return Item::PASSAGE;
+        case 1: return Item::RIGID;
+        case 2: return Item::WOOD;
+        case 3: return Item::BOMB;
+        case 4: return Item::FLAME;
+        case 5: return Item::FOG;
+        case 6: return Item::EXTRABOMB;
+        case 7: return Item::INCRRANGE;
+        case 8: return Item::KICK;
+        case 9: return Item::AGENTDUMMY;
+        case 10: return Item::AGENT0;
+        case 11: return Item::AGENT1;
+        case 12: return Item::AGENT2;
+        case 13: return Item::AGENT3;
+        default: throw std::runtime_error("Unknown map item " + std::to_string(py));
+    }
+}
+
+Direction mapPyToDir(int py)
+{
+    switch (py)
+    {
+        case 0: return Direction::IDLE;
+        case 1: return Direction::UP;
+        case 2: return Direction::DOWN;
+        case 3: return Direction::LEFT;
+        case 4: return  Direction::RIGHT;
+        default: throw std::runtime_error("Unknown direction " + std::to_string(py));
+    }
+}
 
 void PyToBoard(const nlohmann::json& pyBoard, State& state)
 {
@@ -40,7 +57,7 @@ void PyToBoard(const nlohmann::json& pyBoard, State& state)
     {
         for(int x = 0; x < BOARD_SIZE; x++)
         {
-            state.board[y][x] = mapPyToBoard.at(pyBoard[y][x].get<int>());
+            state.board[y][x] = mapPyToBoard(pyBoard[y][x].get<int>());
         }
     }
 }
@@ -49,16 +66,18 @@ void PyToAgentInfo(const nlohmann::json& pyInfo, AgentInfo& info)
 {
     // attributes: agent_id, ammo, blast_strength, can_kick, is_alive, position (tuple)
 
-    info.x = pyInfo["position"][0];
-    info.y = pyInfo["position"][1];
+    // agent_id is defined by the info index
+    // info.team and info.bombCount must be set outside this function
+
+    // Agent positions are stored (row, column)
+    info.x = pyInfo["position"][1];
+    info.y = pyInfo["position"][0];
 
     info.dead = !pyInfo["is_alive"];
 
     info.canKick = pyInfo["can_kick"];
     info.maxBombCount = pyInfo["ammo"];
     info.bombStrength = pyInfo["blast_strength"];
-
-    // TODO: info.team, info.bombCount is missing!
 }
 
 void PyToBomb(const nlohmann::json& pyBomb, Bomb& bomb)
@@ -67,10 +86,20 @@ void PyToBomb(const nlohmann::json& pyBomb, Bomb& bomb)
 
     SetBombID(bomb, pyBomb["bomber_id"]);
     const nlohmann::json& pos = pyBomb["position"];
+    // Bomb positions are stored (column, row)
     SetBombPosition(bomb, pos[0], pos[1]);
     SetBombStrength(bomb, pyBomb["blast_strength"]);
-    // Warning: This assumes that bboard::Direction == direction
-    SetBombDirection(bomb, pyBomb["moving_direction"]);
+
+    nlohmann::json movingDir = pyBomb["moving_direction"];
+    if(movingDir.is_null())
+    {
+        SetBombDirection(bomb, Direction::IDLE);
+    }
+    else
+    {
+        SetBombDirection(bomb, mapPyToDir(movingDir));
+    }
+
     SetBombMovedFlag(bomb, false);
     // TODO: Check for inconsistency
     SetBombTime(bomb, pyBomb["life"]);
@@ -81,16 +110,51 @@ void PyToFlame(const nlohmann::json& pyFlame, Flame& flame)
     // attributes: position (tuple), life
 
     const nlohmann::json& pos = pyFlame["position"];
-    flame.position.x = pos[0];
-    flame.position.y = pos[1];
-    // TODO: Check for inconsistency
+    // Flame positions are stored (row, column)
+    flame.position.x = pos[1];
+    flame.position.y = pos[0];
     flame.timeLeft = pyFlame["life"];
-
-    // the python env spawns flame objects in every cell
-    flame.strength = 1;
 }
 
-void PyStringToState(const std::string& string, State& state)
+bool sortByTimeLeft(const Flame &lhs, const Flame &rhs)
+{
+    return lhs.timeLeft < rhs.timeLeft;
+}
+
+template <int count>
+void printFlames(FixedQueue<Flame, count>& flames)
+{
+    for(int i = 0; i < flames.count; i++)
+    {
+        std::cout << i << " (" << flames[i].timeLeft << ", " << flames[i].position.x << ", " << flames[i].position.y << ") ";
+    }
+
+    std::cout << std::endl;
+}
+
+int OptimizeFlameQueue(State& s)
+{
+    // sort flames
+    std::sort(s.flames.queue, s.flames.queue + s.flames.count, sortByTimeLeft);
+
+    // modify timeLeft (additive)
+    int timeLeft = 0;
+    for(int i = 0; i < s.flames.count; i++)
+    {
+        Flame& f = s.flames[i];
+        int oldVal = f.timeLeft;
+        f.timeLeft -= timeLeft;
+        timeLeft = oldVal;
+
+        // set flame ids to allow for faster lookup
+        s.board[f.position.y][f.position.x] += (i << 3);
+    }
+
+    // return total time left
+    return timeLeft;
+}
+
+void PyStringToState(const std::string& string, State& state, GameMode gameMode)
 {
     // attributes: board_size, step_count, board, agents, bombs, flames, items, intended_actions
     const nlohmann::json pyState = nlohmann::json::parse(string);
@@ -111,6 +175,22 @@ void PyStringToState(const std::string& string, State& state)
         check_key_value(pyInfo, "agent_id", i);
 
         PyToAgentInfo(pyInfo, info);
+
+        // assign teams
+        switch (gameMode)
+        {
+            case GameMode::FreeForAll:
+                info.team = 0;
+                break;
+            case GameMode::TwoTeams:
+                info.team = (i % 2 == 0) ? 1 : 2;
+                break;
+        }
+
+        if(!info.dead && state.board[info.y][info.x] < Item::AGENT0)
+        {
+            throw std::runtime_error("Expected agent, got " + std::to_string(state.board[info.y][info.x]));
+        }
     }
 
     // set bombs
@@ -120,6 +200,9 @@ void PyStringToState(const std::string& string, State& state)
         Bomb bomb;
         PyToBomb(pyBombs[i], bomb);
         state.bombs.AddElem(bomb);
+
+        // increment agent bomb count
+        state.agents[BMB_ID(bomb)].bombCount++;
     }
 
     // set flames
@@ -130,7 +213,10 @@ void PyStringToState(const std::string& string, State& state)
         PyToFlame(pyFlames[i], flame);
         state.flames.AddElem(flame);
 
-        // TODO: Adjust flame ids on the board!
+        if(!IS_FLAME(state.board[flame.position.y][flame.position.x]))
+        {
+            throw std::runtime_error("Invalid flame @ " + std::to_string(flame.position.x) + ", " + std::to_string(flame.position.y));
+        }
     }
 
     // set items
@@ -141,36 +227,44 @@ void PyStringToState(const std::string& string, State& state)
         const nlohmann::json& pyItem = pyItems[i];
 
         const nlohmann::json& pos = pyItem[0];
-        const Item type = mapPyToBoard.at(pyItem[1]);
+        const Item type = mapPyToBoard(pyItem[1]);
 
-        int& boardItem = state.board[pos[1].get<int>()][pos[0].get<int>()];
+        // Item position is (row, column)
+        int& boardItem = state.board[pos[0].get<int>()][pos[1].get<int>()];
         switch (boardItem) {
             case Item::PASSAGE:
                 boardItem = type;
                 break;
             case Item::WOOD:
-            case Item::FLAMES:
+            case Item::FLAME:
                 boardItem += State::ItemFlag(type);
                 break;
             default:
-                throw std::runtime_error("Powerup at board item" + std::to_string(boardItem));
+                throw std::runtime_error("Powerup at board item " + std::to_string(boardItem));
         }
     }
 
-    // TODO: info.team, info.bombCount
+    // optimize flames for faster steps
+    state.currentFlameTime = OptimizeFlameQueue(state);
 }
 
-State PyStringToState(const std::string& string)
+State PyStringToState(const std::string& string, GameMode gameMode)
 {
     State state;
-    PyStringToState(string, state);
+    PyStringToState(string, state, gameMode);
     return state;
 }
 
 void PyStringToObservation(const std::string& string, Observation& obs)
 {
     nlohmann::json jstate = nlohmann::json::parse(string);
-    // TODO
+
+    // attributes:
+    // - game_type (int), game_env (string), step_count (int)
+    // - alive (list with ids), enemies (list with ids),
+    // - position (int pair), blast_strength (int), can_kick (bool), teammate (list with ids), ammo (int),
+    // - board (int matrix), bomb_blast_strength (float matrix), bomb_life (float matrix), bomb_moving_direction (float matrix), flame_life (float matrix)
+
 }
 
 Observation PyStringToObservation(const std::string& string)
