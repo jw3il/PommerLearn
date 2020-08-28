@@ -22,12 +22,12 @@ For the C++ side:
 
 * `make`
 
-* [z5](https://github.com/constantinpape/z5), [xtensor](https://github.com/xtensor-stack/xtensor), [boost](boost.org), [json by nlohmann](https://github.com/nlohmann/json/)
+* [z5](https://github.com/constantinpape/z5), [xtensor](https://github.com/xtensor-stack/xtensor), [boost](boost.org), [json by nlohmann](https://github.com/nlohmann/json/), [catch2](https://github.com/catchorg/Catch2)
 
     You can directly install these libraries with conda in the pommer env:
 
     ```
-    conda install -c conda-forge z5py xtensor boost nlohmann_json blosc
+    conda install -c conda-forge z5py xtensor boost nlohmann_json blosc catch2
     ```
 
 

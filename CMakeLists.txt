@@ -29,5 +29,19 @@ target_link_libraries(${PROJECT_NAME} stdc++fs)
 
 find_library(BLOSC_LIB blosc "$ENV{CONDA_ENV_PATH}/lib")
 target_link_libraries(${PROJECT_NAME} "${BLOSC_LIB}")
-
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
+
+# Testing
+
+set(test_name ${PROJECT_NAME}Test)
+
+set(source_files_nomain ${source_files})
+list(FILTER source_files_nomain EXCLUDE REGEX "main.cpp$")
+
+file(GLOB test_files
+    "cpp/test/*.cpp"
+)
+
+add_executable(${test_name} ${source_files_nomain} ${test_files})
+target_link_libraries(${test_name} "${BLOSC_LIB}")
+target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT})
