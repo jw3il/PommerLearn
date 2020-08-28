@@ -1,4 +1,5 @@
 import json
+import copy
 from pommerman import utility, constants
 
 
@@ -43,6 +44,7 @@ def agent_ints_to_ids(agents):
 
 
 def observation_to_json(obs):
+    obs = copy.deepcopy(obs)
     # fix items -> ids
     agent_ints_to_ids(obs["alive"])
     agent_vals_to_ids(obs["enemies"])
