@@ -59,7 +59,7 @@ void PyToBoard(const nlohmann::json& pyBoard, State& state)
     {
         for(int x = 0; x < BOARD_SIZE; x++)
         {
-            state.board[y][x] = mapPyToBoard(pyBoard[y][x].get<int>());
+            state.items[y][x] = mapPyToBoard(pyBoard[y][x].get<int>());
         }
     }
 }
@@ -161,9 +161,9 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
                 break;
         }
 
-        if(!info.dead && state.board[info.y][info.x] < Item::AGENT0)
+        if(!info.dead && state.items[info.y][info.x] < Item::AGENT0)
         {
-            throw std::runtime_error("Expected agent, got " + std::to_string(state.board[info.y][info.x]));
+            throw std::runtime_error("Expected agent, got " + std::to_string(state.items[info.y][info.x]));
         }
     }
 
@@ -189,7 +189,7 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
         PyToFlame(pyFlames[i], flame);
         state.flames.AddElem(flame);
 
-        if(!IS_FLAME(state.board[flame.position.y][flame.position.x]))
+        if(!IS_FLAME(state.items[flame.position.y][flame.position.x]))
         {
             throw std::runtime_error("Invalid flame @ " + std::to_string(flame.position.x) + ", " + std::to_string(flame.position.y));
         }
@@ -206,7 +206,7 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
         const Item type = mapPyToBoard(pyItem[1]);
 
         // Item position is (row, column)
-        int& boardItem = state.board[pos[0].get<int>()][pos[1].get<int>()];
+        int& boardItem = state.items[pos[0].get<int>()][pos[1].get<int>()];
         switch (boardItem) {
             case Item::PASSAGE:
                 boardItem = type;
@@ -221,7 +221,7 @@ void PyStringToState(const std::string& string, State& state, GameMode gameMode)
     }
 
     // optimize flames for faster steps
-    state.currentFlameTime = util::OptimizeFlameQueue(state.board, state.flames);
+    state.currentFlameTime = util::OptimizeFlameQueue(state);
 }
 
 State PyStringToState(const std::string& string, GameMode gameMode)
@@ -285,7 +285,7 @@ void PyStringToObservation(const std::string& string, int agentId, Observation& 
         for(int x = 0; x < BOARD_SIZE; x++)
         {
             Item item = mapPyToBoard(pyBoard[y][x].get<int>());
-            obs.board[y][x] = item;
+            obs.items[y][x] = item;
 
             switch (item)
             {
@@ -341,7 +341,7 @@ void PyStringToObservation(const std::string& string, int agentId, Observation& 
         }
     }
 
-    obs.currentFlameTime = util::OptimizeFlameQueue(obs.board, obs.flames);
+    obs.currentFlameTime = util::OptimizeFlameQueue(obs);
 }
 
 Observation PyStringToObservation(const std::string& string, int agentId)
