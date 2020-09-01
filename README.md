@@ -30,6 +30,19 @@ For the C++ side:
     conda install -c conda-forge z5py xtensor boost nlohmann_json blosc
     ```
 
+* [blaze](https://bitbucket.org/blaze-lib/blaze/src/master/)
+
+    Blaze needs to be installed manually.
+
+    * https://bitbucket.org/blaze-lib/blaze/downloads/
+
+    * https://bitbucket.org/blaze-lib/blaze/wiki/Configuration%20and%20Installation#!manual-installation-on-linuxmacos
+
+    ```
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local/
+    sudo make install
+    export BLAZE_PATH=/usr/local/include/
+    ```
 
 (Tested on Ubuntu 20.04 LTS)
 

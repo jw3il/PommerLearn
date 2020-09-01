@@ -126,7 +126,7 @@ bool PommermanState::gives_check(Action action) const
     return false;
 }
 
-std::unique_ptr<PommermanState> PommermanState::clone() const
+PommermanState* PommermanState::clone() const
 {
     // TODO
 }
@@ -135,4 +135,10 @@ void PommermanState::print(std::ostream& os) const
 {
     // TODO
     os << InitialStateToString(env.GetState());
+}
+
+Tablebase::WDLScore PommermanState::check_for_tablebase_wdl(Tablebase::ProbeState& result)
+{
+    result = Tablebase::FAIL;
+    return Tablebase::WDLScoreNone;
 }
