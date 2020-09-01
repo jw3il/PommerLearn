@@ -2,8 +2,8 @@
 #define SAMPLE_BUFFER_H
 
 #include "bboard.hpp"
-
 #include <cstdint>
+typedef unsigned long ulong;
 
 /**
  * @brief The SampleBuffer class allows to convert and buffer generated samples.

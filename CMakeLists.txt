@@ -6,12 +6,19 @@ project(PommerLearn CXX)
 option(USE_TENSORRT              "Build with TensorRT support"  ON)
 
 add_definitions(-DMODE_POMMERMAN)
-add_definitions(-DCRAZYHOUSE)
 
 if(DEFINED ENV{CONDA_ENV_PATH})
     MESSAGE(STATUS "CONDA_ENV_PATH set to: $ENV{CONDA_ENV_PATH}")
 else()
     MESSAGE(SEND_ERROR "CONDA_ENV_PATH not set")
+endif()
+
+if(DEFINED ENV{BLAZE_PATH})
+    MESSAGE(STATUS "BLAZE_PATH set to: $ENV{BLAZE_PATH}")
+    include_directories("$ENV{BLAZE_PATH}/include")
+    include_directories("$ENV{BLAZE_PATH}")
+else()
+    MESSAGE(SEND_ERROR "BLAZE_PATH not set")
 endif()
 
 # For now, just directly include the pomcpp code
@@ -20,17 +27,6 @@ file(GLOB source_files
     "deps/pomcpp/src/agents/*.cpp"
     "deps/CrazyAra/engine/src/*.cpp"
     "deps/CrazyAra/engine/src/*.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/syzygy/*.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/syzygy/*.cpp"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/*.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/*.cpp"
-    "deps/CrazyAra/engine/src/domain/crazyhouse/*.h"
-    "deps/CrazyAra/engine/src/domain/crazyhouse/*.cpp"
-    "deps/CrazyAra/engine/src/domain/constants.h"
-    "deps/CrazyAra/engine/src/domain/*.h"
-    "deps/CrazyAra/engine/src/domain/*.cpp"
-    "deps/CrazyAra/engine/src/tests/*.h"
-    "deps/CrazyAra/engine/src/tests/*.cpp"
     "deps/CrazyAra/engine/src/util/*.h"
     "deps/CrazyAra/engine/src/util/*.cpp"
     "deps/CrazyAra/engine/src/domain/crazyhouse/*.h"
@@ -56,10 +52,7 @@ file(GLOB source_files
 include_directories("cpp/include/")
 include_directories("deps/pomcpp/include")
 include_directories("$ENV{CONDA_ENV_PATH}/include")
-include_directories("deps/CrazyAra/engine/3rdparty/Stockfish/src")
 include_directories("deps/CrazyAra/engine/src")
-include_directories("deps/CrazyAra/engine/src/domain/")
-include_directories("deps/CrazyAra/engine/src/domain/crazyhouse/")
 include_directories("deps/CrazyAra/engine/src/nn/")
 include_directories("deps/CrazyAra/engine/src/agents/")
 
@@ -98,6 +91,12 @@ find_library(BLOSC_LIB blosc "$ENV{CONDA_ENV_PATH}/lib")
 target_link_libraries(${PROJECT_NAME} "${BLOSC_LIB}")
 
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
+
+find_package( blaze REQUIRED)
+if( blaze_FOUND )
+     add_library( blaze_target INTERFACE )
+     target_link_libraries( blaze_target INTERFACE blaze::blaze )
+endif()
 
 if (USE_TENSORRT)
     target_link_libraries(${PROJECT_NAME} nvonnxparser nvinfer cudart myelin ${CUDART_LIB} ${CUBLAS_LIB} ${CUDNN_LIB})
