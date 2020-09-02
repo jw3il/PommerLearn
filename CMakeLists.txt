@@ -83,21 +83,45 @@ endif()
     add_definitions(-DTENSORRT)
 endif()
 
-add_executable(${PROJECT_NAME} ${source_files})
-# include filesystem (needed for z5)
-target_link_libraries(${PROJECT_NAME} stdc++fs)
-
-find_library(BLOSC_LIB blosc "$ENV{CONDA_ENV_PATH}/lib")
-target_link_libraries(${PROJECT_NAME} "${BLOSC_LIB}")
-
-target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
-
 find_package( blaze REQUIRED)
 if( blaze_FOUND )
      add_library( blaze_target INTERFACE )
      target_link_libraries( blaze_target INTERFACE blaze::blaze )
 endif()
 
+find_library(BLOSC_LIB blosc "$ENV{CONDA_ENV_PATH}/lib")
+
+# Main target
+
+add_executable(${PROJECT_NAME} ${source_files})
+
+# include filesystem (needed for z5)
+target_link_libraries(${PROJECT_NAME} stdc++fs)
+target_link_libraries(${PROJECT_NAME} "${BLOSC_LIB}")
+target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
+
 if (USE_TENSORRT)
     target_link_libraries(${PROJECT_NAME} nvonnxparser nvinfer cudart myelin ${CUDART_LIB} ${CUBLAS_LIB} ${CUDNN_LIB})
 endif()
+
+# Testing
+
+set(test_name ${PROJECT_NAME}Test)
+
+set(source_files_nomain ${source_files})
+list(FILTER source_files_nomain EXCLUDE REGEX "main.cpp$")
+
+file(GLOB test_files
+    "cpp/test/*.cpp"
+)
+
+add_executable(${test_name} ${source_files_nomain} ${test_files})
+
+target_link_libraries(${test_name} stdc++fs)
+target_link_libraries(${test_name} "${BLOSC_LIB}")
+target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT})
+
+if (USE_TENSORRT)
+    target_link_libraries(${test_name} nvonnxparser nvinfer cudart myelin ${CUDART_LIB} ${CUBLAS_LIB} ${CUDNN_LIB})
+endif()
+

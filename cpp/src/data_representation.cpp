@@ -13,7 +13,7 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
     // shape of a single plane
     std::vector<std::size_t> planeShape = { PLANE_SIZE, PLANE_SIZE };
     // adapt state.board without copying its values
-    auto board = xt::adapt(&(state->board[0][0]), PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), planeShape);
+    auto board = xt::adapt(&(state->items[0][0]), PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), planeShape);
 
     // shape of all planes of a state
     std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
@@ -133,7 +133,7 @@ std::string InitialStateToString(bboard::State state) {
 
     for (int y = 0; y < bboard::BOARD_SIZE; y++) {
         for (int x = 0; x < bboard::BOARD_SIZE; x++) {
-            int elem = state.board[y][x];
+            int elem = state.items[y][x];
 
             switch (elem) {
                 case bboard::Item::PASSAGE: stream << "0"; break;
