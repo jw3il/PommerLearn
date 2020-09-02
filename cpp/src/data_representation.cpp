@@ -77,31 +77,13 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
     int flamesPlane = planeIndex++;
     xt::view(xtPlanes, flamesPlane) = 0;
 
+    float cumulativeTimeLeft = 0;
     for (int i = 0; i < state->flames.count; i++) {
-        bboard::Flame flame = state->flames[i];
+        const bboard::Flame& flame = state->flames[i];
 
-        // each flame object has an id which is used to identify the corresponding flame items on the board
-        int flameId = bboard::FLAME_ID(board(flame.position.y, flame.position.x));
-        float flameValue = (float)flame.timeLeft / bboard::FLAME_LIFETIME;
-
-        // TODO: change manual loops to xtensor operations
-
-        // a flame object represents an explosion which consists of multiple flame items on the board
-
-        // row
-        for (int x = 0; x < bboard::BOARD_SIZE; x++) {
-            int bval = board(flame.position.y, x);
-            if (bboard::IS_FLAME(bval) && bboard::FLAME_ID(bval) == flameId) {
-                xt::view(xtPlanes, flamesPlane, flame.position.y, x) = flameValue;
-            }
-        }
-        // column
-        for (int y = 0; y < bboard::BOARD_SIZE; y++) {
-            int bval = board(y, flame.position.x);
-            if (bboard::IS_FLAME(bval) && bboard::FLAME_ID(bval) == flameId) {
-                xt::view(xtPlanes, flamesPlane, y, flame.position.x) = flameValue;
-            }
-        }
+        cumulativeTimeLeft += (float)flame.timeLeft;
+        float flameValue = cumulativeTimeLeft / bboard::FLAME_LIFETIME;
+        xt::view(xtPlanes, flamesPlane, flame.position.y, flame.position.x) = flameValue;
     }
 
     // player position planes
