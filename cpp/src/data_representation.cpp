@@ -4,34 +4,31 @@
 #include "xtensor/xadapt.hpp"
 #include <sstream>
 
-float inline _getNormalizedBombStrength(int stength) {
+float inline _getNormalizedBombStrength(int stength)
+{
     float val = (float)stength / bboard::BOARD_SIZE;
     return val > 1.0f ? 1.0f : val;
 }
 
-void StateToPlanes(const bboard::State* state, int id, float* planes) {
-    // shape of a single plane
-    std::vector<std::size_t> planeShape = { PLANE_SIZE, PLANE_SIZE };
+template <typename xtPlanesType>
+inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPlanes, int& planeIndex)
+{
+    // shape of a single plane (BOARD_SIZE == PLANE_SIZE)
+    std::vector<std::size_t> boardShape = { bboard::BOARD_SIZE, bboard::BOARD_SIZE };
     // adapt state.board without copying its values
-    auto board = xt::adapt(&(state->items[0][0]), PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), planeShape);
-
-    // shape of all planes of a state
-    std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
-    auto xtPlanes = xt::adapt(planes, PLANE_COUNT * PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), stateShape);
-
-    int planeIndex = 0;
+    auto items = xt::adapt(&(board->items[0][0]), bboard::BOARD_SIZE * bboard::BOARD_SIZE, xt::no_ownership(), boardShape);
 
     // obstacle planes
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::RIGID));
+    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::RIGID));
     // wood blocks can also contain an item (+0, +1, +2, +3)
-    auto isWood = xt::equal(board, bboard::Item::WOOD) + xt::equal(board, bboard::Item::WOOD + 1)
-            + xt::equal(board, bboard::Item::WOOD + 2) + xt::equal(board, bboard::Item::WOOD + 3);
+    auto isWood = xt::equal(items, bboard::Item::WOOD) + xt::equal(items, bboard::Item::WOOD + 1)
+            + xt::equal(items, bboard::Item::WOOD + 2) + xt::equal(items, bboard::Item::WOOD + 3);
     xt::view(xtPlanes, planeIndex++) = xt::cast<float>(isWood);
 
     // item planes
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::EXTRABOMB));
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::INCRRANGE));
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(board, bboard::Item::KICK));
+    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::EXTRABOMB));
+    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::INCRRANGE));
+    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::KICK));
 
     // bomb planes (lifetime & strength)
     int bombTimePlane = planeIndex++;
@@ -44,8 +41,9 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
     xt::view(xtPlanes, bombMovementHorizontalPlane) = 0;
     xt::view(xtPlanes, bombMovementVerticalPlane) = 0;
 
-    for (int i = 0; i < state->bombs.count; i++) {
-        bboard::Bomb bomb = state->bombs[i];
+    for (int i = 0; i < board->bombs.count; i++)
+    {
+        bboard::Bomb bomb = board->bombs[i];
         int x = bboard::BMB_POS_X(bomb);
         int y = bboard::BMB_POS_Y(bomb);
 
@@ -55,7 +53,8 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
 
         // bomb movement
         bboard::Move bombMovement = bboard::Move(bboard::BMB_DIR(bomb));
-        switch (bombMovement) {
+        switch (bombMovement)
+        {
             case bboard::Move::UP:
                 xt::view(xtPlanes, bombMovementVerticalPlane, y, x) = 1.0f;
                 break;
@@ -78,8 +77,9 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
     xt::view(xtPlanes, flamesPlane) = 0;
 
     float cumulativeTimeLeft = 0;
-    for (int i = 0; i < state->flames.count; i++) {
-        const bboard::Flame& flame = state->flames[i];
+    for (int i = 0; i < board->flames.count; i++)
+    {
+        const bboard::Flame& flame = board->flames[i];
 
         cumulativeTimeLeft += (float)flame.timeLeft;
         float flameValue = cumulativeTimeLeft / bboard::FLAME_LIFETIME;
@@ -87,27 +87,44 @@ void StateToPlanes(const bboard::State* state, int id, float* planes) {
     }
 
     // player position planes
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++)
+    {
         int currentId = (id + i) % 4;
 
-        // set plane to zero
         int currentPlane = planeIndex++;
-        xt::view(xtPlanes, currentPlane) = 0;
-
-        // only insert the position if the agent is alive
-        bboard::AgentInfo agentInfo = state->agents[currentId];
-        if (!agentInfo.dead) {
-            xt::view(xtPlanes, currentPlane, agentInfo.y, agentInfo.x) = 1;
-        }
+        xt::view(xtPlanes, currentPlane) = xt::cast<float>(xt::equal(items, bboard::Item::AGENT0 + currentId));;
     }
+}
 
-    // scalar feature planes
-    bboard::AgentInfo info = state->agents[id];
+template <typename xtPlanesType>
+inline void _infoToPlanes(const bboard::AgentInfo* info, xtPlanesType xtPlanes, int& planeIndex)
+{
+    xt::view(xtPlanes, planeIndex++) = _getNormalizedBombStrength(info->bombStrength);
+    xt::view(xtPlanes, planeIndex++) = (float)info->bombCount / bboard::MAX_BOMBS_PER_AGENT;
+    xt::view(xtPlanes, planeIndex++) = (float)info->maxBombCount / bboard::MAX_BOMBS_PER_AGENT;
+    xt::view(xtPlanes, planeIndex++) = info->canKick ? 1 : 0;
+}
 
-    xt::view(xtPlanes, planeIndex++) = _getNormalizedBombStrength(info.bombStrength);
-    xt::view(xtPlanes, planeIndex++) = (float)info.bombCount / bboard::MAX_BOMBS_PER_AGENT;
-    xt::view(xtPlanes, planeIndex++) = (float)info.maxBombCount / bboard::MAX_BOMBS_PER_AGENT;
-    xt::view(xtPlanes, planeIndex++) = info.canKick ? 1 : 0;
+void StateToPlanes(const bboard::State* state, int id, float* planes)
+{
+    // shape of all planes of a state
+    std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
+    auto xtPlanes = xt::adapt(planes, PLANE_COUNT * PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), stateShape);
+
+    int planeIndex = 0;
+    _boardToPlanes(state, id, xtPlanes, planeIndex);
+    _infoToPlanes(&state->agents[id], xtPlanes, planeIndex);
+}
+
+void ObservationToPlanes(const bboard::Observation* obs, int id, float* planes)
+{
+    // shape of all planes of a state
+    std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
+    auto xtPlanes = xt::adapt(planes, PLANE_COUNT * PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), stateShape);
+
+    int planeIndex = 0;
+    _boardToPlanes(obs, id, xtPlanes, planeIndex);
+    _infoToPlanes(&obs->agentInfos[id], xtPlanes, planeIndex);
 }
 
 std::string InitialStateToString(bboard::State state) {
