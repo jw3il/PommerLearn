@@ -3,28 +3,44 @@ cmake_minimum_required(VERSION 2.8)
 set (CMAKE_CXX_STANDARD 17)
 project(PommerLearn CXX)
 
-option(USE_TENSORRT              "Build with TensorRT support"  ON)
+function(check_env_defined name)
+    if(DEFINED ENV{${name}})
+        MESSAGE(STATUS "Environment variable ${name} set to: $ENV{${name}}")
+    else()
+        MESSAGE(SEND_ERROR "Environment variable ${name} not defined!")
+    endif()
+endfunction()
+
+########################
+# General Dependencies #
+########################
+
+# conda-forge headers
+
+check_env_defined("CONDA_ENV_PATH")
+include_directories("$ENV{CONDA_ENV_PATH}/include")
+
+########################
+#      Libraries       #
+########################
+
+# CrazyAra
 
 add_definitions(-DMODE_POMMERMAN)
 
-if(DEFINED ENV{CONDA_ENV_PATH})
-    MESSAGE(STATUS "CONDA_ENV_PATH set to: $ENV{CONDA_ENV_PATH}")
-else()
-    MESSAGE(SEND_ERROR "CONDA_ENV_PATH not set")
-endif()
+check_env_defined("BLAZE_PATH")
+include_directories("$ENV{BLAZE_PATH}/include")
+include_directories("$ENV{BLAZE_PATH}")
 
-if(DEFINED ENV{BLAZE_PATH})
-    MESSAGE(STATUS "BLAZE_PATH set to: $ENV{BLAZE_PATH}")
-    include_directories("$ENV{BLAZE_PATH}/include")
-    include_directories("$ENV{BLAZE_PATH}")
-else()
-    MESSAGE(SEND_ERROR "BLAZE_PATH not set")
-endif()
+# build CrazyAra with TensorRT support
+check_env_defined("TENSORRT_PATH")
+check_env_defined("CUDA_PATH")
+include_directories("$ENV{CUDA_PATH}/include")
+include_directories("$ENV{TENSORRT_PATH}/include")
+include_directories("$ENV{TENSORRT_PATH}/samples/common/")
+add_definitions(-DTENSORRT)
 
-# For now, just directly include the pomcpp code
-file(GLOB source_files
-    "deps/pomcpp/src/bboard/*.cpp"
-    "deps/pomcpp/src/agents/*.cpp"
+file(GLOB CrazyAra_source_files
     "deps/CrazyAra/engine/src/*.cpp"
     "deps/CrazyAra/engine/src/*.h"
     "deps/CrazyAra/engine/src/util/*.h"
@@ -45,64 +61,56 @@ file(GLOB source_files
     "deps/CrazyAra/engine/src/manager/*.h"
     "deps/CrazyAra/engine/src/rl/*.cpp"
     "deps/CrazyAra/engine/src/rl/*.h"
+)
+
+# add additional source file
+set(CrazyAra_source_files
+    ${CrazyAra_source_files}
+    $ENV{TENSORRT_PATH}/samples/common/logger.cpp
+)
+
+include_directories("deps/CrazyAra/engine/src")
+include_directories("deps/CrazyAra/engine/src/nn/")
+include_directories("deps/CrazyAra/engine/src/agents/")
+
+add_library(CrazyAra ${CrazyAra_source_files})
+
+find_package(Threads REQUIRED)
+
+target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib64")
+target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib/x64")
+target_link_libraries(CrazyAra -L"$ENV{TENSORRT_PATH}/lib")
+
+target_link_libraries(CrazyAra nvonnxparser nvinfer cudart myelin)
+
+# pomcpp
+
+# For now, just directly include the pomcpp code
+file(GLOB pomcpp_source_files
+    "deps/pomcpp/src/bboard/*.cpp"
+    "deps/pomcpp/src/agents/*.cpp"
+)
+
+include_directories("deps/pomcpp/include")
+add_library(pomcpp ${pomcpp_source_files})
+
+########################
+#    Main Target(s)    #
+########################
+
+# blosc needed for z5
+find_library(BLOSC blosc "$ENV{CONDA_ENV_PATH}/lib")
+
+file(GLOB source_files
     "cpp/src/*.cpp"
     "cpp/include/*.h"
 )
 
 include_directories("cpp/include/")
-include_directories("deps/pomcpp/include")
-include_directories("$ENV{CONDA_ENV_PATH}/include")
-include_directories("deps/CrazyAra/engine/src")
-include_directories("deps/CrazyAra/engine/src/nn/")
-include_directories("deps/CrazyAra/engine/src/agents/")
-
-find_package(Threads REQUIRED)
-
-if (USE_TENSORRT)
-    # build CrazyAra with TensorRT support, requires a working TensorRT-MXNet library package
-    message(STATUS "Enabled TensorRT support")
-    message(STATUS "TensorRT path: $ENV{TENSORRT_PATH}")
-    # add additional source file
-    set(source_files
-        ${source_files}
-        $ENV{TENSORRT_PATH}/samples/common/logger.cpp
-        )
-#    find_package(CUDA REQUIRED)
-    message(STATUS "CUDA path: $ENV{CUDA_PATH}")
-    include_directories("$ENV{CUDA_PATH}/include")
-    link_directories("$ENV{CUDA_PATH}/lib64")
-    link_directories("$ENV{CUDA_PATH}/lib/x64")
-    link_directories("$ENV{TENSORRT_PATH}/lib")
-if(WIN32)
-  find_library(TENSORRT_LIBRARY_MYELIN myelin64_1
-    HINTS  ${TENSORRT_PATH}
-    PATH_SUFFIXES lib lib64 lib/x64)
-endif()
-    include_directories("$ENV{TENSORRT_PATH}/include")
-    include_directories("$ENV{TENSORRT_PATH}/samples/common/")
-    add_definitions(-DTENSORRT)
-endif()
-
-find_package( blaze REQUIRED)
-if( blaze_FOUND )
-     add_library( blaze_target INTERFACE )
-     target_link_libraries( blaze_target INTERFACE blaze::blaze )
-endif()
-
-find_library(BLOSC_LIB blosc "$ENV{CONDA_ENV_PATH}/lib")
-
-# Main target
 
 add_executable(${PROJECT_NAME} ${source_files})
 
-# include filesystem (needed for z5)
-target_link_libraries(${PROJECT_NAME} stdc++fs)
-target_link_libraries(${PROJECT_NAME} "${BLOSC_LIB}")
-target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
-
-if (USE_TENSORRT)
-    target_link_libraries(${PROJECT_NAME} nvonnxparser nvinfer cudart myelin ${CUDART_LIB} ${CUBLAS_LIB} ${CUDNN_LIB})
-endif()
+target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} stdc++fs ${BLOSC} CrazyAra pomcpp)
 
 # Testing
 
@@ -117,11 +125,4 @@ file(GLOB test_files
 
 add_executable(${test_name} ${source_files_nomain} ${test_files})
 
-target_link_libraries(${test_name} stdc++fs)
-target_link_libraries(${test_name} "${BLOSC_LIB}")
-target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT})
-
-if (USE_TENSORRT)
-    target_link_libraries(${test_name} nvonnxparser nvinfer cudart myelin ${CUDART_LIB} ${CUBLAS_LIB} ${CUDNN_LIB})
-endif()
-
+target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} stdc++fs ${BLOSC} CrazyAra pomcpp)
