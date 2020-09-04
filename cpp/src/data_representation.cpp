@@ -124,7 +124,7 @@ void ObservationToPlanes(const bboard::Observation* obs, int id, float* planes)
 
     int planeIndex = 0;
     _boardToPlanes(obs, id, xtPlanes, planeIndex);
-    _infoToPlanes(&obs->agentInfos[id], xtPlanes, planeIndex);
+    _infoToPlanes(&obs->agentInfos[obs->agentIDMapping[id]], xtPlanes, planeIndex);
 }
 
 std::string InitialStateToString(bboard::State state) {
