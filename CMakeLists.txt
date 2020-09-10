@@ -27,6 +27,7 @@ include_directories("$ENV{CONDA_ENV_PATH}/include")
 # CrazyAra
 
 add_definitions(-DMODE_POMMERMAN)
+# add_definitions(-DDISABLE_UCI_INFO)  # optional
 
 check_env_defined("BLAZE_PATH")
 include_directories("$ENV{BLAZE_PATH}/include")
