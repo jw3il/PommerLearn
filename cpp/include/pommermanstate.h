@@ -18,7 +18,7 @@ class PommermanState : public State
 public:
     PommermanState();
     ~PommermanState();
-    bboard::Environment env;
+    const bboard::State* state;
     const unsigned int numberAgents = 4;
     bboard::Move* agentActions;
     size_t agentToMove;
@@ -26,6 +26,7 @@ public:
 
     // State interface
 public:
+    void set_state(const bboard::State* state);
     std::vector<Action> legal_actions() const override;
     void set(const std::string &fenStr, bool isChess960, int variant) override;
     void get_state_planes(bool normalize, float *inputPlanes) const override;

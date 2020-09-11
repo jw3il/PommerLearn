@@ -17,10 +17,6 @@ PommermanState::PommermanState():
     for (size_t idx = 0; idx < numberAgents; ++idx) {
         agentActions[idx] = bboard::Move::IDLE;
     }
-    agents::RandomAgent* r = new agents::RandomAgent;
-    std::array<bboard::Agent*, 4> agents = {r,r,r,r};
-    env.MakeGame(agents);
-//    env.StartGame(1000, false, false);
 }
 
 PommermanState::~PommermanState()
@@ -28,12 +24,17 @@ PommermanState::~PommermanState()
     delete agentActions;
 }
 
+void PommermanState::set_state(const bboard::State *state)
+{
+    this->state = state;
+}
+
 std::vector<Action> PommermanState::legal_actions() const
 {
     return {Action(bboard::Move::IDLE),
             Action(bboard::Move::UP),
-            Action(bboard::Move::DOWN),
             Action(bboard::Move::LEFT),
+            Action(bboard::Move::DOWN),
             Action(bboard::Move::RIGHT),
             Action(bboard::Move::BOMB)};
 }
@@ -46,7 +47,7 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
 void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
 {
     // TODO
-    StateToPlanes(&env.GetState(), 0, inputPlanes);
+    StateToPlanes(state, 0, inputPlanes);
 }
 
 unsigned int PommermanState::steps_from_null() const
@@ -61,14 +62,14 @@ bool PommermanState::is_chess960() const
 
 std::string PommermanState::fen() const
 {
-    return "null";
+    return "<fen-placeholder>";
 }
 
 void PommermanState::do_action(Action action)
 {
     agentActions[agentToMove++] = bboard::Move(action);
     if (agentToMove == numberAgents) {
-        bboard::Step(&env.GetState(), agentActions);
+//        bboard::Step(state, agentActions);
         agentToMove = 0;
     }
 }
@@ -134,7 +135,7 @@ PommermanState* PommermanState::clone() const
 void PommermanState::print(std::ostream& os) const
 {
     // TODO
-    os << InitialStateToString(env.GetState());
+    os << InitialStateToString(*state);
 }
 
 Tablebase::WDLScore PommermanState::check_for_tablebase_wdl(Tablebase::ProbeState& result)
