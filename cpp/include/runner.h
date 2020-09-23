@@ -27,9 +27,10 @@ public:
      * @param maxEpisodeSteps The maximum number of steps per episode.
      * @param maxEpisodes The maximum number of episodes. Ignored if -1.
      * @param maxTotalSteps The (minimum) total number of simulated steps. Starts new episodes when this limit is not reached. Ignored if -1.
+     * @param seed The seed used to generate the training data (for deterministic results). Ignored (initialized with time) if -1.
      * @param printSteps Whether to print the steps.
      */
-    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, bool printSteps=false);
+    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed=-1, bool printSteps=false);
 
 private:
 

@@ -42,7 +42,7 @@ void _polulate_with_simple_agents(LogAgent* logAgents, int count, long seed) {
     }
 }
 
-void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, bool printSteps) {
+void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed, bool printSteps) {
     // create log agents to log the episodes
     LogAgent logAgents[4] = {
         LogAgent(maxEpisodeSteps),
@@ -52,9 +52,16 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
     };
     std::array<bboard::Agent*, 4> agents = {&logAgents[0], &logAgents[1], &logAgents[2], &logAgents[3]};
 
+    if(seed == -1)
+    {
+        seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    }
+    auto rng = std::mt19937_64(seed);
+
     long totalEpisodeSteps = 0;
     for (int e = 0; (maxEpisodes == -1 || e < maxEpisodes) && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); e++) {
-        long seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        // generate new seeds in every episode
+        seed = rng();
         bboard::Environment env;
         env.MakeGame(agents, bboard::GameMode::FreeForAll, seed, true);
 

@@ -78,7 +78,7 @@ void generate_sl_data(const std::string& dataPrefix, int chunkSize, int chunkCou
     Runner runner;
 
     // generate enough steps (chunkSize * chunkCount) to fill one dataset
-    runner.generateSupervisedTrainingData(&ipcManager, 800, -1, chunkSize * chunkCount, false);
+    runner.generateSupervisedTrainingData(&ipcManager, 800, -1, chunkSize * chunkCount, -1, false);
     ipcManager.flush();
 }
 
