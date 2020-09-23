@@ -58,27 +58,52 @@ def main():
     run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"],
                  train_loader, val_loader, use_cuda, comment="")
 
-    # export a model with batch size 1 and 8
-    export_to_onnx(model, 1, input_shape, use_cuda)
-    export_to_onnx(model, 8, input_shape, use_cuda)
+    # export model for list of given batch-sizes
+    export_model(model, [1, 8], input_shape, use_cuda)
 
 
-def export_to_onnx(model, batch_size: int, input_shape: tuple, use_cuda: bool) -> None:
+def export_model(model, batch_sizes, input_shape, use_cuda):
     """
-    Exports the model to
+    Exports the model in ONNX and Torch Script Module.
     :param model: Pytorch model
-    :param batch_size: Batch size to use for export
+    :param batch_sizes: List of batch sizes to use for export
     :param input_shape: Input shape of the model
     :param use_cuda: Whether cuda is enabled
     :return:
     """
-    dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
-    if use_cuda:
-        dummy_input = dummy_input.cuda()
+    for batch_size in batch_sizes:
+        dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
+        if use_cuda:
+            dummy_input = dummy_input.cuda()
+        export_to_onnx(model, dummy_input)
+        export_as_script_module(model, dummy_input)
+
+
+def export_to_onnx(model, dummy_input) -> None:
+    """
+    Exports the model to ONNX format to allow later import in TensorRT.
+    :param model: Pytorch model
+    :param dummy_input: Dummy input which defines the input shape for the model
+    :return:
+    """
     input_names = ["data"]
     output_names = ["value_out", "policy_out"]
     torch.onnx.export(model, dummy_input, f"model-bsize-{batch_size}.onnx", input_names=input_names,
                       output_names=output_names, verbose=True)
+
+
+def export_as_script_module(model, dummy_input) -> None:
+    """
+    Exports the model to a Torch Script Module to allow later import in C++.
+    :param model: Pytorch model
+    :param dummy_input: Dummy input which defines the input shape for the model
+    :return:
+    """
+    # generate a torch.jit.ScriptModule via tracing.
+    traced_script_module = torch.jit.trace(model, dummy_input)
+
+    # serialize script module to file
+    traced_script_module.save(f"model-bsize-{batch_size}.pt")
 
 
 class Metrics:
