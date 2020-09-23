@@ -13,7 +13,10 @@ PommermanState::PommermanState(int agentID, bboard::GameMode gameMode):
     agentID(agentID),
     gameMode(gameMode),
     plies(0),
-    usePartialObservability(false) {}
+    usePartialObservability(false)
+{
+    std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
+}
 
 void PommermanState::set_state(const bboard::State* state)
 {
