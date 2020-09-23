@@ -9,28 +9,44 @@
 #include "agents.hpp"
 
 
-PommermanState::PommermanState():
-    agentToMove(0),
-    plies(0)
+PommermanState::PommermanState(int agentID, bboard::GameMode gameMode):
+    agentID(agentID),
+    gameMode(gameMode),
+    plies(0),
+    usePartialObservability(false) {}
+
+void PommermanState::set_state(const bboard::State* state)
 {
-    agentActions = new bboard::Move[numberAgents];
-    for (size_t idx = 0; idx < numberAgents; ++idx) {
-        agentActions[idx] = bboard::Move::IDLE;
+    if(this->usePartialObservability)
+    {
+        // simulate partial observability
+
+        bboard::Observation obs;
+        // TODO: Maybe directly use the state object instead of observations?
+        bboard::Observation::Get(*state, agentID, this->params, obs);
+        set_observation(&obs);
+    }
+    else
+    {
+        this->state = *state;
     }
 }
 
-PommermanState::~PommermanState()
+void PommermanState::set_observation(const bboard::Observation* obs)
 {
-    delete agentActions;
+    // TODO: Merge observations
+    obs->ToState(this->state, gameMode);
 }
 
-void PommermanState::set_state(const bboard::State *state)
+void PommermanState::set_partial_observability(const bboard::ObservationParameters* params)
 {
-    this->state = state;
+    this->usePartialObservability = true;
+    this->params = *params;
 }
 
 std::vector<Action> PommermanState::legal_actions() const
 {
+    // TODO: Change depending on the current state
     return {Action(bboard::Move::IDLE),
             Action(bboard::Move::UP),
             Action(bboard::Move::LEFT),
@@ -47,7 +63,7 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
 void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
 {
     // TODO
-    StateToPlanes(state, 0, inputPlanes);
+    StateToPlanes(&state, 0, inputPlanes);
 }
 
 unsigned int PommermanState::steps_from_null() const
@@ -66,12 +82,9 @@ std::string PommermanState::fen() const
 }
 
 void PommermanState::do_action(Action action)
-{
-    agentActions[agentToMove++] = bboard::Move(action);
-    if (agentToMove == numberAgents) {
-//        bboard::Step(state, agentActions);
-        agentToMove = 0;
-    }
+{    
+    moves[agentID] = bboard::Move(action);
+    bboard::Step(&state, moves);
 }
 
 void PommermanState::undo_action(Action action) {
@@ -86,7 +99,7 @@ unsigned int PommermanState::number_repetitions() const
 
 int PommermanState::side_to_move() const
 {
-    return agentToMove;
+    return agentID;
 }
 
 Key PommermanState::hash_key() const
@@ -112,7 +125,34 @@ std::string PommermanState::action_to_san(Action action, const std::vector<Actio
 
 TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, float& customTerminalValue) const
 {
-    // TODO
+    if(state.finished)
+    {
+        if(state.agents[agentID].won)
+        {
+            return TERMINAL_WIN;
+        }
+        else
+        {
+            if(state.isDraw)
+            {
+                return TERMINAL_DRAW;
+            }
+            else
+            {
+                return TERMINAL_LOSS;
+            }
+        }
+    }
+
+    // state is not finished
+
+    if(state.agents[agentID].dead)
+    {
+        // TODO: Add custom terminal value
+        customTerminalValue = -0.5;
+        return TERMINAL_CUSTOM;
+    }
+
     return TERMINAL_NONE;
 }
 
@@ -129,13 +169,15 @@ bool PommermanState::gives_check(Action action) const
 
 PommermanState* PommermanState::clone() const
 {
-    // TODO
+    PommermanState* clone = new PommermanState(agentID, gameMode);
+    clone->state = state;
+    return clone;
 }
 
 void PommermanState::print(std::ostream& os) const
 {
     // TODO
-    os << InitialStateToString(*state);
+    os << InitialStateToString(state);
 }
 
 Tablebase::WDLScore PommermanState::check_for_tablebase_wdl(Tablebase::ProbeState& result)

@@ -107,7 +107,7 @@ void _bombFromJSON(const nlohmann::json& pyBomb, Bomb& bomb)
         SetBombDirection(bomb, _mapPyToDir(movingDir));
     }
 
-    SetBombMovedFlag(bomb, false);
+    SetBombFlag(bomb, false);
     SetBombTime(bomb, pyBomb["life"]);
 }
 
@@ -298,7 +298,7 @@ void ObservationFromJSON(Observation& obs, const std::string& json, int agentId)
                     SetBombPosition(b, x, y);
 
                     // is that necessary?
-                    SetBombMovedFlag(b, false);
+                    SetBombFlag(b, false);
 
                     // WARNING: Bomber Id is not not known! This means based on a single observation,
                     // we do not know when our ammo fills back up in the future.

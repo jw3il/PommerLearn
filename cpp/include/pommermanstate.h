@@ -16,17 +16,21 @@
 class PommermanState : public State
 {
 public:
-    PommermanState();
-    ~PommermanState();
-    const bboard::State* state;
-    const unsigned int numberAgents = 4;
-    bboard::Move* agentActions;
-    size_t agentToMove;
+    PommermanState(int agentID, bboard::GameMode gameMode);
+    bboard::State state;
+    bboard::Move moves[bboard::AGENT_COUNT];
+    const int agentID;
+    const bboard::GameMode gameMode;
     unsigned int plies;
+    bool usePartialObservability;
+    bboard::ObservationParameters params;
 
-    // State interface
 public:
     void set_state(const bboard::State* state);
+    void set_observation(const bboard::Observation* obs);
+    void set_partial_observability(const bboard::ObservationParameters* params);
+
+    // State interface
     std::vector<Action> legal_actions() const override;
     void set(const std::string &fenStr, bool isChess960, int variant) override;
     void get_state_planes(bool normalize, float *inputPlanes) const override;
