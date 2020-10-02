@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 2.8)
 set (CMAKE_CXX_STANDARD 17)
 project(PommerLearn CXX)
 
+option(USE_TENSORRT              "Build with TensorRT support"  OFF)
+option(USE_TORCH                 "Build with Torch support"  ON)
+
 function(check_env_defined name)
     if(DEFINED ENV{${name}})
         MESSAGE(STATUS "Environment variable ${name} set to: $ENV{${name}}")
@@ -33,13 +36,22 @@ check_env_defined("BLAZE_PATH")
 include_directories("$ENV{BLAZE_PATH}/include")
 include_directories("$ENV{BLAZE_PATH}")
 
-# build CrazyAra with TensorRT support
-check_env_defined("TENSORRT_PATH")
-check_env_defined("CUDA_PATH")
-include_directories("$ENV{CUDA_PATH}/include")
-include_directories("$ENV{TENSORRT_PATH}/include")
-include_directories("$ENV{TENSORRT_PATH}/samples/common/")
-add_definitions(-DTENSORRT)
+if (USE_TENSORRT)
+    # build CrazyAra with TensorRT support
+    message(STATUS "Enabled TensorRT Backend")
+    check_env_defined("TENSORRT_PATH")
+    check_env_defined("CUDA_PATH")
+    include_directories("$ENV{CUDA_PATH}/include")
+    include_directories("$ENV{TENSORRT_PATH}/include")
+    include_directories("$ENV{TENSORRT_PATH}/samples/common/")
+    add_definitions(-DTENSORRT)
+endif()
+
+if (USE_TORCH)
+    message(STATUS "Enabled Torch Backend")
+    find_package(Torch REQUIRED)
+    add_definitions(-DTORCH)
+endif()
 
 file(GLOB CrazyAra_source_files
     "deps/CrazyAra/engine/src/*.cpp"
@@ -64,11 +76,13 @@ file(GLOB CrazyAra_source_files
     "deps/CrazyAra/engine/src/rl/*.h"
 )
 
-# add additional source file
-set(CrazyAra_source_files
-    ${CrazyAra_source_files}
-    $ENV{TENSORRT_PATH}/samples/common/logger.cpp
-)
+if (USE_TENSORRT)
+    # add additional source file
+    set(CrazyAra_source_files
+        ${CrazyAra_source_files}
+        $ENV{TENSORRT_PATH}/samples/common/logger.cpp
+    )
+endif()
 
 include_directories("deps/CrazyAra/engine/src")
 include_directories("deps/CrazyAra/engine/src/nn/")
@@ -76,13 +90,19 @@ include_directories("deps/CrazyAra/engine/src/agents/")
 
 add_library(CrazyAra ${CrazyAra_source_files})
 
+if (USE_TORCH)
+    target_link_libraries(CrazyAra "${TORCH_LIBRARIES}")
+endif()
+
 find_package(Threads REQUIRED)
 
-target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib64")
-target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib/x64")
-target_link_libraries(CrazyAra -L"$ENV{TENSORRT_PATH}/lib")
+if (USE_TENSORRT)
+    target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib64")
+    target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib/x64")
+    target_link_libraries(CrazyAra -L"$ENV{TENSORRT_PATH}/lib")
 
-target_link_libraries(CrazyAra nvonnxparser nvinfer cudart myelin)
+    target_link_libraries(CrazyAra nvonnxparser nvinfer cudart myelin)
+endif()
 
 # pomcpp
 
@@ -111,7 +131,15 @@ include_directories("cpp/include/")
 
 add_executable(${PROJECT_NAME} ${source_files})
 
-target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} stdc++fs ${BLOSC} CrazyAra pomcpp)
+if(APPLE)
+    # apple has trouble linking to stdc++fs somehow
+    target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp)
+else()
+    target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} stdc++fs ${BLOSC} CrazyAra pomcpp)
+endif()
+
+
+target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp)
 
 # Testing
 
@@ -126,4 +154,8 @@ file(GLOB test_files
 
 add_executable(${test_name} ${source_files_nomain} ${test_files})
 
-target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} stdc++fs ${BLOSC} CrazyAra pomcpp)
+if(APPLE)
+    target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp)
+else()
+    target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} stdc++fs ${BLOSC} CrazyAra pomcpp)
+endif()
