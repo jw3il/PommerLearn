@@ -5,6 +5,7 @@
 #include "ipc_manager.h"
 #include "nn/neuralnetapi.h"
 #include "nn/tensorrtapi.h"
+#include "nn/torchapi.h"
 #include "agents/rawnetagent.h"
 #include "pommerman_raw_net_agent.h"
 #include "stateobj.h"
@@ -13,6 +14,7 @@
 
 void load_models()
 {
+#ifdef TENSORRT
     make_unique<TensorrtAPI>(1, 1, "model/", "float32");
     make_unique<TensorrtAPI>(1, 1, "model/", "float16");
     make_unique<TensorrtAPI>(1, 1, "model/", "int8");
@@ -20,12 +22,19 @@ void load_models()
     make_unique<TensorrtAPI>(1, 8, "model/", "float32");
     make_unique<TensorrtAPI>(1, 8, "model/", "float16");
     make_unique<TensorrtAPI>(1, 8, "model/", "int8");
+#elif defined (TORCH)
+    make_unique<TorchAPI>("cpu", 0, 1, "model/");
+#endif
 }
 
 void free_for_all_tourney(size_t nbGames)
 {
     Constants::init(false);
+#ifdef TENSORRT
     TensorrtAPI nn(0, 1, "model", "float32");
+#elif defined (TORCH)
+    TorchAPI nn("cpu", 0, 1, "model/");
+#endif
     PlaySettings playSettings;
     RawNetAgent rawNetAgent(&nn, &playSettings, true);
 
