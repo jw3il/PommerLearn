@@ -16,8 +16,8 @@
 
 FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount)
     : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount),
-      sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename()) {
-
+      sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename())
+{
     this->maxStepCount = chunkSize * chunkCount;
     this->processedSteps = 0;
     this->datasetStepCount = 0;
@@ -68,8 +68,9 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
     buffer.clear();
 }
 
-void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo info) {
-    if (logAgent->step == 0)
+void FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID)
+{
+    if (sampleBuffer.getCount() == 0)
         return;
 
     if (this->processedSteps == this->maxStepCount) {
@@ -89,18 +90,20 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
         this->datasetStepCount = 0;
     }
 
+    // TODO: Adapt value for team mode
+    EpisodeInfo& lastInfo = this->episodeInfos.back();
+    float value = lastInfo.winningAgent == agentID ? 1.0f : (lastInfo.dead[agentID] ? -1.0f : 0.0f);
+    sampleBuffer.setValues(value);
+
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
-    uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->processedSteps));
-    // TODO: Adapt value for team mode
-    float value = info.winningAgent == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
-    logAgent->sampleBuffer.setValues(value);
-
+    ulong trimmedSteps = std::min(sampleBuffer.getCount(), this->maxStepCount - this->processedSteps);
     ulong currentStep = 0;
     ulong remainingSteps = trimmedSteps;
+
     while (remainingSteps > 0) {
         // add the samples of the agent to the global samplebuffer
-        ulong steps = sampleBuffer.addSamples(logAgent->sampleBuffer, currentStep, remainingSteps);
+        ulong steps = this->sampleBuffer.addSamples(sampleBuffer, currentStep, remainingSteps);
 
         if (steps < remainingSteps) {
             // buffer is full, flush it
@@ -111,17 +114,19 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
         remainingSteps -= steps;
     }
 
-    // add meta information
-    AgentEpisodeInfo agentEpisodeInfo;
-    agentEpisodeInfo.steps = logAgent->step;
-    agentEpisodeInfo.agentId = logAgent->id;
-    agentEpisodeInfo.episode = this->episodeInfos.size() - 1;
-    this->agentEpisodeInfos.push_back(agentEpisodeInfo);
+    // add meta information of this agent episode
+    AgentEpisodeInfo agentInfo;
+    agentInfo.id = agentID;
+    agentInfo.steps = sampleBuffer.getCount();
+    agentInfo.episodeID = this->episodeInfos.size() - 1;
+
+    this->agentEpisodeInfos.push_back(agentInfo);
 
     this->processedSteps += trimmedSteps;
 }
 
-void FileBasedIPCManager::writeEpisodeInfo(EpisodeInfo info) {
+void FileBasedIPCManager::writeNewEpisode(const EpisodeInfo& info)
+{
     this->episodeInfos.push_back(info);
 }
 
@@ -156,9 +161,9 @@ void FileBasedIPCManager::flush() {
     // TODO: Create all attribute arrays in one pass
 
     // agents
-    attributes["AgentIds"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.agentId;});
+    attributes["AgentIds"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.id;});
     attributes["AgentSteps"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.steps;});
-    attributes["AgentEpisode"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.episode;});
+    attributes["AgentEpisode"] =  _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.episodeID;});
 
     // episodes
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});

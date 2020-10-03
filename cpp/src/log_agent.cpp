@@ -28,6 +28,7 @@ bboard::Move LogAgent::act(const bboard::State* state) {
 
 void LogAgent::reset(bboard::Agent* agent) {
     this->step = 0;
+    this->sampleBuffer.clear();
     this->agent = agent;
     this->agent->id = this->id;
 }

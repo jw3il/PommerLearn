@@ -16,20 +16,30 @@
 class IPCManager {
 public:
     /**
-     * @brief writeEpisode Write the collected experience of the given LogAgent.
-     * @param logAgent The LogAgent which contains an experience log.
-     * @param info The info of the corresponding episode.
+     * @brief writeAgentExperience Write the experience of a single agent episode.
+     * @param sampleBuffer The sample buffer which contains the experience of the agent episode.
+     * @param agentID The id of the agent which collected this experience.
      */
-    virtual void writeAgentExperience(LogAgent* logAgent, EpisodeInfo info) = 0;
+    virtual void writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID) = 0;
 
     /**
-     * @brief writeEpisodeInfo Write the episode information of a completed episode. Is expected to be called before writeAgentExperience.
-     * @param info The info of the complete episode.
+     * @brief writeAgentExperience Write the experience of the given LogAgent.
+     * @param logAgent The LogAgent which collected experience in an episode.
      */
-    virtual void writeEpisodeInfo(EpisodeInfo info) = 0;
+    inline void writeAgentExperience(LogAgent* logAgent)
+    {
+        writeAgentExperience(logAgent->sampleBuffer, logAgent->id);
+    }
 
     /**
-     * @brief flush When the class is buffering logs, flush forces the buffer to save/transmit the buffered data.
+     * @brief writeNewEpisode Writes the episode information of a completed episode. Is expected to be called
+     * before writing experience via writeAgentExperience.
+     * @param info The info of a completed episode.
+     */
+    virtual void writeNewEpisode(const EpisodeInfo& info) = 0;
+
+    /**
+     * @brief flush When the class is buffering data, flush forces the buffer to save/transmit the buffered data.
      */
     virtual void flush() = 0;
 };
@@ -47,11 +57,20 @@ public:
      */
     FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount);
 
-    void writeAgentExperience(LogAgent* logAgent, EpisodeInfo info);
-    void writeEpisodeInfo(EpisodeInfo info);
+    void writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID);
+    void writeNewEpisode(const EpisodeInfo& info);
     void flush();
 
 private:
+    /**
+     * @brief Private struct to store meta-information for an agent episode.
+     */
+    struct AgentEpisodeInfo {
+        int id;
+        int steps;
+        int episodeID;
+    };
+
     std::string fileNamePrefix;
     unsigned long chunkSize, chunkCount, maxStepCount;
 

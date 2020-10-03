@@ -16,13 +16,4 @@ struct EpisodeInfo {
     bool dead[bboard::AGENT_COUNT];
 };
 
-/**
- * @brief Contains metadata for an episode as seen by a single agent.
- */
-struct AgentEpisodeInfo {
-   int agentId;
-   int steps;
-   int episode;
-};
-
 #endif // EPISODE_INFO_H
