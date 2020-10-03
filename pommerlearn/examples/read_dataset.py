@@ -90,6 +90,7 @@ def main():
 
     obs = z['obs'][episode_slice]
     act = z['act'][episode_slice]
+    pol = z['pol'][episode_slice]
     val = z['val'][episode_slice]
 
     # Warning: The last episode may have been cut
@@ -103,7 +104,9 @@ def main():
 
     print("Actions")
     print(act)
-    print("Values:")
+    print("Policy")
+    print(pol)
+    print("Values")
     print(val)
     print("Observations of first step:")
     print("Shape", obs[0].shape)

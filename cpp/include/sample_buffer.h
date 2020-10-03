@@ -3,6 +3,8 @@
 
 #include "bboard.hpp"
 #include <cstdint>
+#include "data_representation.h"
+
 typedef unsigned long ulong;
 
 /**
@@ -30,6 +32,15 @@ public:
     bool addSample(const float* planes, const bboard::Move move);
 
     /**
+     * @brief addSample Adds a single sample to the buffer, as long as the capacity is not reached.
+     * @param planes Pointer to the input planes (observation).
+     * @param moves The move which was chosen based on the given planes.
+     * @param moveProbs The move probabilities
+     * @return Whether the sample has been added (false if the capacity has already been reached).
+     */
+    bool addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES]);
+
+    /**
      * @brief setValues Sets all values of the buffer according to the given value.
      * @param value Used to set val[0:count-1] = value.
      */
@@ -42,6 +53,7 @@ public:
 
     const float* getObs() const;
     const int8_t* getAct() const;
+    const float* getPol() const;
     const float* getVal() const;
 
     ulong getCount() const;
@@ -56,6 +68,7 @@ private:
 
     float* obs;
     int8_t* act;
+    float* pol;
     float* val;
 };
 
