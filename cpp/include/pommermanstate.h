@@ -13,6 +13,66 @@
 #include "bboard.hpp"
 
 
+class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
+{
+public:
+    static int BOARD_WIDTH() {
+        return 11;
+    }
+    static int BOARD_HEIGHT() {
+        return 11;
+    }
+    static int NB_CHANNELS_TOTAL() {
+        return 18;
+    }
+    static int NB_LABELS() {
+        return 6;
+    }
+    static int NB_LABELS_POLICY_MAP() {
+        return 6;
+    }
+    static std::string action_to_uci(Action action, bool is960) {
+        switch(bboard::Move(action)) {
+        case (bboard::Move::IDLE):
+            return "IDLE";
+        case (bboard::Move::UP):
+            return "UP";
+        case (bboard::Move::DOWN):
+            return "DOWN";
+        case (bboard::Move::LEFT):
+            return "LEFT";
+        case (bboard::Move::RIGHT):
+            return "RIGHT";
+        case (bboard::Move::BOMB):
+            return "BOMB";
+        default:
+            return "UNKNOWN";
+        }
+    }
+    template<PolicyType p, MirrorType m>
+    static size_t action_to_index(Action action) {
+        switch (action) {
+            case Action(bboard::Move::IDLE):
+            return 0;
+        case Action(bboard::Move::UP):
+            return 1;
+        case Action(bboard::Move::LEFT):
+            return 2;
+        case Action(bboard::Move::DOWN):
+            return 3;
+        case Action(bboard::Move::RIGHT):
+            return 4;
+        case Action(bboard::Move::BOMB):
+            return 5;
+        default:
+            return 0;
+        }
+    }
+    static void init(bool isPolicyMap) {
+        return; // pass
+    }
+};
+
 class PommermanState : public State
 {
 public:

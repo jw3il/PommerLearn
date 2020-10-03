@@ -29,7 +29,7 @@ void load_models()
 
 void free_for_all_tourney(size_t nbGames)
 {
-    Constants::init(false);
+    StateConstants::init(false);
 #ifdef TENSORRT
     TensorrtAPI nn(0, 1, "model", "float32");
 #elif defined (TORCH)
