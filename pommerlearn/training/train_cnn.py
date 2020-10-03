@@ -10,7 +10,7 @@ import zarr
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
-from pommerlearn.nn.a0_resnet import AlphaZeroResnet, init_weights
+from nn.a0_resnet import AlphaZeroResnet, init_weights
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -88,7 +88,7 @@ def export_to_onnx(model, dummy_input) -> None:
     """
     input_names = ["data"]
     output_names = ["value_out", "policy_out"]
-    torch.onnx.export(model, dummy_input, f"model-bsize-{batch_size}.onnx", input_names=input_names,
+    torch.onnx.export(model, dummy_input, f"model-bsize-{dummy_input.size(0)}.onnx", input_names=input_names,
                       output_names=output_names, verbose=True)
 
 
@@ -103,7 +103,7 @@ def export_as_script_module(model, dummy_input) -> None:
     traced_script_module = torch.jit.trace(model, dummy_input)
 
     # serialize script module to file
-    traced_script_module.save(f"model-bsize-{batch_size}.pt")
+    traced_script_module.save(f"model-bsize-{dummy_input.size(0)}.pt")
 
 
 class Metrics:
