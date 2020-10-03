@@ -74,8 +74,9 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
 
         // write the episode logs
         for (int i = 0; i < 4 && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
-            LogAgent a = logAgents[i];
+            LogAgent& a = logAgents[i];
             ipcManager->writeAgentExperience(&a, result);
+            a.sampleBuffer.clear();
             totalEpisodeSteps += a.step;
         }
 

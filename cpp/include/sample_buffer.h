@@ -13,15 +13,27 @@ public:
     SampleBuffer(const ulong capacity);
 
     /**
-     * @brief addSamples Converts samples and adds them to the buffer, as long as the capacity is not reached.
-     * @param states Pointer to an array which contains at least "count" states.
-     * @param moves Pointer to an array which contains at least "count" moves.
-     * @param value The value associated with all samples.
-     * @param agentId The id of the agent which collected these samples.
-     * @param count The number of samples.
-     * @return The number of added samples (is <= count, depending on the capacity of the buffer).
+     * @brief addSamples Copies samples from the given buffer until the capacity is reached.
+     * @param buffer Content from otherBuffer[offset] to otherBuffer[otherBuffer.count - 1] is copied to this buffer.
+     * @param offset The offset in the other buffer.
+     * @param n The number of elements we want to copy (should be <= otherBuffer.count - offset)
+     * @return The number of added samples (is <= n, depending on the capacity of this buffer).
      */
-    ulong addSamples(const bboard::State* states, const bboard::Move* moves, const float value, const int agentId, const ulong count);
+    ulong addSamples(const SampleBuffer& otherBuffer, const ulong offset, const ulong n);
+
+    /**
+     * @brief addSample Adds a single sample to the buffer, as long as the capacity is not reached.
+     * @param planes Pointer to the input planes (observation).
+     * @param moves The move which was chosen based on the given planes.
+     * @return Whether the sample has been added (false if the capacity has already been reached).
+     */
+    bool addSample(const float* planes, const bboard::Move move);
+
+    /**
+     * @brief setValues Sets all values of the buffer according to the given value.
+     * @param value Used to set val[0:count-1] = value.
+     */
+    void setValues(const float value);
 
     /**
      * @brief clear Clears the buffer state (not its actual content).

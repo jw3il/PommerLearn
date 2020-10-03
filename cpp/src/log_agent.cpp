@@ -1,20 +1,25 @@
 #include "log_agent.h"
+#include "data_representation.h"
 
-LogAgent::LogAgent(int maxEpisodeLength) {
+LogAgent::LogAgent(int maxEpisodeLength) : sampleBuffer(maxEpisodeLength) {
     this->agent = nullptr;
     this->step = 0;
     this->id = -1;
 
-    this->actionBuffer = new bboard::Move[maxEpisodeLength];
-    this->stateBuffer = new bboard::State[maxEpisodeLength];
+    this->planeBuffer = new float[GetObsSize(1)];
+}
+
+LogAgent::~LogAgent()
+{
+    delete[] this->planeBuffer;
 }
 
 bboard::Move LogAgent::act(const bboard::State* state) {
     bboard::Move move = this->agent == nullptr ? bboard::Move::IDLE : this->agent->act(state);
 
     // log the (state, action) pair
-    this->stateBuffer[step] = *state;
-    this->actionBuffer[step] = move;
+    StateToPlanes(state, id, this->planeBuffer);
+    this->sampleBuffer.addSample(this->planeBuffer, move);
 
     this->step++;
 

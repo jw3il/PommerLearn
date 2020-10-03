@@ -8,6 +8,10 @@ const int PLANE_COUNT = 18;
 const int PLANE_SIZE = bboard::BOARD_SIZE;
 const int PLANES_TOTAL_FLOATS = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
 
+inline long GetObsSize(const long step) {
+    return step * PLANES_TOTAL_FLOATS;
+}
+
 /*
 Action Space
 

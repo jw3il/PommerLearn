@@ -94,15 +94,13 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
     uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->processedSteps));
     // TODO: Adapt value for team mode
     float value = info.winningAgent == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
+    logAgent->sampleBuffer.setValues(value);
 
     ulong currentStep = 0;
     ulong remainingSteps = trimmedSteps;
     while (remainingSteps > 0) {
-        bboard::State* states = &logAgent->stateBuffer[currentStep];
-        bboard::Move* moves = &logAgent->actionBuffer[currentStep];
-
-        // add the samples to the buffer
-        ulong steps = sampleBuffer.addSamples(states, moves, value, logAgent->id, remainingSteps);
+        // add the samples of the agent to the global samplebuffer
+        ulong steps = sampleBuffer.addSamples(logAgent->sampleBuffer, currentStep, remainingSteps);
 
         if (steps < remainingSteps) {
             // buffer is full, flush it
