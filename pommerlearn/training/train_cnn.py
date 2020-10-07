@@ -16,6 +16,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
+from pathlib import Path
 
 
 def main():
@@ -59,27 +60,40 @@ def main():
                  train_loader, val_loader, use_cuda, comment="")
 
     # export model for list of given batch-sizes
-    export_model(model, [1, 8], input_shape, use_cuda)
+    model_batch_sizes = [1, 8]
+    if use_cuda:
+        export_model(model, model_batch_sizes, input_shape, True, Path('./models-cuda'))
+
+    # always export for cpu as well
+    export_model(model, model_batch_sizes, input_shape, False, Path('./models-cpu'))
 
 
-def export_model(model, batch_sizes, input_shape, use_cuda):
+def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
     """
     Exports the model in ONNX and Torch Script Module.
     :param model: Pytorch model
     :param batch_sizes: List of batch sizes to use for export
     :param input_shape: Input shape of the model
     :param use_cuda: Whether cuda is enabled
+    :param dir: The base path for all models
     :return:
     """
+    dir.mkdir(parents=True, exist_ok=True)
+
     for batch_size in batch_sizes:
         dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
+
         if use_cuda:
             dummy_input = dummy_input.cuda()
-        export_to_onnx(model, dummy_input)
-        export_as_script_module(model, dummy_input)
+            model = model.cuda()
+        else:
+            model = model.cpu()
+
+        export_to_onnx(model, dummy_input, dir)
+        export_as_script_module(model, dummy_input, dir)
 
 
-def export_to_onnx(model, dummy_input) -> None:
+def export_to_onnx(model, dummy_input, dir) -> None:
     """
     Exports the model to ONNX format to allow later import in TensorRT.
     :param model: Pytorch model
@@ -88,11 +102,11 @@ def export_to_onnx(model, dummy_input) -> None:
     """
     input_names = ["data"]
     output_names = ["value_out", "policy_out"]
-    torch.onnx.export(model, dummy_input, f"model-bsize-{dummy_input.size(0)}.onnx", input_names=input_names,
+    torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{dummy_input.size(0)}.onnx")), input_names=input_names,
                       output_names=output_names, verbose=True)
 
 
-def export_as_script_module(model, dummy_input) -> None:
+def export_as_script_module(model, dummy_input, dir) -> None:
     """
     Exports the model to a Torch Script Module to allow later import in C++.
     :param model: Pytorch model
@@ -103,7 +117,7 @@ def export_as_script_module(model, dummy_input) -> None:
     traced_script_module = torch.jit.trace(model, dummy_input)
 
     # serialize script module to file
-    traced_script_module.save(f"model-bsize-{dummy_input.size(0)}.pt")
+    traced_script_module.save(str(dir / Path(f"model-bsize-{dummy_input.size(0)}.pt")))
 
 
 class Metrics:

@@ -46,6 +46,8 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
             netBatches.push_back(make_unique<MXNetAPI>(Options["Context"], deviceId, searchSettings.batchSize, modelDirectory, useTensorRT));
     #elif defined TENSORRT
             netBatches.push_back(make_unique<TensorrtAPI>(deviceId, searchSettings.batchSize, modelDirectory, "float16"));
+    #elif defined TORCH
+            netBatches.push_back(make_unique<TorchAPI>("cpu", deviceId, searchSettings.batchSize, modelDirectory));
     #endif
         }
     }
