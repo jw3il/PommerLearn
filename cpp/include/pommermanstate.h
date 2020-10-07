@@ -31,6 +31,9 @@ public:
     static int NB_LABELS_POLICY_MAP() {
         return 6;
     }
+    static int NB_PLAYERS() {
+        return 4;
+    }
     static std::string action_to_uci(Action action, bool is960) {
         switch(bboard::Move(action)) {
         case (bboard::Move::IDLE):
