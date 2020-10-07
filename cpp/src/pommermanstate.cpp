@@ -49,13 +49,34 @@ void PommermanState::set_partial_observability(const bboard::ObservationParamete
 
 std::vector<Action> PommermanState::legal_actions() const
 {
-    // TODO: Change depending on the current state
-    return {Action(bboard::Move::IDLE),
-            Action(bboard::Move::UP),
-            Action(bboard::Move::LEFT),
-            Action(bboard::Move::DOWN),
-            Action(bboard::Move::RIGHT),
-            Action(bboard::Move::BOMB)};
+    const bboard::AgentInfo& self = state.agents[agentID];
+    std::vector<Action> legalActions;
+
+    // it's always possible to idle
+    legalActions.push_back(Action(bboard::Move::IDLE));
+
+    // agents can only place bombs when max bomb count is not reached yet
+    if (self.bombCount < self.maxBombCount) {
+        legalActions.push_back(Action(bboard::Move::BOMB));
+    }
+
+    // check if movement is possible
+    static const bboard::Move directions[4] = {bboard::Move::UP, bboard::Move::DOWN, bboard::Move::RIGHT, bboard::Move::LEFT};
+    for (bboard::Move dir : directions) {
+        bboard::Position dest = bboard::util::DesiredPosition(self.x, self.y, dir);
+        if (bboard::util::IsOutOfBounds(dest)) {
+            continue;
+        }
+
+        // check if the item at the destination is passable (and don't walk into flames)
+        int destItem = state.items[dest.y][dest.x];
+        if (destItem == bboard::Item::PASSAGE || bboard::IS_POWERUP(destItem)
+                || (destItem == bboard::Item::BOMB && self.canKick)) {
+            legalActions.push_back(Action(dir));
+        }
+    }
+
+    return legalActions;
 }
 
 void PommermanState::set(const std::string &fenStr, bool isChess960, int variant)
