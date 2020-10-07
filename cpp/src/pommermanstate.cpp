@@ -107,7 +107,9 @@ int PommermanState::side_to_move() const
 
 Key PommermanState::hash_key() const
 {
-    return 0;
+    // TODO: maybe make this more proper. The hash_key() is used to check for tree reusage.
+    // Returning a constant hash bad side effects.
+    return rand();
 }
 
 void PommermanState::flip()

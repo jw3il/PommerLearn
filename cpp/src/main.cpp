@@ -7,7 +7,8 @@
 #include "nn/tensorrtapi.h"
 #include "nn/torchapi.h"
 #include "agents/rawnetagent.h"
-#include "pommerman_raw_net_agent.h"
+#include "agents/mctsagent.h"
+#include "crazyara_agent.h"
 #include "stateobj.h"
 
 #include "agents.hpp"
@@ -27,16 +28,56 @@ void load_models()
 #endif
 }
 
+vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirectory, const SearchSettings& searchSettings)
+{
+    vector<unique_ptr<NeuralNetAPI>> netBatches;
+#ifdef MXNET
+    #ifdef TENSORRT
+        const bool useTensorRT = bool(Options["Use_TensorRT"]);
+    #else
+        const bool useTensorRT = false;
+    #endif
+#endif
+    int First_Device_ID = 0;
+    int Last_Device_ID = 0;
+    for (int deviceId = First_Device_ID; deviceId <= Last_Device_ID; ++deviceId) {
+        for (size_t i = 0; i < searchSettings.threads; ++i) {
+    #ifdef MXNET
+            netBatches.push_back(make_unique<MXNetAPI>(Options["Context"], deviceId, searchSettings.batchSize, modelDirectory, useTensorRT));
+    #elif defined TENSORRT
+            netBatches.push_back(make_unique<TensorrtAPI>(deviceId, searchSettings.batchSize, modelDirectory, "float16"));
+    #endif
+        }
+    }
+    return netBatches;
+}
+
 void free_for_all_tourney(size_t nbGames)
 {
-    Constants::init(false);
+    StateConstants::init(false);
 #ifdef TENSORRT
-    TensorrtAPI nn(0, 1, "model", "float32");
+    TensorrtAPI netSingle(0, 1, "model", "float32");
 #elif defined (TORCH)
-    TorchAPI nn("cpu", 0, 1, "model/");
+    TorchAPI netSingle("cpu", 0, 1, "model/");
 #endif
+    SearchSettings searchSettings;
+    searchSettings.virtualLoss = 1;
+    searchSettings.batchSize = 8;
+    searchSettings.threads = 1;
+    searchSettings.useTranspositionTable = false;
+    searchSettings.multiPV = 1;
+    searchSettings.nodePolicyTemperature = 1;
+    searchSettings.dirichletEpsilon = 0.2;
+
+    vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches("model", searchSettings);
     PlaySettings playSettings;
-    RawNetAgent rawNetAgent(&nn, &playSettings, true);
+    SearchLimits searchLimits;
+    searchLimits.movetime = 100;
+    searchLimits.moveOverhead = 20;
+    EvalInfo evalInfo;
+
+    RawNetAgent rawNetAgent(&netSingle, &playSettings, true);
+    MCTSAgent mctsAgent(&netSingle, netBatches, &searchSettings, &playSettings);
 
     bboard::Environment env;
     bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
@@ -50,10 +91,12 @@ void free_for_all_tourney(size_t nbGames)
     // this is the state object of agent 0
     PommermanState pommermanState(0, gameMode);
     // pommermanState.set_partial_observability(&obsParams);
-    PommermanRawNetAgent pommerRawAgent(&rawNetAgent, &pommermanState);
+
+    CrazyAraAgent crazyaraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo);
+//    CrazyAraAgent crazyaraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo);
 
     srand(time(0));
-    std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {&pommerRawAgent,
+    std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {&crazyaraAgent,
                                                               new agents::SimpleAgent(rand()),
                                                               new agents::SimpleAgent(rand()),
                                                               new agents::SimpleAgent(rand()),
@@ -98,7 +141,7 @@ int main(int argc, char **argv) {
     }
 
     // generate_sl_data(dataPrefix, 1000, 100);
-    free_for_all_tourney(100);
+    free_for_all_tourney(10);
 
     return 0;
 }
