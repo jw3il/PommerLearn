@@ -16,8 +16,8 @@
 
 FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount)
     : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount),
-      sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename()) {
-
+      sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename())
+{
     this->maxStepCount = chunkSize * chunkCount;
     this->processedSteps = 0;
     this->datasetStepCount = 0;
@@ -38,7 +38,7 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
 
     // observations
 
-    std::vector<size_t> obsShape = { count, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE};
+    std::vector<size_t> obsShape = { count, PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
     z5::types::ShapeType obsOffset = { this->datasetStepCount, 0, 0, 0, 0 };
 
     auto xtObs = xt::adapt(buffer.getObs(), buffer.getTotalObsValCount(), xt::no_ownership(), obsShape);
@@ -54,6 +54,15 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
     auto actDataset = z5::openDataset(file, "act");
     z5::multiarray::writeSubarray<int8_t>(actDataset, xtAct, actOffset.begin());
 
+    // policy
+
+    std::vector<size_t> polShape = { count, NUM_MOVES };
+    z5::types::ShapeType polOffset = { this->datasetStepCount, 0 };
+
+    auto xtPol = xt::adapt(buffer.getPol(), count * NUM_MOVES, xt::no_ownership(), polShape);
+    auto polDataset = z5::openDataset(file, "pol");
+    z5::multiarray::writeSubarray<float>(polDataset, xtPol, polOffset.begin());
+
     // values
 
     std::vector<size_t> valShape = { count };
@@ -68,8 +77,9 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
     buffer.clear();
 }
 
-void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo info) {
-    if (logAgent->step == 0)
+void FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID)
+{
+    if (sampleBuffer.getCount() == 0)
         return;
 
     if (this->processedSteps == this->maxStepCount) {
@@ -89,20 +99,20 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
         this->datasetStepCount = 0;
     }
 
+    // TODO: Adapt value for team mode
+    EpisodeInfo& lastInfo = this->episodeInfos.back();
+    float value = lastInfo.winningAgent == agentID ? 1.0f : (lastInfo.dead[agentID] ? -1.0f : 0.0f);
+    sampleBuffer.setValues(value);
+
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
-    uint trimmedSteps = std::min(logAgent->step, (uint)(this->maxStepCount - this->processedSteps));
-    // TODO: Adapt value for team mode
-    float value = info.winningAgent == logAgent->id ? 1.0f : (info.dead[logAgent->id] ? -1.0f : 0.0f);
-
+    ulong trimmedSteps = std::min(sampleBuffer.getCount(), this->maxStepCount - this->processedSteps);
     ulong currentStep = 0;
     ulong remainingSteps = trimmedSteps;
-    while (remainingSteps > 0) {
-        bboard::State* states = &logAgent->stateBuffer[currentStep];
-        bboard::Move* moves = &logAgent->actionBuffer[currentStep];
 
-        // add the samples to the buffer
-        ulong steps = sampleBuffer.addSamples(states, moves, value, logAgent->id, remainingSteps);
+    while (remainingSteps > 0) {
+        // add the samples of the agent to the global samplebuffer
+        ulong steps = this->sampleBuffer.addSamples(sampleBuffer, currentStep, remainingSteps);
 
         if (steps < remainingSteps) {
             // buffer is full, flush it
@@ -113,17 +123,19 @@ void FileBasedIPCManager::writeAgentExperience(LogAgent* logAgent, EpisodeInfo i
         remainingSteps -= steps;
     }
 
-    // add meta information
-    AgentEpisodeInfo agentEpisodeInfo;
-    agentEpisodeInfo.steps = logAgent->step;
-    agentEpisodeInfo.agentId = logAgent->id;
-    agentEpisodeInfo.episode = this->episodeInfos.size() - 1;
-    this->agentEpisodeInfos.push_back(agentEpisodeInfo);
+    // add meta information of this agent episode
+    AgentEpisodeInfo agentInfo;
+    agentInfo.id = agentID;
+    agentInfo.steps = sampleBuffer.getCount();
+    agentInfo.episodeID = this->episodeInfos.size() - 1;
+
+    this->agentEpisodeInfos.push_back(agentInfo);
 
     this->processedSteps += trimmedSteps;
 }
 
-void FileBasedIPCManager::writeEpisodeInfo(EpisodeInfo info) {
+void FileBasedIPCManager::writeNewEpisode(const EpisodeInfo& info)
+{
     this->episodeInfos.push_back(info);
 }
 
@@ -158,14 +170,15 @@ void FileBasedIPCManager::flush() {
     // TODO: Create all attribute arrays in one pass
 
     // agents
-    attributes["AgentIds"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.agentId;});
+    attributes["AgentIds"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.id;});
     attributes["AgentSteps"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.steps;});
-    attributes["AgentEpisode"] = _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.episode;});
+    attributes["AgentEpisode"] =  _mapVector<AgentEpisodeInfo, int>(agentEpisodeInfos, [](AgentEpisodeInfo &info){ return info.episodeID;});
 
     // episodes
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
     attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningAgent;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
+    attributes["EpisodeActions"] = _mapVector<EpisodeInfo, std::array<std::vector<int8_t>, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.actions;});
 
     // total steps
     attributes["Steps"] = this->processedSteps;
@@ -220,6 +233,12 @@ void FileBasedIPCManager::createDatasets(z5::filesystem::handle::File file) {
     std::vector<size_t> actShape = { this->maxStepCount };
     std::vector<size_t> actChunks = { this->chunkSize };
     z5::createDataset(file, "act", "int8", actShape, actChunks, compressor, compressionOptions);
+
+    // policy
+
+    std::vector<size_t> polShape = { this->maxStepCount, NUM_MOVES };
+    std::vector<size_t> polChunks = { this->chunkSize, NUM_MOVES };
+    z5::createDataset(file, "pol", "float32", polShape, polChunks, compressor, compressionOptions);
 
     // values
 

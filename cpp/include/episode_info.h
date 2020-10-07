@@ -6,23 +6,19 @@
 /**
  * @brief Contains metadata for an episode.
  */
-struct EpisodeInfo {
+struct EpisodeInfo
+{
+    // information about the episode itself
     bboard::State initialState;
+    std::array<std::vector<int8_t>, bboard::AGENT_COUNT> actions;
+
+    // information about the result
     int winningAgent;
     int winningTeam;
     bool isDraw;
     bool isDone;
     int steps;
-    bool dead[bboard::AGENT_COUNT];
-};
-
-/**
- * @brief Contains metadata for an episode as seen by a single agent.
- */
-struct AgentEpisodeInfo {
-   int agentId;
-   int steps;
-   int episode;
+    std::array<bool, bboard::AGENT_COUNT> dead;
 };
 
 #endif // EPISODE_INFO_H

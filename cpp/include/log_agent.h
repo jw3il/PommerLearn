@@ -2,6 +2,7 @@
 #define LOGAGENT_H
 
 #include "bboard.hpp"
+#include "sample_buffer.h"
 
 /**
  * @brief Logs the observations and actions of the underlying agent.
@@ -14,16 +15,12 @@ public:
      * @param maxEpisodeLength The maximum amount of steps per episode.
      */
     LogAgent(int maxEpisodeLength);
+    ~LogAgent();
 
     /**
-     * @brief stateBuffer Contains the states of the current/last episode.
+     * @brief sampleBuffer The samplebuffer used to save the experience of this agent.
      */
-    bboard::State* stateBuffer;
-
-    /**
-     * @brief actionBuffer Contains the actions of the current/last episode.
-     */
-    bboard::Move* actionBuffer;
+    SampleBuffer sampleBuffer;
 
     /**
      * @brief step The number of steps of the current/last episode.
@@ -45,6 +42,7 @@ public:
 
 private:
     bboard::Agent* agent;
+    float* planeBuffer;
 };
 
 #endif // LOGAGENT_H

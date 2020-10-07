@@ -18,7 +18,27 @@ EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps)
     EpisodeInfo info;
     info.initialState = env.GetState();
 
-    env.RunGame(maxSteps, false, printSteps, false, false, 0);
+    const bboard::State& currentState = env.GetState();
+    int startSteps = currentState.timeStep;
+    while(!env.IsDone() && (maxSteps <= 0 || currentState.timeStep - startSteps < maxSteps))
+    {
+        // execute the step
+        env.Step(false);
+        if(printSteps)
+        {
+            std::cout << "Step: " << currentState.timeStep << std::endl;
+            env.Print(false);
+        }
+
+        // log actions
+        for(int i = 0; i < bboard::AGENT_COUNT; i++)
+        {
+            if(env.HasActed(i))
+            {
+                info.actions[i].push_back((int8_t)env.GetLastMove(i));
+            }
+        }
+    }
 
     info.winningTeam = env.GetWinningTeam();
     info.winningAgent = env.GetWinningAgent();
@@ -70,12 +90,12 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
 
         EpisodeInfo result = run(env, maxEpisodeSteps, printSteps);
 
-        ipcManager->writeEpisodeInfo(result);
+        ipcManager->writeNewEpisode(result);
 
         // write the episode logs
         for (int i = 0; i < 4 && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); i++) {
-            LogAgent a = logAgents[i];
-            ipcManager->writeAgentExperience(&a, result);
+            LogAgent& a = logAgents[i];
+            ipcManager->writeAgentExperience(&a);
             totalEpisodeSteps += a.step;
         }
 
