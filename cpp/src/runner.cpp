@@ -18,7 +18,27 @@ EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps)
     EpisodeInfo info;
     info.initialState = env.GetState();
 
-    env.RunGame(maxSteps, false, printSteps, false, false, 0);
+    const bboard::State& currentState = env.GetState();
+    int startSteps = currentState.timeStep;
+    while(!env.IsDone() && (maxSteps <= 0 || currentState.timeStep - startSteps < maxSteps))
+    {
+        // execute the step
+        env.Step(false);
+        if(printSteps)
+        {
+            std::cout << "Step: " << currentState.timeStep << std::endl;
+            env.Print(false);
+        }
+
+        // log actions
+        for(int i = 0; i < bboard::AGENT_COUNT; i++)
+        {
+            if(env.HasActed(i))
+            {
+                info.actions[i].push_back((int8_t)env.GetLastMove(i));
+            }
+        }
+    }
 
     info.winningTeam = env.GetWinningTeam();
     info.winningAgent = env.GetWinningAgent();

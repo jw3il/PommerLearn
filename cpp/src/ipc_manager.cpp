@@ -178,6 +178,7 @@ void FileBasedIPCManager::flush() {
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
     attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningAgent;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
+    attributes["EpisodeActions"] = _mapVector<EpisodeInfo, std::array<std::vector<int8_t>, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.actions;});
 
     // total steps
     attributes["Steps"] = this->processedSteps;
