@@ -77,10 +77,10 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
     buffer.clear();
 }
 
-void FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID)
+ulong FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID)
 {
     if (sampleBuffer.getCount() == 0)
-        return;
+        return 0;
 
     if (this->processedSteps == this->maxStepCount) {
         // when the current dataset is full and we want to add more data..
@@ -132,6 +132,7 @@ void FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const
     this->agentEpisodeInfos.push_back(agentInfo);
 
     this->processedSteps += trimmedSteps;
+    return trimmedSteps;
 }
 
 void FileBasedIPCManager::writeNewEpisode(const EpisodeInfo& info)

@@ -5,43 +5,76 @@
 #include "sample_buffer.h"
 
 /**
- * @brief Logs the observations and actions of the underlying agent.
+ * @brief Interface to allow access to an agent's sample buffer.
  */
-struct LogAgent : bboard::Agent
-{
+class SampleCollector {
 public:
     /**
-     * @brief LogAgent Create a LogAgent for logging episodes with the given maximum episode length.
-     * @param maxEpisodeLength The maximum amount of steps per episode.
+     * @brief create_buffer Create a sample buffer.
+     * @param maxEpisodeLength The maximum episode length will determine the capacity of the buffer.
      */
-    LogAgent(int maxEpisodeLength);
-    ~LogAgent();
+    void create_buffer(int maxEpisodeLength);
 
     /**
-     * @brief sampleBuffer The samplebuffer used to save the experience of this agent.
+     * @brief get_sample_buffer Get the sample buffer used by this agent to collect experience.
+     * @return The agent's sample buffer.
      */
-    SampleBuffer sampleBuffer;
+    SampleBuffer* get_buffer();
 
     /**
-     * @brief step The number of steps of the current/last episode.
+     * @brief has_buffer Check whether a sample buffer has been created.
+     * @return true iff a buffer has been created
      */
-    uint step;
+    bool has_buffer() const;
+
+    /**
+     * @brief get_buffer_agent_id Get the id of the agent associated with this buffer.
+     * @return the agent's id.
+     */
+    virtual int get_buffer_agent_id() = 0;
+
+protected:
+    std::unique_ptr<SampleBuffer> sampleBuffer;
+};
+
+/**
+ * @brief An agent which can log observations and actions.
+ */
+class LogAgent : public bboard::Agent, public SampleCollector {
+public:
+    // SampleCollector
+    int get_buffer_agent_id() override;
+};
+
+/**
+ * @brief Automatically logs the observations and actions of an underlying agent (which does not have to be a log agent).
+ */
+class WrappedLogAgent : public LogAgent {
+public:
+    /**
+     * @brief LogAgent Create a LogAgent for logging episodes.
+     */
+    WrappedLogAgent();
+    ~WrappedLogAgent();
+
+    /**
+     * @brief set_agent Set the controlling agent.
+     * @param agent The agent which decides which actions this agent will use.
+     */
+    void set_agent(std::unique_ptr<bboard::Agent> agent);
+
+    /**
+     * @brief delete_agent Delete the agent if it exists.
+     */
+    void release_agent();
+
+    // bboard::Agent
 
     bboard::Move act(const bboard::State* state) override;
-
-    /**
-     * @brief reset Reset the agent with a new controlling agent. Has to be called after Environment::MakeGame so that the id can be set correctly.
-     * @param agent The agent which decides which actions this LogAgent will use.
-     */
-    void reset(bboard::Agent* agent);
-
-    /**
-     * @brief deleteAgent Deletes the agent if it exists.
-     */
-    void deleteAgent();
+    void reset() override;
 
 private:
-    bboard::Agent* agent;
+    std::unique_ptr<bboard::Agent> agent;
     float* planeBuffer;
 };
 

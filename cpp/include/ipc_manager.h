@@ -19,16 +19,18 @@ public:
      * @brief writeAgentExperience Write the experience of a single agent episode.
      * @param sampleBuffer The sample buffer which contains the experience of the agent episode.
      * @param agentID The id of the agent which collected this experience.
+     * @returns the number of added samples.
      */
-    virtual void writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID) = 0;
+    virtual ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID) = 0;
 
     /**
-     * @brief writeAgentExperience Write the experience of the given LogAgent.
-     * @param logAgent The LogAgent which collected experience in an episode.
+     * @brief writeAgentExperience Write the experience of the given collector.
+     * @param collector The SampleCollector which collected experience in an episode.
+     * @returns the number of added samples.
      */
-    inline void writeAgentExperience(LogAgent* logAgent)
+    inline ulong writeAgentExperience(SampleCollector* collector)
     {
-        writeAgentExperience(logAgent->sampleBuffer, logAgent->id);
+        return writeAgentExperience(*collector->get_buffer(), collector->get_buffer_agent_id());
     }
 
     /**
@@ -57,7 +59,7 @@ public:
      */
     FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount);
 
-    void writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID);
+    ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID);
     void writeNewEpisode(const EpisodeInfo& info);
     void flush();
 

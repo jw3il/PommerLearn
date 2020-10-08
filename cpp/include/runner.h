@@ -19,7 +19,7 @@ public:
      * @param printSteps Whether to print the steps.
      * @return The result of the episode.
      */
-    EpisodeInfo run(bboard::Environment& env, int maxSteps, bool printSteps=false);
+    static EpisodeInfo run(bboard::Environment& env, int maxSteps, bool printSteps=false);
 
     /**
      * @brief generateSupervisedTrainingData Generate a traning dataset for supervised training.
@@ -30,7 +30,7 @@ public:
      * @param seed The seed used to generate the training data (for deterministic results). Ignored (initialized with time) if -1.
      * @param printSteps Whether to print the steps.
      */
-    void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed=-1, bool printSteps=false);
+    static void generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed=-1, bool printSteps=false);
 
 private:
 

@@ -1,42 +1,67 @@
 #include "log_agent.h"
 #include "data_representation.h"
 
-LogAgent::LogAgent(int maxEpisodeLength) : sampleBuffer(maxEpisodeLength) {
+// SampleCollector
+
+void SampleCollector::create_buffer(int maxEpisodeLength) {
+    sampleBuffer = std::make_unique<SampleBuffer>(maxEpisodeLength);
+}
+
+SampleBuffer* SampleCollector::get_buffer() {
+    return sampleBuffer.get();
+}
+
+bool SampleCollector::has_buffer() const {
+    return sampleBuffer.get() != nullptr;
+}
+
+// LogAgent
+
+int LogAgent::get_buffer_agent_id() {
+    return this->id;
+}
+
+// WrappedLogAgent
+
+WrappedLogAgent::WrappedLogAgent() {
     this->agent = nullptr;
-    this->step = 0;
     this->id = -1;
 
     this->planeBuffer = new float[GetObsSize(1)];
 }
 
-LogAgent::~LogAgent()
+WrappedLogAgent::~WrappedLogAgent()
 {
     delete[] this->planeBuffer;
 }
 
-bboard::Move LogAgent::act(const bboard::State* state) {
+bboard::Move WrappedLogAgent::act(const bboard::State* state) {
     bboard::Move move = this->agent == nullptr ? bboard::Move::IDLE : this->agent->act(state);
 
     // log the (state, action) pair
-    StateToPlanes(state, id, this->planeBuffer);
-    this->sampleBuffer.addSample(this->planeBuffer, move);
-
-    this->step++;
+    if (this->has_buffer()) {
+        StateToPlanes(state, id, this->planeBuffer);
+        this->sampleBuffer->addSample(this->planeBuffer, move);
+    }
 
     return move;
 }
 
-void LogAgent::reset(bboard::Agent* agent) {
-    this->step = 0;
-    this->sampleBuffer.clear();
-    this->agent = agent;
-    this->agent->id = this->id;
+void WrappedLogAgent::set_agent(std::unique_ptr<bboard::Agent> agent) {
+    if(agent.get() == nullptr) {
+        return;
+    }
+
+    this->agent = std::move(agent);
 }
 
-void LogAgent::deleteAgent() {
-    if (this->agent != nullptr)
-        delete this->agent;
+void WrappedLogAgent::reset() {
+    if (this->agent.get() != nullptr) {
+        this->agent->id = this->id;
+        this->agent->reset();
+    }
+}
 
-    this->step = 0;
-    this->agent = nullptr;
+void WrappedLogAgent::release_agent() {
+    this->agent.release();
 }
