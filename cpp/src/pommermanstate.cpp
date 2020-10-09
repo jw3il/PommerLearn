@@ -146,7 +146,23 @@ Action PommermanState::uci_to_action(std::string &uciStr) const
 
 std::string PommermanState::action_to_san(Action action, const std::vector<Action>& legalActions, bool leadsToWin, bool bookMove) const
 {
-    return "";
+    // TODO: Maybe change to UTF8 symbols later
+    switch(bboard::Move(action)) {
+    case (bboard::Move::IDLE):
+        return "I";
+    case (bboard::Move::UP):
+        return "U";
+    case (bboard::Move::DOWN):
+        return "D";
+    case (bboard::Move::LEFT):
+        return "L";
+    case (bboard::Move::RIGHT):
+        return "R";
+    case (bboard::Move::BOMB):
+        return "B";
+    default:
+        return "?";
+    }
 }
 
 TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, float& customTerminalValue) const
