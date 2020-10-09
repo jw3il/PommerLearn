@@ -11,6 +11,7 @@
 
 #include "state.h"
 #include "bboard.hpp"
+#include "data_representation.h"
 
 
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
@@ -52,24 +53,9 @@ public:
             return "UNKNOWN";
         }
     }
-    template<PolicyType p, MirrorType m>
+    template<PolicyType p = normal, MirrorType m = notMirrored>
     static size_t action_to_index(Action action) {
-        switch (action) {
-            case Action(bboard::Move::IDLE):
-            return 0;
-        case Action(bboard::Move::UP):
-            return 1;
-        case Action(bboard::Move::LEFT):
-            return 2;
-        case Action(bboard::Move::DOWN):
-            return 3;
-        case Action(bboard::Move::RIGHT):
-            return 4;
-        case Action(bboard::Move::BOMB):
-            return 5;
-        default:
-            return 0;
-        }
+        return std::clamp(action, 0, NUM_MOVES);
     }
     static void init(bool isPolicyMap) {
         return; // pass
