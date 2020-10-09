@@ -78,8 +78,14 @@ void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGE
         std::cerr << "No logging agents detected! No actions will be logged!" << std::endl;
     }
 
+    int nbNotDone = 0;
+    int nbDraws = 0;
+    std::array<int, bboard::AGENT_COUNT> nbWins;
+    std::fill(nbWins.begin(), nbWins.end(), 0);
+
     long totalEpisodeSteps = 0;
-    for (int e = 0; (maxEpisodes == -1 || e < maxEpisodes) && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); e++) {
+    int episode = 0;
+    for (; (maxEpisodes == -1 || episode < maxEpisodes) && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); episode++) {
         // generate new seeds in every episode
         seed = rng();
         bboard::Environment env;
@@ -100,7 +106,22 @@ void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGE
             collector->get_buffer()->clear();
         }
 
-        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << e << ": steps " << result.steps << ", ";
+        if (!result.isDone) {
+            nbNotDone++;
+        }
+        else if (result.isDraw) {
+            nbDraws++;
+        }
+        else {
+            // add winning agents, this also works for teams
+            for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+                if (env.GetState().agents[i].won) {
+                    nbWins[i] += 1;
+                }
+            }
+        }
+
+        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << episode << ": steps " << result.steps << ", ";
         if (result.winningAgent != -1)
         {
             std::cout << "winning agent " << result.winningAgent;
@@ -118,7 +139,19 @@ void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGE
         std::cout << " > Seed: 0x" << std::hex << seed << std::dec << std::endl;
     }
 
-    // TODO: display aggregated statistics
+    // display aggregated statistics
+
+    std::cout << "------------------------------" << std::endl;
+
+    std::cout << "Total episodes: " << episode <<  std::endl;
+    std::cout << "Wins: " << std::endl;
+    for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
+        int wins = nbWins[agentIdx];
+        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%)" << std::endl;
+    }
+
+    std::cout << "Draws: " << nbDraws << " (" << (float)nbDraws * 100 / episode << "%)" << std::endl;
+    std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
 }
 
 void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed, bool printSteps) {
