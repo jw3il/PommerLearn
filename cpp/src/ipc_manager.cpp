@@ -161,10 +161,16 @@ std::vector<B> _mapVector(std::vector<A> vectorA, std::function<B(A&)> mapAToB) 
 }
 
 void FileBasedIPCManager::flush() {
-    if (!this->activeFile.exists())
-        return;
+    // flush the sample buffer if it contains samples
+    // (might create a new file)
+    if (sampleBuffer.getCount() > 0) {
+        this->flushSampleBuffer(this->activeFile);
+    }
 
-    this->flushSampleBuffer(this->activeFile);
+    // there are no samples for the current file, so we don't have to save meta data
+    if (!this->activeFile.exists()) {
+        return;
+    }
 
     nlohmann::json attributes;
 

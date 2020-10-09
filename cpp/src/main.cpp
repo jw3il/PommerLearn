@@ -54,7 +54,7 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     return netBatches;
 }
 
-void free_for_all_tourney(size_t nbGames)
+void free_for_all_tourney(size_t nbGames, IPCManager* ipcManager)
 {
     StateConstants::init(false);
 #ifdef TENSORRT
@@ -94,46 +94,27 @@ void free_for_all_tourney(size_t nbGames)
     PommermanState pommermanState(0, gameMode);
     // pommermanState.set_partial_observability(&obsParams);
 
-    CrazyAraAgent crazyaraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo);
-//    CrazyAraAgent crazyaraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo);
-
     srand(time(0));
-    std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {&crazyaraAgent,
-                                                              new agents::SimpleAgent(rand()),
-                                                              new agents::SimpleAgent(rand()),
-                                                              new agents::SimpleAgent(rand()),
-                                                             };
-    std::array<size_t, 4> nbWins = {0,0,0,0};
-    size_t nbDraws = 0;
 
-    for (size_t curIt = 0; curIt < nbGames; ++curIt) {
-        env.MakeGame(agents, gameMode, rand(), true);
-        env.RunGame(800);
+    std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
+        new CrazyAraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo),
+        // new CrazyAraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo);
+        new agents::SimpleAgent(rand()),
+        new agents::SimpleAgent(rand()),
+        new agents::SimpleAgent(rand()),
+    };
 
-        const bboard::State& lastState = env.GetState();
-        if (lastState.winningAgent != -1) {
-            nbWins[lastState.winningAgent] += 1;
-        }
-        else {
-            ++nbDraws;
-        }
-    }
-
-    for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
-        std::cout << "Agent " << agentIdx << ": " << nbWins[agentIdx] << " wins" << std::endl;
-    }
-
-    std::cout << "Draws: " << nbDraws << std::endl;
+    Runner::run(agents, gameMode, 800, nbGames, -1, -1, false, ipcManager);
 }
 
-void generate_sl_data(const std::string& dataPrefix, int chunkSize, int chunkCount)
+void generate_sl_data(int nbSamples, IPCManager* ipcManager)
 {
-    FileBasedIPCManager ipcManager(dataPrefix, chunkSize, chunkCount);
-    Runner runner;
+    if (ipcManager == nullptr) {
+        std::cout << "Cannot generate SL data without an IPCManager instance!" << std::endl;
+        return;
+    }
 
-    // generate enough steps (chunkSize * chunkCount) to fill one dataset
-    runner.generateSupervisedTrainingData(&ipcManager, 800, -1, chunkSize * chunkCount, -1, false);
-    ipcManager.flush();
+    Runner::run_simple_agents(800, -1, nbSamples, -1, false, ipcManager);
 }
 
 int main(int argc, char **argv) {
@@ -142,8 +123,23 @@ int main(int argc, char **argv) {
         dataPrefix = argv[1];
     }
 
-    // generate_sl_data(dataPrefix, 1000, 100);
-    free_for_all_tourney(10);
+    int chunkSize = 1000;
+    int chunkCount = 100;
+
+    std::unique_ptr<FileBasedIPCManager> ipcManager;
+
+    // uncomment to enable logging
+    // ipcManager = std::make_unique<FileBasedIPCManager>(dataPrefix, chunkSize, chunkCount);
+
+    // generate enough steps to fill one dataset
+    // generate_sl_data(chunkCount * chunkSize, ipcManager.get());
+
+    free_for_all_tourney(10, ipcManager.get());
+
+    if(ipcManager.get() != nullptr)
+    {
+        ipcManager->flush();
+    }
 
     return 0;
 }

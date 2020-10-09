@@ -13,7 +13,7 @@ Runner::Runner()
     // TODO maybe create persistent environment and reset it?
 }
 
-EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps)
+EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool printSteps)
 {
     EpisodeInfo info;
     info.initialState = env.GetState();
@@ -55,7 +55,7 @@ EpisodeInfo Runner::run(bboard::Environment& env, int maxSteps, bool printSteps)
     return info;
 }
 
-void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed, bool printSteps) {
+void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, int maxEpisodeSteps, long maxEpisodes, long maxLoggedSteps, long seed, bool printSteps, IPCManager* ipcManager) {
     if(seed == -1)
     {
         seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -64,46 +64,46 @@ void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGE
 
     // create the sample buffers for all agents wanting to collect samples
     std::vector<SampleCollector*> sampleCollectors;
-    for (uint i = 0; i < agents.size(); i++) {
-        SampleCollector* sampleCollector = dynamic_cast<SampleCollector*>(agents[i]);
-        if (sampleCollector != nullptr) {
-            sampleCollector->create_buffer(maxEpisodeSteps);
-            sampleCollectors.push_back(sampleCollector);
+    if (ipcManager != nullptr) {
+        for (uint i = 0; i < agents.size(); i++) {
+            SampleCollector* sampleCollector = dynamic_cast<SampleCollector*>(agents[i]);
+            if (sampleCollector != nullptr) {
+                sampleCollector->create_buffer(maxEpisodeSteps);
+                sampleCollectors.push_back(sampleCollector);
+            }
         }
     }
 
     std::cout << "Number of logging agents: " << sampleCollectors.size() << std::endl;
-
-    if (sampleCollectors.size() == 0) {
-        std::cerr << "No logging agents detected! No actions will be logged!" << std::endl;
-    }
 
     int nbNotDone = 0;
     int nbDraws = 0;
     std::array<int, bboard::AGENT_COUNT> nbWins;
     std::fill(nbWins.begin(), nbWins.end(), 0);
 
-    long totalEpisodeSteps = 0;
+    long totalLoggedSteps = 0;
     int episode = 0;
-    for (; (maxEpisodes == -1 || episode < maxEpisodes) && (maxTotalSteps == -1 || totalEpisodeSteps < maxTotalSteps); episode++) {
+    for (; (maxEpisodes == -1 || episode < maxEpisodes) && (maxLoggedSteps == -1 || totalLoggedSteps < maxLoggedSteps); episode++) {
         // generate new seeds in every episode
         seed = rng();
         bboard::Environment env;
         env.MakeGame(agents, gameMode, seed, true);
 
-        EpisodeInfo result = Runner::run(env, maxEpisodeSteps, printSteps);
+        EpisodeInfo result = Runner::run_env_episode(env, maxEpisodeSteps, printSteps);
 
-        ipcManager->writeNewEpisode(result);
+        if (ipcManager != nullptr) {
+            ipcManager->writeNewEpisode(result);
 
-        // write the episode logs (if there are any logging agents)
-        for (SampleCollector* collector : sampleCollectors) {
-            if ((maxTotalSteps > 0 && totalEpisodeSteps >= maxTotalSteps))
-                break;
+            // write the episode logs (if there are any logging agents)
+            for (SampleCollector* collector : sampleCollectors) {
+                if ((maxLoggedSteps > 0 && totalLoggedSteps >= maxLoggedSteps))
+                    break;
 
-            int steps = ipcManager->writeAgentExperience(collector);
-            totalEpisodeSteps += steps;
+                int steps = ipcManager->writeAgentExperience(collector);
+                totalLoggedSteps += steps;
 
-            collector->get_buffer()->clear();
+                collector->get_buffer()->clear();
+            }
         }
 
         if (!result.isDone) {
@@ -121,7 +121,7 @@ void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGE
             }
         }
 
-        std::cout << "Total steps: " << totalEpisodeSteps << " > Episode " << episode << ": steps " << result.steps << ", ";
+        std::cout << "Total logged steps: " << totalLoggedSteps << " > Episode " << episode << ": steps " << result.steps << ", ";
         if (result.winningAgent != -1)
         {
             std::cout << "winning agent " << result.winningAgent;
@@ -154,7 +154,7 @@ void log_episodes(IPCManager* ipcManager, std::array<bboard::Agent*, bboard::AGE
     std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
 }
 
-void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpisodeSteps, long maxEpisodes, long maxTotalSteps, long seed, bool printSteps) {
+void Runner::run_simple_agents(int maxEpisodeSteps, long maxEpisodes, long maxLoggedSteps, long seed, bool printSteps, IPCManager* ipcManager) {
     // create wrappers to log the actions of some agents
     WrappedLogAgent agentWrappers[4];
     std::array<bboard::Agent*, 4> agents = {&agentWrappers[0], &agentWrappers[1], &agentWrappers[2], &agentWrappers[3]};
@@ -164,7 +164,7 @@ void Runner::generateSupervisedTrainingData(IPCManager* ipcManager, int maxEpiso
         agentWrappers[i].set_agent(std::make_unique<agents::SimpleAgent>(seed + i));
     }
 
-    log_episodes(ipcManager, agents, bboard::GameMode::FreeForAll, maxEpisodeSteps, maxEpisodes, maxTotalSteps, seed, printSteps);
+    Runner::run(agents, bboard::GameMode::FreeForAll, maxEpisodeSteps, maxEpisodes, maxLoggedSteps, seed, printSteps, ipcManager);
 
     for (int i = 0; i < 4; i++) {
         agentWrappers[i].release_agent();
