@@ -73,6 +73,7 @@ public:
     unsigned int plies;
     bool usePartialObservability;
     bboard::ObservationParameters params;
+    int eventHash;
 
 public:
     void set_state(const bboard::State* state);

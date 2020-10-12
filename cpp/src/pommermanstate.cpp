@@ -13,7 +13,8 @@ PommermanState::PommermanState(int agentID, bboard::GameMode gameMode):
     agentID(agentID),
     gameMode(gameMode),
     plies(0),
-    usePartialObservability(false)
+    usePartialObservability(false),
+    eventHash(0)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
 }
@@ -105,10 +106,26 @@ std::string PommermanState::fen() const
     return "<fen-placeholder>";
 }
 
+bool _attribute_changed(const bboard::AgentInfo& oldInfo, const bboard::AgentInfo& newInfo) {
+    return oldInfo.canKick != newInfo.canKick
+            || oldInfo.bombCount != newInfo.bombCount
+            || oldInfo.bombStrength != newInfo.bombStrength
+            || oldInfo.maxBombCount != newInfo.maxBombCount;
+}
+
 void PommermanState::do_action(Action action)
-{    
+{
+    bboard::AgentInfo info = state.agents[agentID];
+    int bombCount = state.bombs.count;
+    int flameCount = state.flames.count;
+
     moves[agentID] = bboard::Move(action);
     bboard::Step(&state, moves);
+
+    if (_attribute_changed(info, state.agents[agentID])
+            || bombCount != state.bombs.count || flameCount != state.flames.count) {
+        eventHash = rand();
+    }
 }
 
 void PommermanState::undo_action(Action action) {
@@ -128,9 +145,10 @@ int PommermanState::side_to_move() const
 
 Key PommermanState::hash_key() const
 {
-    // TODO: maybe make this more proper. The hash_key() is used to check for tree reusage.
-    // Returning a constant hash bad side effects.
-    return rand();
+    const bboard::AgentInfo& self = state.agents[agentID];
+    int pos = self.x + self.y * bboard::BOARD_SIZE;
+    // pos is in range [0, 120], so we can shift left by 7 (128)
+    return ((Key)eventHash << 7) + pos;
 }
 
 void PommermanState::flip()
