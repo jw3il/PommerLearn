@@ -12,7 +12,6 @@
 PommermanState::PommermanState(int agentID, bboard::GameMode gameMode):
     agentID(agentID),
     gameMode(gameMode),
-    plies(0),
     usePartialObservability(false),
     eventHash(0)
 {
@@ -93,7 +92,7 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
 
 unsigned int PommermanState::steps_from_null() const
 {
-    return plies;
+    return state.timeStep;
 }
 
 bool PommermanState::is_chess960() const

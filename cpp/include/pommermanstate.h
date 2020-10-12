@@ -70,7 +70,6 @@ public:
     bboard::Move moves[bboard::AGENT_COUNT];
     const int agentID;
     const bboard::GameMode gameMode;
-    unsigned int plies;
     bool usePartialObservability;
     bboard::ObservationParameters params;
     int eventHash;
