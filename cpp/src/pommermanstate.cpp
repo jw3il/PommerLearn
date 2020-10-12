@@ -175,7 +175,7 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, 
         }
         else
         {
-            if(state.isDraw)
+            if(state.isDraw || state.timeStep > 800)
             {
                 return TERMINAL_DRAW;
             }
