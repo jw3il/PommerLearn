@@ -64,12 +64,13 @@ void free_for_all_tourney(size_t nbGames, IPCManager* ipcManager)
 #endif
     SearchSettings searchSettings;
     searchSettings.virtualLoss = 1;
-    searchSettings.batchSize = 8;
+    searchSettings.batchSize = 1;
     searchSettings.threads = 1;
     searchSettings.useTranspositionTable = false;
     searchSettings.multiPV = 1;
+    searchSettings.virtualLoss = 1;
     searchSettings.nodePolicyTemperature = 1;
-    searchSettings.dirichletEpsilon = 0.2;
+    searchSettings.dirichletEpsilon = 0.25f;
 
     vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches("model", searchSettings);
     PlaySettings playSettings;
@@ -134,7 +135,7 @@ int main(int argc, char **argv) {
     // generate enough steps to fill one dataset
     // generate_sl_data(chunkCount * chunkSize, ipcManager.get());
 
-    free_for_all_tourney(10, ipcManager.get());
+    free_for_all_tourney(1, ipcManager.get());
 
     if(ipcManager.get() != nullptr)
     {
