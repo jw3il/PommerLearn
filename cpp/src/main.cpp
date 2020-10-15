@@ -126,14 +126,23 @@ void generate_sl_data(int nbSamples, IPCManager* ipcManager)
 
 int main(int argc, char **argv) {
     po::options_description configDesc("Available options");
+
     configDesc.add_options()
-        ("help", "Print help message")
-        ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
-        ("max_games", po::value<int>()->default_value(10), "The max. number of generated games (ignored if -1)")
-        ("log", "If set, generate enough samples to fill a whole dataset (chunk_size * chunk_count samples)")
-        ("file_prefix", po::value<std::string>()->default_value("./data"), "Set the filename prefix for the new datasets")
-        ("chunk_size", po::value<int>()->default_value(1000), "Max. number of samples in a single file inside the dataset")
-        ("chunk_count", po::value<int>()->default_value(100), "Max. number of chunks in a dataset")
+            ("help", "Print help message")
+
+            // general options
+            ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
+            ("max_games", po::value<int>()->default_value(10), "The max. number of generated games (ignored if -1)")
+
+            // log options
+            ("log", "If set, generate enough samples to fill a whole dataset (chunk_size * chunk_count samples)")
+            ("file_prefix", po::value<std::string>()->default_value("./data"), "Set the filename prefix for the new datasets")
+            ("chunk_size", po::value<int>()->default_value(1000), "Max. number of samples in a single file inside the dataset")
+            ("chunk_count", po::value<int>()->default_value(100), "Max. number of chunks in a dataset")
+
+            // value options
+            ("discount_factor", po::value<float>()->default_value(1), "The discount factor used to assign values to individual steps (ignored if >= 1)")
+            ("add_agent_vals", po::value<bool>()->default_value(false), "Whether to add weighted agent values in the value calculation")
     ;
 
     po::variables_map configVals;
@@ -149,7 +158,13 @@ int main(int argc, char **argv) {
     std::unique_ptr<FileBasedIPCManager> ipcManager;
     int maxSamples;
     if (configVals.count("log")) {
-        ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file_prefix"].as<std::string>(), configVals["chunk_size"].as<int>(), configVals["chunk_count"].as<int>());
+        // read the value config
+        ValueConfig valConf;
+        valConf.discountFactor = configVals["discount_factor"].as<float>();
+        valConf.addWeightedAgentValues = configVals["add_agent_vals"].as<bool>();
+
+        ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file_prefix"].as<std::string>(), configVals["chunk_size"].as<int>(), configVals["chunk_count"].as<int>(), valConf);
+
         // fill at most one dataset
         maxSamples = configVals["chunk_size"].as<int>() * configVals["chunk_count"].as<int>();
     }

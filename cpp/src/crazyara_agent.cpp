@@ -32,7 +32,7 @@ bboard::Move CrazyAraAgent::act(const bboard::State *state)
         pommermanState->get_state_planes(true, planeBuffer);
         _get_policy(evalInfo, policyBuffer);
 
-        sampleBuffer->addSample(planeBuffer, bestAction, policyBuffer);
+        sampleBuffer->addSample(planeBuffer, bestAction, policyBuffer, evalInfo->bestMoveQ.at(0));
     }
 
     return bestAction;

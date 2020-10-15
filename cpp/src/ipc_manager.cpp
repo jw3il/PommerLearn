@@ -14,8 +14,8 @@
 #include "z5/multiarray/xtensor_access.hxx"
 #include "z5/attributes.hxx"
 
-FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount)
-    : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount),
+FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount, ValueConfig valConfig)
+    : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount), valConfig(valConfig),
       sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename())
 {
     this->maxStepCount = chunkSize * chunkCount;
@@ -102,7 +102,13 @@ ulong FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, cons
     // TODO: Adapt value for team mode
     EpisodeInfo& lastInfo = this->episodeInfos.back();
     float value = lastInfo.winningAgent == agentID ? 1.0f : (lastInfo.dead[agentID] ? -1.0f : 0.0f);
-    sampleBuffer.setValues(value);
+
+    if (valConfig.discountFactor < 1) {
+        sampleBuffer.setValuesDiscounted(value, valConfig.discountFactor, valConfig.addWeightedAgentValues);
+    }
+    else {
+        sampleBuffer.setValues(value);
+    }
 
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset

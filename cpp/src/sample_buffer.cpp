@@ -4,8 +4,7 @@
 #include "xtensor/xarray.hpp"
 #include "xtensor/xadapt.hpp"
 
-SampleBuffer::SampleBuffer(const unsigned long capacity) : capacity(capacity), count(0)
-{
+SampleBuffer::SampleBuffer(const unsigned long capacity) : capacity(capacity), count(0) {
     this->obs = new float[GetObsSize(this->capacity)];
     this->act = new int8_t[this->capacity];
     this->pol = new float[this->capacity * NUM_MOVES];
@@ -19,8 +18,7 @@ SampleBuffer::~SampleBuffer() {
     delete[] this->val;
 }
 
-ulong SampleBuffer::addSamples(const SampleBuffer& otherBuffer, const ulong offset, const ulong n)
-{
+ulong SampleBuffer::addSamples(const SampleBuffer& otherBuffer, const ulong offset, const ulong n) {
     ulong numSamples = std::min(n, this->capacity - this->count);
 
     std::copy_n(otherBuffer.obs + GetObsSize(offset), GetObsSize(numSamples), this->obs + GetObsSize(this->count));
@@ -33,21 +31,20 @@ ulong SampleBuffer::addSamples(const SampleBuffer& otherBuffer, const ulong offs
     return numSamples;
 }
 
-bool SampleBuffer::addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES])
-{
+bool SampleBuffer::addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES], const float qVal) {
     if(count >= capacity)
         return false;
 
     std::copy_n(planes, GetObsSize(1), this->obs + GetObsSize(this->count));
     std::copy_n(moveProbs, NUM_MOVES, this->pol + NUM_MOVES * this->count);
     act[count] = int8_t(move);
+    val[count] = qVal;
     count += 1;
 
     return true;
 }
 
-bool SampleBuffer::addSample(const float* planes, const bboard::Move move)
-{
+bool SampleBuffer::addSample(const float* planes, const bboard::Move move) {
     float moveProbs[NUM_MOVES];
     std::fill_n(moveProbs, NUM_MOVES, 0);
     const int m = (int)move;
@@ -56,13 +53,35 @@ bool SampleBuffer::addSample(const float* planes, const bboard::Move move)
         moveProbs[m] = 1.0f;
     }
 
-    return addSample(planes, move, moveProbs);
+    return addSample(planes, move, moveProbs, 0);
 }
 
-
-void SampleBuffer::setValues(const float value)
-{
+void SampleBuffer::setValues(const float value) {
     std::fill_n(val, count, value);
+}
+
+void SampleBuffer::setValuesDiscounted(const float value, const float discountFactor, bool addWeightedValues) {
+    if (count <= 0)
+        return;
+
+    // set the final value
+    val[count - 1] = value;
+
+    // discount the others
+    if (addWeightedValues) {
+        float runningDiscountFactor = discountFactor;
+        for (int i = count - 2; i >= 0;--i) {
+            val[i] = runningDiscountFactor * value + (1 - runningDiscountFactor) * val[i];
+            runningDiscountFactor *= discountFactor;
+        }
+    }
+    else {
+        float runningValue = discountFactor * value;
+        for (int i = count - 2; i >= 0;--i) {
+            val[i] = runningValue;
+            runningValue *= discountFactor;
+        }
+    }
 }
 
 void SampleBuffer::clear() {

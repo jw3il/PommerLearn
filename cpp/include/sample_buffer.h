@@ -35,16 +35,26 @@ public:
      * @brief addSample Adds a single sample to the buffer, as long as the capacity is not reached.
      * @param planes Pointer to the input planes (observation).
      * @param moves The move which was chosen based on the given planes.
-     * @param moveProbs The move probabilities
+     * @param moveProbs The move probabilities.
+     * @param qVal The q value for the selected move.
      * @return Whether the sample has been added (false if the capacity has already been reached).
      */
-    bool addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES]);
+    bool addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES], const float qVal);
 
     /**
      * @brief setValues Sets all values of the buffer according to the given value.
      * @param value Used to set val[0:count-1] = value.
      */
     void setValues(const float value);
+
+    /**
+     * @brief setValuesDiscounted Sets all values of the buffer according to the discounted reward
+     * val[t] = discountFactor^(count - 1 - t) * value for 0 <= t < count.
+     * @param value The final value of this episode (val[count - 1] = value).
+     * @param discountFactor The discount factor.
+     * @param addWeightedValues If true, also adds (1 - discountFactor^(count - 1 - t)) * val[t].
+     */
+    void setValuesDiscounted(const float value, const float discountFactor, bool addWeightedValues);
 
     /**
      * @brief clear Clears the buffer state (not its actual content).
