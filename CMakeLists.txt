@@ -124,6 +124,7 @@ find_library(BLOSC blosc "$ENV{CONDA_ENV_PATH}/lib")
 
 # boost
 set(Boost_Dir "$ENV{CONDA_ENV_PATH}/lib")
+set(Boost_INCLUDE_DIR "$ENV{CONDA_ENV_PATH}/include")
 FIND_PACKAGE(Boost COMPONENTS program_options REQUIRED)
 
 file(GLOB source_files
