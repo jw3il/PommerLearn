@@ -59,28 +59,13 @@ since more data was available.'
 """
 import torch
 import torch.nn as nn
-from torch.nn import Sequential, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear
+from torch.nn import Sequential, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish
+from nn.builder_util import get_act
 
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.kaiming_normal_(m.weight.data, nonlinearity="relu")
-
-
-def get_act(act_type):
-    """Wrapper method for different non linear activation functions"""
-    if act_type == "relu":
-        return ReLU()
-    if act_type == "sigmoid":
-        return Sigmoid()
-    if act_type == "tanh":
-        return Tanh()
-    if act_type == "lrelu":
-        LeakyReLU(negative_slope=0.2)
-    if act_type == "hard_sigmoid":
-        raise NotImplementedError
-
-    raise NotImplementedError
 
 
 class ResidualBlock(torch.nn.Module):
@@ -186,7 +171,6 @@ class _ValueHeadAlphaZero(torch.nn.Module):
     def forward(self, x):
         """
         Compute forward pass
-        :param F: Handle
         :param x: Input data to the block
         :return: Activation maps of the block
         """
