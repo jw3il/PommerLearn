@@ -84,7 +84,7 @@ def create_dataset(arguments):
     LOG_DIR.mkdir(exist_ok=True)
 
     local_args = copy.deepcopy(arguments)
-    local_args.append([
+    local_args.extend([
         "--log",
         f"--file_prefix={str(LOG_DIR / Path('data'))}"
     ])
@@ -125,9 +125,25 @@ def train(data_dir, model_dir, train_config):
     return train_thread
 
 
-def create_initial_models(model_dir):
-    # TODO: Use train_cnn and build initial model if the model dir is empty!
-    Path.mkdir(model_dir / "example-model", parents=True, exist_ok=True)
+def create_initial_models(model_dir: Path, batch_sizes):
+    if is_empty(model_dir):
+        training.train_cnn.export_initial_model(batch_sizes, model_dir)
+    else:
+        print("Skipping initialization because model dir is not empty!")
+
+
+def subprocess_verbose_wait(sproc):
+    while sproc.poll() is None:
+        try:
+            sproc.wait(1)
+        except subprocess.TimeoutExpired:
+            pass
+
+        while True:
+            line = sproc.stdout.readline()
+            if not line:
+                break
+            print(line.decode("utf-8"), end='')
 
 
 def rl_loop(max_iterations, dataset_args, train_config):
@@ -142,7 +158,7 @@ def rl_loop(max_iterations, dataset_args, train_config):
         return datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
 
     # Before we can create any datasets, we have to create initial models
-    create_initial_models(MODEL_IN_DIR)
+    create_initial_models(MODEL_IN_DIR, train_config["model_batch_sizes"])
     iteration_id = "init_" + get_identifier()
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
@@ -167,7 +183,7 @@ def rl_loop(max_iterations, dataset_args, train_config):
             print_it("Create dataset")
 
             sproc_create_dataset = create_dataset(dataset_args)
-            sproc_create_dataset.wait()
+            subprocess_verbose_wait(sproc_create_dataset)
 
             print_it("Dataset done")
 
@@ -178,7 +194,7 @@ def rl_loop(max_iterations, dataset_args, train_config):
         if thread_train is not None:
             thread_train.join()
             print_it("Training done")
-            MODEL_OUT_DIR.rename(MODEL_IN_DIR)
+            move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
 
         # Archive the old training dataset
         iteration_id = get_identifier()
@@ -202,16 +218,19 @@ def main():
 
     # Info: All path-related arguments should be set inside the rl loop
 
-    dataset_args = [
-        "--mode=ffa_sl",
-        "--max_games=10",
-    ]
-
     train_config = {
         "nb_epochs": 1
     }
+    training.train_cnn.fill_default_config(train_config)
 
-    max_iterations = 3
+    use_cuda_models = True
+    dataset_args = [
+        "--mode=ffa_mcts",
+        "--max_games=1",
+        f"--model_dir={training.train_cnn.get_model_path(MODEL_IN_DIR, use_cuda_models)}"
+    ]
+
+    max_iterations = 5
 
     # Start the rl loop
     rl_thread = threading.Thread(target=rl_loop, args=(max_iterations, dataset_args, train_config))

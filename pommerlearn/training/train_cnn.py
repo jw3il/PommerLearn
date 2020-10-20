@@ -19,6 +19,15 @@ from sklearn.model_selection import train_test_split
 from pathlib import Path
 
 
+def create_model():
+    input_shape = (18, 11, 11)
+    model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
+                            board_height=input_shape[2])
+    init_weights(model)
+
+    return input_shape, model
+
+
 def train_cnn(train_config):
     z = zarr.open(train_config["dataset_path"], 'r')
     z_samples = z.attrs["Steps"]
@@ -31,10 +40,7 @@ def train_cnn(train_config):
     train_loader, val_loader = prepare_dataset(z, train_config["test_size"], train_config["batch_size"],
                                                train_config["random_state"])
 
-    input_shape = (18, 11, 11)
-    model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
-                            board_height=input_shape[2])
-    init_weights(model)
+    input_shape, model = create_model()
 
     if use_cuda:
         model = model.cuda()
@@ -48,15 +54,30 @@ def train_cnn(train_config):
     run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"],
                  train_loader, val_loader, use_cuda, comment="")
 
-    # export model for list of given batch-sizes
-    model_batch_sizes = [1, 8]
-    if use_cuda:
-        path_models_cuda = Path(train_config["model_output_dir"]) / Path("models-cuda")
-        export_model(model, model_batch_sizes, input_shape, True, path_models_cuda)
+    base_dir = Path(train_config["model_output_dir"])
+    batch_sizes = train_config["model_batch_sizes"]
+    export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
 
-    # always export for cpu as well
-    path_models_cpu = Path(train_config["model_output_dir"]) / Path("models-cpu")
-    export_model(model, model_batch_sizes, input_shape, False, path_models_cpu)
+
+def get_model_path(base_dir: Path, cuda: bool) -> Path:
+    if cuda:
+        return base_dir / Path("cuda")
+    else:
+        return base_dir / Path("cpu")
+
+
+def export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir: Path):
+    # always export for cpu
+    export_model(model, batch_sizes, input_shape, False, get_model_path(base_dir, False))
+
+    # also export for cuda, if available
+    if torch.cuda.is_available():
+        export_model(model, batch_sizes, input_shape, True, get_model_path(base_dir, True))
+
+
+def export_initial_model(batch_sizes, base_dir: Path):
+    input_shape, model = create_model()
+    export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
 
 
 def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
@@ -78,6 +99,7 @@ def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
             dummy_input = dummy_input.cuda()
             model = model.cuda()
         else:
+            dummy_input = dummy_input.cpu()
             model = model.cpu()
 
         export_to_onnx(model, dummy_input, dir)
@@ -308,8 +330,12 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
 
 def fill_default_config(train_config):
     default_config = {
+        # input
         "dataset_path": "data_0.zr",
-        "model_output_dir": "./",
+        # output
+        "model_output_dir": "./model",
+        "model_batch_sizes": [1, 8],
+        # hyperparameters
         "lr": 0.01,
         "momentum": 0.9,
         "weight_decay": 1e-04,
