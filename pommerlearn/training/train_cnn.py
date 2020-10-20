@@ -19,22 +19,11 @@ from sklearn.model_selection import train_test_split
 from pathlib import Path
 
 
-def main():
-    # ----------- HYPERPARAMETERS --------------
-    train_config = {
-        "lr": 0.01,
-        "momentum": 0.9,
-        "weight_decay": 1e-04,
-        "value_loss_ratio": 0.01,
-        "test_size": 0.2,
-        "batch_size": 128,
-        "random_state":  42,
-        "nb_epochs":  10,
-    }
+def train_cnn(train_config):
+    z = zarr.open(train_config["dataset_path"], 'r')
+    z_samples = z.attrs["Steps"]
 
-    z = zarr.open('data_0.zr', 'r')
-
-    print(f"Opened dataset with {len(z['act'])} samples from {len(z.attrs['EpisodeSteps'])} episodes")
+    print(f"Opened dataset with {z_samples} samples from {len(z.attrs['EpisodeSteps'])} episodes")
 
     use_cuda = torch.cuda.is_available()
     print(f"CUDA enabled: {use_cuda}")
@@ -62,10 +51,12 @@ def main():
     # export model for list of given batch-sizes
     model_batch_sizes = [1, 8]
     if use_cuda:
-        export_model(model, model_batch_sizes, input_shape, True, Path('./models-cuda'))
+        path_models_cuda = Path(train_config["model_output_dir"]) / Path("models-cuda")
+        export_model(model, model_batch_sizes, input_shape, True, path_models_cuda)
 
     # always export for cpu as well
-    export_model(model, model_batch_sizes, input_shape, False, Path('./models-cpu'))
+    path_models_cpu = Path(train_config["model_output_dir"]) / Path("models-cpu")
+    export_model(model, model_batch_sizes, input_shape, False, path_models_cpu)
 
 
 def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
@@ -103,7 +94,7 @@ def export_to_onnx(model, dummy_input, dir) -> None:
     input_names = ["data"]
     output_names = ["value_out", "policy_out"]
     torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{dummy_input.size(0)}.onnx")), input_names=input_names,
-                      output_names=output_names, verbose=True)
+                      output_names=output_names)
 
 
 def export_as_script_module(model, dummy_input, dir) -> None:
@@ -293,8 +284,11 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
     :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
-    x_train, x_val, yv_train, yv_val, yp_train, yp_val = \
-        train_test_split(z['obs'][:], z['val'][:], z['act'][:], test_size=test_size, random_state=random_state)
+    z_steps = z.attrs["Steps"]
+    x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
+        z['obs'][:z_steps], z['val'][:z_steps], z['act'][:z_steps],
+        test_size=test_size, random_state=random_state
+    )
 
     x_train = torch.Tensor(x_train)
     yp_train = torch.Tensor(yp_train).long()
@@ -312,5 +306,26 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
     return train_loader, val_loader
 
 
+def fill_default_config(train_config):
+    default_config = {
+        "dataset_path": "data_0.zr",
+        "model_output_dir": "./",
+        "lr": 0.01,
+        "momentum": 0.9,
+        "weight_decay": 1e-04,
+        "value_loss_ratio": 0.01,
+        "test_size": 0.2,
+        "batch_size": 128,
+        "random_state":  42,
+        "nb_epochs":  10,
+    }
+
+    for key in default_config:
+        if key not in train_config:
+            train_config[key] = default_config[key]
+
+    return train_config
+
+
 if __name__ == '__main__':
-    main()
+    train_cnn(fill_default_config({}))
