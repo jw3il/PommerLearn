@@ -58,15 +58,15 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     return netBatches;
 }
 
-void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager)
+void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager, std::string modelDir)
 {
     // TODO: Decouple agent creation
 
     StateConstants::init(false);
 #ifdef TENSORRT
-    TensorrtAPI netSingle(0, 1, "model", "float32");
+    TensorrtAPI netSingle(0, 1, modelDir, "float32");
 #elif defined (TORCH)
-    TorchAPI netSingle("cpu", 0, 1, "model/");
+    TorchAPI netSingle("cpu", 0, 1, modelDir);
 #endif
     SearchSettings searchSettings;
     searchSettings.virtualLoss = 1;
@@ -78,7 +78,7 @@ void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager
     searchSettings.nodePolicyTemperature = 1;
     searchSettings.dirichletEpsilon = 0.25f;
 
-    vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches("model", searchSettings);
+    vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches(modelDir, searchSettings);
     PlaySettings playSettings;
     SearchLimits searchLimits;
     searchLimits.movetime = 100;
@@ -143,6 +143,9 @@ int main(int argc, char **argv) {
             // value options
             ("discount_factor", po::value<float>()->default_value(1), "The discount factor used to assign values to individual steps (ignored if >= 1)")
             ("add_agent_vals", po::value<bool>()->default_value(false), "Whether to add weighted agent values in the value calculation")
+
+            // mcts options
+            ("model_dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
     ;
 
     po::variables_map configVals;
@@ -179,7 +182,7 @@ int main(int argc, char **argv) {
         Runner::run_simple_agents(800, maxGames, maxSamples, -1, false, ipcManager.get());
     }
     else if (configVals["mode"].as<std::string>() == "ffa_mcts") {
-        free_for_all_tourney(maxGames, maxSamples, ipcManager.get());
+        free_for_all_tourney(maxGames, maxSamples, ipcManager.get(), configVals["model_dir"].as<std::string>());
     }
     else {
         std::cerr << "Unknown mode" << std::endl;
