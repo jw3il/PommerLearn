@@ -6,6 +6,7 @@ Created on 16.06.20
 
 Basic training script to replicate behaviour of baseline agent
 """
+
 import zarr
 import torch.nn as nn
 from torch.autograd import Variable
@@ -18,32 +19,10 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from pathlib import Path
+from torch.optim.optimizer import Optimizer
 
 
-def main():
-    # ----------- HYPERPARAMETERS --------------
-    train_config = {
-        "lr": 0.01,
-        "momentum": 0.9,
-        "weight_decay": 1e-04,
-        "value_loss_ratio": 0.01,
-        "test_size": 0.2,
-        "batch_size": 128,
-        "random_state":  42,
-        "nb_epochs":  10,
-        "model": "risev3",
-    }
-
-    z = zarr.open('data_0.zr', 'r')
-
-    print(f"Opened dataset with {len(z['act'])} samples from {len(z.attrs['EpisodeSteps'])} episodes")
-
-    use_cuda = torch.cuda.is_available()
-    print(f"CUDA enabled: {use_cuda}")
-
-    train_loader, val_loader = prepare_dataset(z, train_config["test_size"], train_config["batch_size"],
-                                               train_config["random_state"])
-
+def create_model(train_config):
     input_shape = (18, 11, 11)
     valid_models = ["a0", "risev3"]
     if train_config["model"] == "a0":
@@ -58,11 +37,37 @@ def main():
         raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
 
+    return input_shape, model
+
+
+def create_optimizer(model: nn.Module, train_config: dict):
+    return optim.SGD(model.parameters(), lr=train_config["lr"], momentum=train_config["momentum"],
+                     weight_decay=train_config["weight_decay"])
+
+
+def train_cnn(train_config):
+    z = zarr.open(train_config["dataset_path"], 'r')
+    z_samples = z.attrs["Steps"]
+
+    print(f"Opened dataset with {z_samples} samples from {len(z.attrs['EpisodeSteps'])} episodes")
+
+    use_cuda = torch.cuda.is_available()
+    print(f"CUDA enabled: {use_cuda}")
+
+    train_loader, val_loader = prepare_dataset(z, train_config["test_size"], train_config["batch_size"],
+                                               train_config["random_state"])
+
+    input_shape, model = create_model(train_config)
+
     if use_cuda:
         model = model.cuda()
 
-    optimizer = optim.SGD(model.parameters(), lr=train_config["lr"], momentum=train_config["momentum"],
-                          weight_decay=train_config["weight_decay"])
+    optimizer = create_optimizer(model, train_config)
+
+    model_input_dir = None if train_config["torch_input_dir"] is None else Path(train_config["torch_input_dir"])
+    if model_input_dir is not None:
+        print(f"Loading torch state from {str(model_input_dir)}")
+        load_torch_state(model, optimizer, str(get_torch_state_path(model_input_dir)))
 
     policy_loss = nn.CrossEntropyLoss()
     value_loss = nn.MSELoss()
@@ -70,13 +75,51 @@ def main():
     run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"],
                  train_loader, val_loader, use_cuda, comment="")
 
-    # export model for list of given batch-sizes
-    model_batch_sizes = [1, 8]
-    if use_cuda:
-        export_model(model, model_batch_sizes, input_shape, True, Path('./models-cuda'))
+    base_dir = Path(train_config["output_dir"])
+    batch_sizes = train_config["model_batch_sizes"]
+    export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
+    save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
-    # always export for cpu as well
-    export_model(model, model_batch_sizes, input_shape, False, Path('./models-cpu'))
+
+def get_torch_state_path(base_dir: Path) -> Path:
+    return base_dir / "torch_state.tar"
+
+
+def load_torch_state(model: nn.Module, optimizer: Optimizer, path: str):
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+
+def save_torch_state(model: nn.Module, optimizer: Optimizer, path):
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+    }, path)
+
+
+def get_model_path(base_dir: Path, cuda: bool) -> Path:
+    if cuda:
+        return base_dir / Path("cuda")
+    else:
+        return base_dir / Path("cpu")
+
+
+def export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir: Path):
+    # always export for cpu
+    export_model(model, batch_sizes, input_shape, False, get_model_path(base_dir, False))
+
+    # also export for cuda, if available
+    if torch.cuda.is_available():
+        export_model(model, batch_sizes, input_shape, True, get_model_path(base_dir, True))
+
+
+def export_initial_model(train_config, base_dir: Path):
+    input_shape, model = create_model()
+    optimizer = create_optimizer(model, train_config)
+
+    export_model_cpu_cuda(model, train_config["model_batch_sizes"], input_shape, base_dir)
+    save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
 
 def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
@@ -98,6 +141,7 @@ def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
             dummy_input = dummy_input.cuda()
             model = model.cuda()
         else:
+            dummy_input = dummy_input.cpu()
             model = model.cpu()
 
         export_to_onnx(model, dummy_input, dir)
@@ -114,7 +158,7 @@ def export_to_onnx(model, dummy_input, dir) -> None:
     input_names = ["data"]
     output_names = ["value_out", "policy_out"]
     torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{dummy_input.size(0)}.onnx")), input_names=input_names,
-                      output_names=output_names, verbose=True)
+                      output_names=output_names)
 
 
 def export_as_script_module(model, dummy_input, dir) -> None:
@@ -221,6 +265,9 @@ def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_los
 
     progress.close()
 
+    writer_train.close()
+    writer_val.close()
+
 
 def log_to_tensorboard(writer, metrics, global_step) -> None:
     """
@@ -304,8 +351,11 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
     :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
-    x_train, x_val, yv_train, yv_val, yp_train, yp_val = \
-        train_test_split(z['obs'][:], z['val'][:], z['act'][:], test_size=test_size, random_state=random_state)
+    z_steps = z.attrs["Steps"]
+    x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
+        z['obs'][:z_steps], z['val'][:z_steps], z['act'][:z_steps],
+        test_size=test_size, random_state=random_state
+    )
 
     x_train = torch.Tensor(x_train)
     yp_train = torch.Tensor(yp_train).long()
@@ -323,5 +373,32 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
     return train_loader, val_loader
 
 
+def fill_default_config(train_config):
+    default_config = {
+        # input
+        "dataset_path": "data_0.zr",
+        "torch_input_dir": None,
+        # output
+        "output_dir": "./model",
+        "model_batch_sizes": [1, 8],
+        # hyperparameters
+        "lr": 0.01,
+        "momentum": 0.9,
+        "weight_decay": 1e-04,
+        "value_loss_ratio": 0.01,
+        "test_size": 0.2,
+        "batch_size": 128,
+        "random_state":  42,
+        "nb_epochs":  10,
+        "model": "a0",
+    }
+
+    for key in default_config:
+        if key not in train_config:
+            train_config[key] = default_config[key]
+
+    return train_config
+
+
 if __name__ == '__main__':
-    main()
+    train_cnn(fill_default_config({}))
