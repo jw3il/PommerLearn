@@ -144,12 +144,12 @@ def get_datatset(dir: Path) -> Path:
     raise ValueError(f"Could not find any dataset in {dir}!")
 
 
-def train(data_dir, model_dir, train_config):
+def train(data_dir, out_dir, train_config):
     """
     Start a training pass.
 
     :param data_dir: The directory which contains the datatset
-    :param model_dir: The model output directory
+    :param out_dir: The output directory
     :param train_config: The training config
     """
 
@@ -157,7 +157,7 @@ def train(data_dir, model_dir, train_config):
 
     # fill the config
     local_train_config = copy.deepcopy(train_config)
-    local_train_config["model_output_dir"] = str(model_dir)
+    local_train_config["output_dir"] = str(out_dir)
     local_train_config["dataset_path"] = str(get_datatset(data_dir))
     training.train_cnn.fill_default_config(local_train_config)
 

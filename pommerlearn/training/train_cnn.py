@@ -17,6 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from pathlib import Path
+from torch.optim.optimizer import Optimizer
 
 
 def create_model():
@@ -48,15 +49,37 @@ def train_cnn(train_config):
     optimizer = optim.SGD(model.parameters(), lr=train_config["lr"], momentum=train_config["momentum"],
                           weight_decay=train_config["weight_decay"])
 
+    model_input_dir = train_config["torch_input_dir"]
+    if model_input_dir is not None:
+        load_torch_state(model, optimizer, get_torch_state_path(model_input_dir))
+
     policy_loss = nn.CrossEntropyLoss()
     value_loss = nn.MSELoss()
 
     run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"],
                  train_loader, val_loader, use_cuda, comment="")
 
-    base_dir = Path(train_config["model_output_dir"])
+    base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
     export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
+    save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
+
+
+def get_torch_state_path(base_dir: Path) -> Path:
+    return base_dir / "torch_state.tar"
+
+
+def load_torch_state(model: nn.Module, optimizer: Optimizer, path):
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+
+def save_torch_state(model: nn.Module, optimizer: Optimizer, path):
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+    }, path)
 
 
 def get_model_path(base_dir: Path, cuda: bool) -> Path:
@@ -223,6 +246,9 @@ def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_los
 
     progress.close()
 
+    writer_train.close()
+    writer_val.close()
+
 
 def log_to_tensorboard(writer, metrics, global_step) -> None:
     """
@@ -332,8 +358,9 @@ def fill_default_config(train_config):
     default_config = {
         # input
         "dataset_path": "data_0.zr",
+        "torch_input_dir": None,
         # output
-        "model_output_dir": "./model",
+        "output_dir": "./model",
         "model_batch_sizes": [1, 8],
         # hyperparameters
         "lr": 0.01,
