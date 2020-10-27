@@ -71,7 +71,7 @@ void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager
     SearchSettings searchSettings;
     searchSettings.virtualLoss = 1;
     searchSettings.batchSize = 1;
-    searchSettings.threads = 1;
+    searchSettings.threads = 2;
     searchSettings.useTranspositionTable = false;
     searchSettings.multiPV = 1;
     searchSettings.virtualLoss = 1;
@@ -81,8 +81,9 @@ void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager
     vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches(modelDir, searchSettings);
     PlaySettings playSettings;
     SearchLimits searchLimits;
-    searchLimits.movetime = 100;
-    searchLimits.moveOverhead = 20;
+    searchLimits.simulations = 400;
+    // searchLimits.movetime = 100;
+    // searchLimits.moveOverhead = 20;
     EvalInfo evalInfo;
 
     RawNetAgent rawNetAgent(&netSingle, &playSettings, true);
