@@ -16,17 +16,23 @@ MODEL_INIT_DIR = Path("./model-init/")
 MODEL_OUT_DIR = Path("./model-out/")
 MODEL_IN_DIR = Path("./model/")
 
-# Global variable used to stop the rl loop
+# Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
 stop_rl_lock = threading.Lock()
 
 
-def rm_dir(path: Path, keep_empty_dir=False):
-    if not path.exists():
+def rm_dir(dir: Path, keep_empty_dir=True):
+    """
+    Removes all the content from the given directory (and optionally also the directory itself)
+
+    :param dir: A directory
+    :param keep_empty_dir: Whether to keep the empty directory after all its content has been deleted
+    """
+    if not dir.exists() or not dir.is_dir():
         return
 
     # recursively for every dir
-    for child in path.iterdir():
+    for child in dir.iterdir():
         if child.is_dir():
             rm_dir(child)
         elif child.is_file():
@@ -36,23 +42,35 @@ def rm_dir(path: Path, keep_empty_dir=False):
 
     # delete empty dir
     if not keep_empty_dir:
-        path.rmdir()
+        dir.rmdir()
 
 
-def rename_subdirs_id(path: Path, id: str):
-    if not path.exists() or not path.is_dir():
+def rename_datasets_id(dir: Path, id: str):
+    """
+    Rename all the datasets inside a directory according to the given id.
+    
+    :param dir: A directory which might contain some datatsets
+    :param id: An identifier for these datasets
+    """
+    if not dir.exists() or not dir.is_dir():
         return
 
     dir_count = 0
 
     # rename every subdir according to the given id
-    for child in path.iterdir():
-        if child.is_dir():
-            child.rename(path / f"{id}_{dir_count}.zr")
+    for child in dir.iterdir():
+        if child.is_dir() and child.name.endswith(".zr"):
+            child.rename(dir / f"{id}_{dir_count}.zr")
             dir_count += 1
 
 
 def move_content(source: Path, dest: Path):
+    """
+    Move all content from the source to the destination directory.
+
+    :param source: The source directory
+    :param dest: The destination directory
+    """
     if not source.exists() or not source.is_dir():
         return
 
@@ -63,6 +81,12 @@ def move_content(source: Path, dest: Path):
 
 
 def is_empty(dir: Path):
+    """
+    Check whether the specified directory is empty (or does not exists).
+
+    :param dir: A directory
+    :return: dir.exists() and dir is empty
+    """
     if not dir.exists():
         return True
 
@@ -76,9 +100,12 @@ def is_empty(dir: Path):
 
 
 def create_dataset(arguments):
-    # execute the c++ program once
+    """
+    Create a dataset by executing the C++ program.
 
-    # clear the dir if it already exists
+    :param arguments: The program arguments (excluding log and file dirs)
+    """
+    # clear the log dir if it already exists
     rm_dir(LOG_DIR, keep_empty_dir=True)
     # make sure it exists
     LOG_DIR.mkdir(exist_ok=True)
@@ -101,6 +128,12 @@ def create_dataset(arguments):
 
 
 def get_datatset(dir: Path) -> Path:
+    """
+    Get the path of the dataset inside a directory.
+
+    :param dir: Some directory which contains a dataset
+    :return: the first subdirectory within dir ending with .zr
+    """
     if not dir.exists() or not dir.is_dir():
         raise ValueError(f"{str(dir)} is no directory!")
 
@@ -112,6 +145,16 @@ def get_datatset(dir: Path) -> Path:
 
 
 def train(data_dir, model_dir, train_config):
+    """
+    Start a training pass.
+
+    :param data_dir: The directory which contains the datatset
+    :param model_dir: The model output directory
+    :param train_config: The training config
+    """
+
+    # TODO: Add model input dir!?
+
     # fill the config
     local_train_config = copy.deepcopy(train_config)
     local_train_config["model_output_dir"] = str(model_dir)
@@ -126,6 +169,12 @@ def train(data_dir, model_dir, train_config):
 
 
 def create_initial_models(model_dir: Path, batch_sizes):
+    """
+    Create initial models if the given directory is not empty.
+
+    :param model_dir: Directory where the models should be created
+    :param batch_sizes: The batch sizes
+    """
     if is_empty(model_dir):
         training.train_cnn.export_initial_model(batch_sizes, model_dir)
     else:
@@ -146,8 +195,19 @@ def subprocess_verbose_wait(sproc):
             print(line.decode("utf-8"), end='')
 
 
-def rl_loop(max_iterations, dataset_args, train_config):
+def rl_loop(max_iterations, dataset_args: list, train_config: dict):
+    """
+    The main RL loop which alternates between data generation and training:
+
+    generation 0 -> training 0 & generation 1 -> training 1 & generation 2 -> ...
+
+    :param max_iterations: Max number of iterations (-1 for endless loop)
+    :param dataset_args: Arguments for dataset generation
+    :param train_config: Training configuration
+    """
+
     global stop_rl
+
     # The current iteration
     it = 0
 
@@ -203,7 +263,7 @@ def rl_loop(max_iterations, dataset_args, train_config):
         # Prepare the training dataset
         if not last_iteration:
             move_content(LOG_DIR, TRAIN_DIR)
-            rename_subdirs_id(TRAIN_DIR, iteration_id)
+            rename_datasets_id(TRAIN_DIR, iteration_id)
         else:
             # just directly archive the created model
             move_content(MODEL_IN_DIR, ARCHIVE_DIR / ("model_" + iteration_id))
