@@ -41,11 +41,11 @@ class MixConv(Module):
         self.num_splits = len(kernels)
 
         for kernel in kernels:
-            branch = Sequential(Conv2d(in_channels=in_channels // self.num_splits,
+            self.branch = Sequential(Conv2d(in_channels=in_channels // self.num_splits,
                                  out_channels=out_channels // self.num_splits, kernel_size=(kernel, kernel),
                                  padding=(kernel//2, kernel//2), bias=False,
                                  groups=out_channels // self.num_splits))
-            self.branches.append(branch)
+            self.branches.append(self.branch)
 
     def forward(self, x):
         """
@@ -54,11 +54,11 @@ class MixConv(Module):
         :return: Activation maps of the block
         """
         if self.num_splits == 1:
-            return self.branches[0](x)
-
-        conv_layers = []
-        for xi, branch in zip(torch.split(x, dim=1, split_size_or_sections=self.num_splits), self.branches):
-            conv_layers.append(branch(xi))
+            return self.branch(x)
+        else:
+            conv_layers = []
+            for xi, branch in zip(torch.split(x, dim=1, split_size_or_sections=self.num_splits), self.branches):
+                conv_layers.append(branch(xi))
 
         return torch.cat(conv_layers, 0)
 
