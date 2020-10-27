@@ -6,6 +6,7 @@ Created on 16.06.20
 
 Basic training script to replicate behaviour of baseline agent
 """
+
 import zarr
 import torch.nn as nn
 from torch.autograd import Variable
@@ -29,6 +30,11 @@ def create_model():
     return input_shape, model
 
 
+def create_optimizer(model: nn.Module, train_config: dict):
+    return optim.SGD(model.parameters(), lr=train_config["lr"], momentum=train_config["momentum"],
+                     weight_decay=train_config["weight_decay"])
+
+
 def train_cnn(train_config):
     z = zarr.open(train_config["dataset_path"], 'r')
     z_samples = z.attrs["Steps"]
@@ -46,12 +52,12 @@ def train_cnn(train_config):
     if use_cuda:
         model = model.cuda()
 
-    optimizer = optim.SGD(model.parameters(), lr=train_config["lr"], momentum=train_config["momentum"],
-                          weight_decay=train_config["weight_decay"])
+    optimizer = create_optimizer(model, train_config)
 
-    model_input_dir = train_config["torch_input_dir"]
+    model_input_dir = None if train_config["torch_input_dir"] is None else Path(train_config["torch_input_dir"])
     if model_input_dir is not None:
-        load_torch_state(model, optimizer, get_torch_state_path(model_input_dir))
+        print(f"Loading torch state from {str(model_input_dir)}")
+        load_torch_state(model, optimizer, str(get_torch_state_path(model_input_dir)))
 
     policy_loss = nn.CrossEntropyLoss()
     value_loss = nn.MSELoss()
@@ -69,7 +75,7 @@ def get_torch_state_path(base_dir: Path) -> Path:
     return base_dir / "torch_state.tar"
 
 
-def load_torch_state(model: nn.Module, optimizer: Optimizer, path):
+def load_torch_state(model: nn.Module, optimizer: Optimizer, path: str):
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -98,9 +104,12 @@ def export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir: Path):
         export_model(model, batch_sizes, input_shape, True, get_model_path(base_dir, True))
 
 
-def export_initial_model(batch_sizes, base_dir: Path):
+def export_initial_model(train_config, base_dir: Path):
     input_shape, model = create_model()
-    export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
+    optimizer = create_optimizer(model, train_config)
+
+    export_model_cpu_cuda(model, train_config["model_batch_sizes"], input_shape, base_dir)
+    save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
 
 def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):

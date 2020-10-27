@@ -4,6 +4,8 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 import time
 from datetime import datetime
+from typing import Optional
+
 import training.train_cnn
 import copy
 import shutil
@@ -152,12 +154,13 @@ def get_datatset(dir: Path) -> Path:
     raise ValueError(f"Could not find any dataset in {dir}!")
 
 
-def train(data_dir, out_dir, train_config):
+def train(data_dir: Path, out_dir: Path, torch_in_dir: Optional[str], train_config):
     """
     Start a training pass.
 
     :param data_dir: The directory which contains the datatset
     :param out_dir: The output directory
+    :param torch_in_dir: The torch input dir used to load an existing model
     :param train_config: The training config
     """
 
@@ -167,6 +170,7 @@ def train(data_dir, out_dir, train_config):
     local_train_config = copy.deepcopy(train_config)
     local_train_config["output_dir"] = str(out_dir)
     local_train_config["dataset_path"] = str(get_datatset(data_dir))
+    local_train_config["torch_input_dir"] = torch_in_dir
     training.train_cnn.fill_default_config(local_train_config)
 
     # start training
@@ -228,10 +232,13 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
 
     # Before we can create a dataset, we need an initial model
     if is_empty(MODEL_INIT_DIR):
-        create_initial_models(MODEL_IN_DIR, train_config["model_batch_sizes"])
+        create_initial_models(MODEL_IN_DIR, train_config)
+        print("No initial model provided. Using new model.")
     else:
-        # use existing model
         shutil.copy(MODEL_INIT_DIR, MODEL_IN_DIR)
+        print("Using existing model.")
+
+    last_model_dir_name = None
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
     thread_train = None
@@ -246,7 +253,7 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
         # Start training if training data exists
         if not is_empty(TRAIN_DIR):
             print_it("Start training")
-            thread_train = train(TRAIN_DIR, MODEL_OUT_DIR, train_config)
+            thread_train = train(TRAIN_DIR, MODEL_OUT_DIR, last_model_dir_name, train_config)
             # wait until the training is done before we start generating samples
             if not concurrency:
                 thread_train.join()
@@ -263,12 +270,16 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
             print_it("Dataset done")
 
         # Archive the model which was used to create the current data set with a smaller id
-        move_content(MODEL_IN_DIR, ARCHIVE_DIR / run_id / (str(it - 1) + "_model"))
+        archived_model_dir = ARCHIVE_DIR / run_id / (str(it - 1) + "_model")
+        move_content(MODEL_IN_DIR, archived_model_dir)
 
         if concurrency and thread_train is not None:
             thread_train.join()
             print_it("Training done")
             move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
+            last_model_dir_name = str(MODEL_IN_DIR)
+        else:
+            last_model_dir_name = str(archived_model_dir)
 
         # Archive the old training dataset
         move_content(TRAIN_DIR, ARCHIVE_DIR / run_id)
@@ -284,7 +295,7 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
 
         it += 1
 
-    print_it("RL loop done")
+    print("RL loop done")
 
 
 def check_clean_working_dirs():
