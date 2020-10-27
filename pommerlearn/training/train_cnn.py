@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
 from nn.a0_resnet import AlphaZeroResnet, init_weights
+from nn.rise_mobile_v3 import RiseV3
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -21,10 +22,19 @@ from pathlib import Path
 from torch.optim.optimizer import Optimizer
 
 
-def create_model():
+def create_model(train_config):
     input_shape = (18, 11, 11)
-    model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
-                            board_height=input_shape[2])
+    valid_models = ["a0", "risev3"]
+    if train_config["model"] == "a0":
+        model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
+                                board_height=input_shape[2])
+    elif train_config["model"] == "risev3":
+        kernels = [[3]] * 3
+        se_types = [None] * 3
+        model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
+                       kernels=kernels, se_types=se_types)
+    else:
+        raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
 
     return input_shape, model
@@ -47,7 +57,7 @@ def train_cnn(train_config):
     train_loader, val_loader = prepare_dataset(z, train_config["test_size"], train_config["batch_size"],
                                                train_config["random_state"])
 
-    input_shape, model = create_model()
+    input_shape, model = create_model(train_config)
 
     if use_cuda:
         model = model.cuda()
@@ -380,6 +390,7 @@ def fill_default_config(train_config):
         "batch_size": 128,
         "random_state":  42,
         "nb_epochs":  10,
+        "model": "a0",
     }
 
     for key in default_config:
