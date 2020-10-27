@@ -60,7 +60,7 @@ since more data was available.'
 import torch
 import torch.nn as nn
 from torch.nn import Sequential, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish
-from nn.builder_util import get_act
+from nn.builder_util import get_act, _Stem, _PolicyHead, _ValueHead
 
 
 def init_weights(m):
@@ -97,111 +97,6 @@ class ResidualBlock(torch.nn.Module):
         :return: Sum of the shortcut and the computed residual block computation
         """
         return x + self.body(x)
-
-
-class _PolicyHeadAlphaZero(torch.nn.Module):
-    def __init__(self, board_height=11, board_width=11, channels=256, policy_channels=2, n_labels=4992, bn_mom=0.9, act_type="relu",
-                 select_policy_from_plane=False):
-        """
-        Definition of the value head proposed by the alpha zero authors
-        :param policy_channels: Number of channels for 1st conv operation in branch 0
-        :param bn_mom: Batch normalization momentum parameter
-        :param act_type: Activation type to use
-        channelwise squeeze excitation, channel-spatial-squeeze-excitation, respectively
-        """
-
-        super(_PolicyHeadAlphaZero, self).__init__()
-
-        self.body = Sequential()
-        self.select_policy_from_plane = select_policy_from_plane
-
-        if self.select_policy_from_plane:
-            self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels, padding=1, kernel_size=(3, 3), bias=False),
-                                   BatchNorm2d(momentum=bn_mom, num_features=channels),
-                                   get_act(act_type),
-                                   Conv2d(in_channels=channels, out_channels=policy_channels, padding=1, kernel_size=(3, 3), bias=False))
-            self.nb_flatten = policy_channels*board_width*policy_channels
-
-        else:
-            self.body = Sequential(Conv2d(in_channels=channels, out_channels=policy_channels, kernel_size=(1, 1), bias=False),
-                                   BatchNorm2d(momentum=bn_mom, num_features=policy_channels),
-                                   get_act(act_type))
-
-            self.nb_flatten = board_height*board_width*policy_channels
-            self.body2 = Sequential(Linear(in_features=self.nb_flatten, out_features=n_labels))
-
-    def forward(self, x):
-        """
-        Compute forward pass
-        :param x: Input data to the block
-        :return: Activation maps of the block
-        """
-        if self.select_policy_from_plane:
-            return self.body(x).view(-1, self.nb_flatten)
-        else:
-            x = self.body(x).view(-1, self.nb_flatten)
-            return self.body2(x)
-
-
-class _ValueHeadAlphaZero(torch.nn.Module):
-    def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, bn_mom=0.9, act_type="relu"):
-        """
-        Definition of the value head proposed by the alpha zero authors
-        :param board_height: Height of the board
-        :param board_width: Width of the board
-        :param channels: Number of channels as input
-        :param channels_value_head: Number of channels for 1st conv operation in branch 0
-        :param fc0: Number of units in Dense/Fully-Connected layer
-        :param bn_mom: Batch normalization momentum parameter
-        :param act_type: Activation type to use
-        """
-
-        super(_ValueHeadAlphaZero, self).__init__()
-
-        self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_value_head, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_value_head),
-                               get_act(act_type))
-
-        self.nb_flatten = board_height*board_width*channels_value_head
-        self.body2 = Sequential(Linear(in_features=self.nb_flatten, out_features=fc0),
-                                get_act(act_type),
-                                Linear(in_features=fc0, out_features=1),
-                                get_act("tanh"))
-
-    def forward(self, x):
-        """
-        Compute forward pass
-        :param x: Input data to the block
-        :return: Activation maps of the block
-        """
-        x = self.body(x).view(-1, self.nb_flatten)
-        return self.body2(x)
-
-
-class _StemAlphaZero(torch.nn.Module):
-    def __init__(self, channels, bn_mom=0.9, act_type="relu", nb_input_channels=34):
-        """
-        Definition of the stem proposed by the alpha zero authors
-        :param channels: Number of channels for 1st conv operation
-        :param bn_mom: Batch normalization momentum parameter
-        :param act_type: Activation type to use
-        :param nb_input_channels: Number of input channels of the board representation
-        """
-
-        super(_StemAlphaZero, self).__init__()
-
-        self.body = Sequential(Conv2d(in_channels=nb_input_channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels),
-                               get_act(act_type))
-
-    def forward(self, x):
-        """
-        Compute forward pass
-        :param F: Handle
-        :param x: Input data to the block
-        :return: Activation maps of the block
-        """
-        return self.body(x)
     
 
 class AlphaZeroResnet(torch.nn.Module):
@@ -239,14 +134,14 @@ class AlphaZeroResnet(torch.nn.Module):
         for i in range(num_res_blocks):
             res_blocks.append(ResidualBlock(channels, bn_mom, act_type))
 
-        self.body = Sequential(_StemAlphaZero(channels=channels, bn_mom=bn_mom, act_type=act_type,
+        self.body = Sequential(_Stem(channels=channels, bn_mom=bn_mom, act_type=act_type,
                                      nb_input_channels=nb_input_channels),
                                *res_blocks)
 
         # create the two heads which will be used in the hybrid fwd pass
-        self.value_head = _ValueHeadAlphaZero(board_height, board_width, channels, channels_value_head, value_fc_size, bn_mom, act_type)
-        self.policy_head = _PolicyHeadAlphaZero(board_height, board_width, channels, channels_policy_head, n_labels,
-                                                bn_mom, act_type, select_policy_from_plane)
+        self.value_head = _ValueHead(board_height, board_width, channels, channels_value_head, value_fc_size, bn_mom, act_type)
+        self.policy_head = _PolicyHead(board_height, board_width, channels, channels_policy_head, n_labels,
+                                       bn_mom, act_type, select_policy_from_plane)
 
     def forward(self, x):
         """
