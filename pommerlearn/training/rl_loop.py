@@ -6,15 +6,23 @@ import time
 from datetime import datetime
 import training.train_cnn
 import copy
+import shutil
 
-EXEC_NAME = Path("./PommerLearn")
+# The path of the main executable for data generation
+EXEC_PATH = Path("./PommerLearn")
 
-LOG_DIR = Path("./log/")
-TRAIN_DIR = Path("./train/")
-ARCHIVE_DIR = Path("./archive/")
-MODEL_INIT_DIR = Path("./model-init/")
-MODEL_OUT_DIR = Path("./model-out/")
-MODEL_IN_DIR = Path("./model/")
+# Every subdirectory will be put into the base dir
+BASE_DIR = Path("./")
+
+# The subdirectories for training and data generation
+LOG_DIR = BASE_DIR / "log"
+TRAIN_DIR = BASE_DIR / "train"
+ARCHIVE_DIR = BASE_DIR / "archive"
+MODEL_INIT_DIR = BASE_DIR / "model-init"
+MODEL_OUT_DIR = BASE_DIR / "model-out"
+MODEL_IN_DIR = BASE_DIR / "model"
+
+WORKING_DIRS = [LOG_DIR, TRAIN_DIR, MODEL_OUT_DIR, MODEL_IN_DIR]
 
 # Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
@@ -34,7 +42,7 @@ def rm_dir(dir: Path, keep_empty_dir=True):
     # recursively for every dir
     for child in dir.iterdir():
         if child.is_dir():
-            rm_dir(child)
+            rm_dir(child, keep_empty_dir=False)
         elif child.is_file():
             child.unlink()
         else:
@@ -117,7 +125,7 @@ def create_dataset(arguments):
     ])
 
     proc = subprocess.Popen(
-        [f"./{EXEC_NAME}", *local_args],
+        [f"./{str(EXEC_PATH)}", *local_args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -195,7 +203,7 @@ def subprocess_verbose_wait(sproc):
             print(line.decode("utf-8"), end='')
 
 
-def rl_loop(max_iterations, dataset_args: list, train_config: dict):
+def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=False):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -204,6 +212,8 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict):
     :param max_iterations: Max number of iterations (-1 for endless loop)
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
+    :param concurrency: Whether to generate and train concurrently
+    (WARNING: This causes a delay of 1 iteration between sample generation and training)
     """
 
     global stop_rl
@@ -214,22 +224,22 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict):
     def print_it(msg: str):
         print(f"{datetime.now()} > It. {it}: {msg}")
 
-    def get_identifier() -> str:
-        return datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    run_id = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
 
-    # Before we can create any datasets, we have to create initial models
-    create_initial_models(MODEL_IN_DIR, train_config["model_batch_sizes"])
-    iteration_id = "init_" + get_identifier()
+    # Before we can create a dataset, we need an initial model
+    if is_empty(MODEL_INIT_DIR):
+        create_initial_models(MODEL_IN_DIR, train_config["model_batch_sizes"])
+    else:
+        # use existing model
+        shutil.copy(MODEL_INIT_DIR, MODEL_IN_DIR)
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
     thread_train = None
-    while max_iterations < 0 or it < max_iterations:
-        # TODO: Clean exit instead of break
+    # The first iteration does not count, as we only generate a dataset
+    while max_iterations < 0 or it <= max_iterations:
         with stop_rl_lock:
-            if stop_rl:
-                break
+            last_iteration = it == max_iterations or stop_rl
 
-        last_iteration = it == max_iterations - 1
         if last_iteration:
             print_it("Entering the last iteration")
 
@@ -237,6 +247,11 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict):
         if not is_empty(TRAIN_DIR):
             print_it("Start training")
             thread_train = train(TRAIN_DIR, MODEL_OUT_DIR, train_config)
+            # wait until the training is done before we start generating samples
+            if not concurrency:
+                thread_train.join()
+                print_it("Training done")
+                move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
 
         if not last_iteration:
             # Create a new dataset
@@ -247,34 +262,67 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict):
 
             print_it("Dataset done")
 
-        # Archive previous models
-        move_content(MODEL_IN_DIR, ARCHIVE_DIR / ("model_" + iteration_id))
+        # Archive the model which was used to create the current data set with a smaller id
+        move_content(MODEL_IN_DIR, ARCHIVE_DIR / run_id / (str(it - 1) + "_model"))
 
-        # Wait until the training is done as well
-        if thread_train is not None:
+        if concurrency and thread_train is not None:
             thread_train.join()
             print_it("Training done")
             move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
 
         # Archive the old training dataset
-        iteration_id = get_identifier()
-        move_content(TRAIN_DIR, ARCHIVE_DIR)
+        move_content(TRAIN_DIR, ARCHIVE_DIR / run_id)
 
         # Prepare the training dataset
         if not last_iteration:
             move_content(LOG_DIR, TRAIN_DIR)
-            rename_datasets_id(TRAIN_DIR, iteration_id)
+            rename_datasets_id(TRAIN_DIR, str(it))
         else:
-            # just directly archive the created model
-            move_content(MODEL_IN_DIR, ARCHIVE_DIR / ("model_" + iteration_id))
+            if concurrency:
+                # just directly archive the new model
+                move_content(MODEL_IN_DIR, ARCHIVE_DIR / run_id / (str(it) + "_model"))
 
         it += 1
 
     print_it("RL loop done")
 
 
+def check_clean_working_dirs():
+    """
+    Ensures that all working directories are empty.
+    """
+
+    all_empty = all(is_empty(d) for d in WORKING_DIRS)
+    if not all_empty:
+        print("The working directories are not empty!")
+        print("Before you continue, please inspect the directories and back up all valuable data.")
+        print("After that, type 'clean' to clean up the working directories.")
+        while True:
+            cmd = input()
+            if cmd == 'clean':
+                print("Cleaning all working directories")
+                for d in WORKING_DIRS:
+                    rm_dir(d, keep_empty_dir=True)
+                print("Done.")
+                return
+            else:
+                print("Unknown command")
+
+
+def clean_working_dirs():
+    """
+    Removes all empty working directories.
+    """
+
+    for d in WORKING_DIRS:
+        if is_empty(d):
+            rm_dir(d, keep_empty_dir=False)
+
+
 def main():
     global stop_rl
+
+    check_clean_working_dirs()
 
     # Info: All path-related arguments should be set inside the rl loop
 
@@ -309,15 +357,7 @@ def main():
 
     rl_thread.join()
 
-    # Clean up the empty dirs
-    def clean(dir: Path):
-        if is_empty(dir):
-            rm_dir(dir)
-
-    clean(LOG_DIR)
-    clean(TRAIN_DIR)
-    clean(MODEL_IN_DIR)
-    clean(MODEL_OUT_DIR)
+    clean_working_dirs()
 
 
 if __name__ == "__main__":
