@@ -204,10 +204,13 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, 
     }
 
     // state is not finished
-
     if(state.agents[agentID].dead)
     {
-        // TODO: Add custom terminal value
+        if (gameMode == bboard::GameMode::FreeForAll) {
+            return TERMINAL_LOSS;
+        }
+        // Partner is still alive
+        // TODO: Add evaluation from NN
         customTerminalValue = -0.5;
         return TERMINAL_CUSTOM;
     }
