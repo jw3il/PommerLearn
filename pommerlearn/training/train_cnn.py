@@ -20,6 +20,8 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from pathlib import Path
 from torch.optim.optimizer import Optimizer
+from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
+    MomentumSchedule, OneCycleSchedule, ConstantSchedule
 
 
 def create_model(train_config):
@@ -41,7 +43,7 @@ def create_model(train_config):
 
 
 def create_optimizer(model: nn.Module, train_config: dict):
-    return optim.SGD(model.parameters(), lr=train_config["lr"], momentum=train_config["momentum"],
+    return optim.SGD(model.parameters(), lr=train_config["max_lr"], momentum=train_config["max_momentum"],
                      weight_decay=train_config["weight_decay"])
 
 
@@ -72,13 +74,43 @@ def train_cnn(train_config):
     policy_loss = nn.CrossEntropyLoss()
     value_loss = nn.MSELoss()
 
-    run_training(model, train_config["nb_epochs"], optimizer, value_loss, policy_loss, train_config["value_loss_ratio"],
-                 train_loader, val_loader, use_cuda, comment="")
+    total_it = len(train_loader) * train_config["nb_epochs"]
+    lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
+
+    run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
+                 train_config["value_loss_ratio"], train_loader, val_loader, use_cuda, comment="")
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
     export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
+
+
+def get_schedules(total_it, train_config, plot_schedules=True):
+    """
+    Returns a learning rate and momentum schedule
+    :param total_it: Total iterations
+    :param train_config: Training configuration dictionary
+    :param plot_schedules: Boolean indicating if schedules shall be plotted
+    """
+    if train_config["schedule"] == "cosine_annealing":
+        lr_schedule = CosineAnnealingSchedule(train_config["min_lr"], train_config["max_lr"], total_it * 0.7)
+        lr_schedule = LinearWarmUp(lr_schedule, start_lr=0, length=total_it * 0.25)
+    elif train_config["schedule"] == "one_cycle":
+        lr_schedule = OneCycleSchedule(start_lr=train_config["max_lr"] / 8, max_lr=train_config["max_lr"],
+                                       cycle_length=total_it * .3, cooldown_length=total_it * .6,
+                                       finish_lr=train_config["min_lr"])
+        lr_schedule = LinearWarmUp(lr_schedule, start_lr=train_config["min_lr"], length=total_it / 30)
+    elif train_config["schedule"] == "constant":
+        lr_schedule = ConstantSchedule(train_config["max_lr"])
+    else:
+        raise Exception(f"Invalid schedule type '{train_config['schedule']}' given.")
+    momentum_schedule = MomentumSchedule(lr_schedule, train_config["min_lr"], train_config["max_lr"],
+                                         train_config["min_momentum"], train_config["max_momentum"])
+    if plot_schedules:
+        plot_schedule(lr_schedule, total_it)
+        plot_schedule(momentum_schedule, total_it, ylabel="Momentum")
+    return lr_schedule, momentum_schedule
 
 
 def get_torch_state_path(base_dir: Path) -> Path:
@@ -208,13 +240,15 @@ class Metrics:
         return self.correct_cnt / self.total_cnt
 
 
-def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_loss_ratio, train_loader, val_loader,
+def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss, value_loss_ratio, train_loader, val_loader,
                  use_cuda, comment=''):
     """
     Trains a given model for a number of epochs
     :param model: Model to optimize
     :param nb_epochs: Number of epochs to train
     :param optimizer: Optimizer to use
+    :param lr_schedule: LR-scheduler
+    :param momentum_schedule: Momentum scheduler
     :param policy_loss: Policy loss object
     :param value_loss: Value loss object
     :param value_loss_ratio: Value loss ratio
@@ -245,6 +279,10 @@ def run_training(model, nb_epochs, optimizer, value_loss, policy_loss, value_los
                                            yv_train)
 
             combined_loss.backward()
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr_schedule(global_step)
+                param_group['momentum'] = momentum_schedule(global_step)
+
             optimizer.step()
 
             global_step += 1
@@ -382,7 +420,11 @@ def fill_default_config(train_config):
         "output_dir": "./model",
         "model_batch_sizes": [1, 8],
         # hyperparameters
-        "lr": 0.01,
+        "min_lr": 0.0001,
+        "max_lr": 0.05,
+        "min_momentum": 0.8,
+        "max_momentum": 0.95,
+        "schedule": "one_cycle",  # "cosine_annealing", "one_cycle", "constant"
         "momentum": 0.9,
         "weight_decay": 1e-04,
         "value_loss_ratio": 0.01,
@@ -390,7 +432,7 @@ def fill_default_config(train_config):
         "batch_size": 128,
         "random_state":  42,
         "nb_epochs":  10,
-        "model": "a0",
+        "model": "a0",  # "a0", "risev3"
     }
 
     for key in default_config:
