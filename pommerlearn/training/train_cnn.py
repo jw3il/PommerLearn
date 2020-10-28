@@ -75,7 +75,7 @@ def train_cnn(train_config):
     value_loss = nn.MSELoss()
 
     total_it = len(train_loader) * train_config["nb_epochs"]
-    lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
+    lr_schedule, momentum_schedule = get_schedules(total_it, train_config, train_config["plot_schedules"])
 
     run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
                  train_config["value_loss_ratio"], train_loader, val_loader, use_cuda, comment="")
@@ -86,7 +86,7 @@ def train_cnn(train_config):
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
 
-def get_schedules(total_it, train_config, plot_schedules=True):
+def get_schedules(total_it, train_config, plot_schedules):
     """
     Returns a learning rate and momentum schedule
     :param total_it: Total iterations
@@ -108,8 +108,10 @@ def get_schedules(total_it, train_config, plot_schedules=True):
     momentum_schedule = MomentumSchedule(lr_schedule, train_config["min_lr"], train_config["max_lr"],
                                          train_config["min_momentum"], train_config["max_momentum"])
     if plot_schedules:
+        # TODO: Plot in tensorboard and remove parameter
         plot_schedule(lr_schedule, total_it)
         plot_schedule(momentum_schedule, total_it, ylabel="Momentum")
+
     return lr_schedule, momentum_schedule
 
 
@@ -147,7 +149,7 @@ def export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir: Path):
 
 
 def export_initial_model(train_config, base_dir: Path):
-    input_shape, model = create_model()
+    input_shape, model = create_model(train_config)
     optimizer = create_optimizer(model, train_config)
 
     export_model_cpu_cuda(model, train_config["model_batch_sizes"], input_shape, base_dir)
@@ -433,6 +435,8 @@ def fill_default_config(train_config):
         "random_state":  42,
         "nb_epochs":  10,
         "model": "a0",  # "a0", "risev3"
+        # debugging
+        "plot_schedules": False,
     }
 
     for key in default_config:

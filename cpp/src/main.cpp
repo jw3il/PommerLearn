@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
             ("max_games", po::value<int>()->default_value(10), "The max. number of generated games (ignored if -1)")
 
             // log options
-            ("log", po::value<bool>()->default_value(false), "If set, generate enough samples to fill a whole dataset (chunk_size * chunk_count samples)")
+            ("log", "If set, generate enough samples to fill a whole dataset (chunk_size * chunk_count samples)")
             ("file_prefix", po::value<std::string>()->default_value("./data"), "Set the filename prefix for the new datasets")
             ("chunk_size", po::value<int>()->default_value(1000), "Max. number of samples in a single file inside the dataset")
             ("chunk_count", po::value<int>()->default_value(100), "Max. number of chunks in a dataset")
