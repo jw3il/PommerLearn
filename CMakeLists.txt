@@ -129,10 +129,10 @@ FIND_PACKAGE(Boost COMPONENTS program_options REQUIRED)
 
 file(GLOB source_files
     "cpp/src/*.cpp"
-    "cpp/include/*.h"
+    "cpp/src/*.h"
 )
 
-include_directories("cpp/include/")
+include_directories("cpp/src/")
 
 add_executable(${PROJECT_NAME} ${source_files})
 
