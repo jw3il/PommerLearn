@@ -15,6 +15,8 @@
 
 #include "boost/program_options.hpp"
 
+#include "clonable.h"
+
 namespace po = boost::program_options;
 
 void load_models()
@@ -61,6 +63,7 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
 void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager, std::string modelDir)
 {
     // TODO: Decouple agent creation
+    srand(time(0));
 
     StateConstants::init(false);
 #ifdef TENSORRT
@@ -92,17 +95,25 @@ void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager
     bboard::Environment env;
     bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
 
+    // this is the state object of agent 0
+    PommermanState pommermanState(0, gameMode);
+
+    // partial observability
     bboard::ObservationParameters obsParams;
     obsParams.agentPartialMapView = true;
     obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
     obsParams.exposePowerUps = false;
     obsParams.agentViewSize = 4;
-
-    // this is the state object of agent 0
-    PommermanState pommermanState(0, gameMode);
     // pommermanState.set_partial_observability(&obsParams);
 
-    srand(time(0));
+    // other agents used for planning
+    std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> planningAgents = {
+        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+    };
+    pommermanState.set_planning_agents(planningAgents);
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
         new CrazyAraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo),

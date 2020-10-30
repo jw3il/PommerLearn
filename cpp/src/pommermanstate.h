@@ -13,6 +13,8 @@
 #include "bboard.hpp"
 #include "data_representation.h"
 
+#include "clonable.h"
+
 
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
 {
@@ -65,19 +67,39 @@ public:
 class PommermanState : public State
 {
 public:
-    PommermanState(int agentID, bboard::GameMode gameMode);
+    PommermanState(uint agentID, bboard::GameMode gameMode);
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
-    const int agentID;
+    const uint agentID;
     const bboard::GameMode gameMode;
     bool usePartialObservability;
     bboard::ObservationParameters params;
     int eventHash;
 
+    /**
+     * @brief planningAgents contains other agents which can be used in the planning process.
+     */
+    std::array<std::unique_ptr<Clonable<bboard::Agent>>, bboard::AGENT_COUNT> planningAgents;
+
+    /**
+     * @brief hasPlanningAgents whether there are any planningAgents.
+     */
+    bool hasPlanningAgents;
+
+    /**
+     * @brief hasBufferedActions whether the actions of the planning agents have already been evaluated for the current state.
+     */
+    bool hasBufferedActions;
+
 public:
     void set_state(const bboard::State* state);
     void set_observation(const bboard::Observation* obs);
     void set_partial_observability(const bboard::ObservationParameters* params);
+
+    // planning agent methods
+    void set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents);
+    void planning_agents_reset();
+    void planning_agents_act();
 
     // State interface
     std::vector<Action> legal_actions() const override;

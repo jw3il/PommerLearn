@@ -9,11 +9,13 @@
 #include "agents.hpp"
 
 
-PommermanState::PommermanState(int agentID, bboard::GameMode gameMode):
+PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode):
     agentID(agentID),
     gameMode(gameMode),
     usePartialObservability(false),
-    eventHash(0)
+    eventHash(0),
+    hasPlanningAgents(false),
+    hasBufferedActions(false)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
 }
@@ -33,19 +35,94 @@ void PommermanState::set_state(const bboard::State* state)
     {
         this->state = *state;
     }
+
+    if (hasPlanningAgents) {
+        planning_agents_reset();
+    }
 }
 
 void PommermanState::set_observation(const bboard::Observation* obs)
 {
     // TODO: Merge observations
     obs->ToState(this->state, gameMode);
+
+    if (hasPlanningAgents) {
+        planning_agents_reset();
+    }
 }
 
 void PommermanState::set_partial_observability(const bboard::ObservationParameters* params)
 {
     this->usePartialObservability = true;
     this->params = *params;
+
+    if (this->hasPlanningAgents) {
+        throw std::runtime_error("The combination of partial observability & planning agents is not implemented yet!");
+    }
 }
+
+void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents)
+{
+    if (this->usePartialObservability) {
+        throw std::runtime_error("The combination of partial observability & planning agents is not implemented yet!");
+    }
+
+    hasPlanningAgents = false;
+    for (size_t i = 0; i < agents.size(); i++) {
+        // skip own id, as we won't use this agent
+        if (i == agentID) {
+            continue;
+        }
+
+        Clonable<bboard::Agent>* agent = agents[i];
+        if (agent != nullptr) {
+            // create new clonable agent from this one and set its id
+            planningAgents[i] = agent->clone();
+            planningAgents[i]->get_obj_ptr()->id = i;
+            // we have at least one agent
+            hasPlanningAgents = true;
+        }
+    }
+}
+
+void PommermanState::planning_agents_reset()
+{
+    for (size_t i = 0; i < planningAgents.size(); i++) {
+        if (i == agentID) {
+            continue;
+        }
+
+        Clonable<bboard::Agent>* agent = planningAgents[i].get();
+        if (agent != nullptr) {
+            agent->get_obj_ptr()->reset();
+        }
+    }
+
+    hasBufferedActions = false;
+}
+
+void PommermanState::planning_agents_act()
+{
+    // we don't have to act when the actions are already buffered
+    if (hasBufferedActions)
+        return;
+
+    for (size_t i = 0; i < planningAgents.size(); i++) {
+        if (i == agentID) {
+            continue;
+        }
+
+        Clonable<bboard::Agent>* agent = planningAgents[i].get();
+        if (agent != nullptr) {
+            moves[i] = agent->get_obj_ptr()->act(&state);
+        }
+    }
+
+    hasBufferedActions = true;
+}
+
+
+// State methods
 
 std::vector<Action> PommermanState::legal_actions() const
 {
@@ -119,6 +196,15 @@ void PommermanState::do_action(Action action)
     int flameCount = state.flames.count;
 
     moves[agentID] = bboard::Move(action);
+
+    if (hasPlanningAgents) {
+        // fill the remaining moves
+        planning_agents_act();
+        // after this step, our cached actions are invalid
+        hasBufferedActions = false;
+    }
+
+    // std::cout << "Moves: " << (int)moves[0] << " " << (int)moves[1] << " " << (int)moves[2] << " " << (int)moves[3] << std::endl;
     bboard::Step(&state, moves);
 
     if (_attribute_changed(info, state.agents[agentID])
@@ -233,6 +319,17 @@ PommermanState* PommermanState::clone() const
 {
     PommermanState* clone = new PommermanState(agentID, gameMode);
     clone->state = state;
+    if (hasPlanningAgents) {
+        // clone all agents
+        for (size_t i = 0; i < planningAgents.size(); i++) {
+            auto ptr = planningAgents[i].get();
+            if (ptr != nullptr) {
+                clone->planningAgents[i] = ptr->clone();
+            }
+        }
+        // we'll also use the agents in the clone
+        clone->hasPlanningAgents = true;
+    }
     return clone;
 }
 
