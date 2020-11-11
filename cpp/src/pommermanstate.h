@@ -56,7 +56,7 @@ public:
         }
     }
     template<PolicyType p = normal, MirrorType m = notMirrored>
-    static size_t action_to_index(Action action) {
+    static MoveIdx action_to_index(Action action) {
         return std::clamp(action, 0, NUM_MOVES);
     }
     static void init(bool isPolicyMap) {
