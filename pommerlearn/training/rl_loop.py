@@ -354,13 +354,13 @@ def main():
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
-    use_cuda_models = True
-    # training.train_cnn.get_model_path(MODEL_IN_DIR, use_cuda_models)
-    model_path = str(MODEL_IN_DIR)
+    model_type = "onnx"
+    # model_type = "torch_cpu"
+    # model_type = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
         "--max_games=10",
-        f"--model_dir={model_path}"
+        f"--model_dir={str(MODEL_IN_DIR / model_type)}"
     ]
 
     max_iterations = 5
