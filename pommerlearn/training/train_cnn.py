@@ -482,8 +482,13 @@ def log_dataset_stats(z, log_dir, iteration):
         writer.add_scalar(f"Dataset/Win ratio {a}", winner_a / num_episodes, iteration)
 
         actions_a = []
-        for ep in actions:
-            actions_a += ep[a]
+        episode_steps = np.empty(len(actions))
+        for i, ep in enumerate(actions):
+            ep_actions = ep[a]
+            episode_steps[i] = len(ep_actions)
+            actions_a += ep_actions
+
+        writer.add_scalar(f"Dataset/Steps mean {a}", episode_steps.mean(), iteration)
 
         # TODO: Correct bin borders
         writer.add_histogram(f"Dataset/Actions {a}", np.array(actions_a), iteration)
