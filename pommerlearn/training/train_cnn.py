@@ -81,6 +81,7 @@ def train_cnn(train_config):
     log_dir = train_config["tensorboard_dir"]
     iteration = train_config["iteration"]
 
+    log_config(train_config, log_dir, iteration)
     log_dataset_stats(z, log_dir, iteration)
 
     global_step_start = train_config["global_step"]
@@ -474,6 +475,20 @@ def log_dataset_stats(z, log_dir, iteration):
     not_done = np.sum(done == False)
     writer.add_scalar(f"Dataset/Not done ratio", not_done / num_episodes, iteration)
 
+    writer.close()
+
+
+def log_config(train_config, log_dir, iteration):
+    """
+    Log the train config to tensorboard.
+
+    :param train_config: The train config dictionary
+    :param log_dir: The logdir of the summary writer
+    :param iteration: The iteration this config belongs to
+    """
+
+    writer = SummaryWriter(log_dir=log_dir)
+    writer.add_text(f"Train Config", str(train_config), iteration)
     writer.close()
 
 
