@@ -100,6 +100,8 @@ class RiseV3(Module):
         """
         super(RiseV3, self).__init__()
 
+        self.use_raw_features = use_raw_features
+
         if len(kernels) != len(se_types):
             raise Exception(f'The length of "kernels": {len(kernels)} must be the same as'
                             f' the length of "se_types": {len(se_types)}')
@@ -118,8 +120,8 @@ class RiseV3(Module):
             else:
                 temp_channels = cur_channels
             res_blocks.append(_PreactResidualMixConvBlock(channels=channels, channels_operating=temp_channels,
-                                                  kernels=cur_kernels, act_type=act_type,
-                                                  se_ratio=se_ratio, se_type=se_types[idx], bn_mom=bn_mom))
+                                                          kernels=cur_kernels, act_type=act_type,
+                                                          se_ratio=se_ratio, se_type=se_types[idx], bn_mom=bn_mom))
             cur_channels += channel_expansion
 
         self.body = Sequential(
@@ -141,7 +143,11 @@ class RiseV3(Module):
         :return: Value & Policy Output
         """
         out = self.body(x)
-        value = self.value_head(out)
+        if self.use_raw_features:
+            value = self.value_head(out, x)
+        else:
+            value = self.value_head(out)
+
         policy = self.policy_head(out)
 
         return [value, policy]

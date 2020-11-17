@@ -161,7 +161,7 @@ class _PolicyHead(Module):
 
 
 class _ValueHead(Module):
-    def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, bn_mom=0.9, act_type="relu"):
+    def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, bn_mom=0.9, act_type="relu", use_raw_features=False, nb_input_channels=18):
         """
         Definition of the value head proposed by the alpha zero authors
         :param board_height: Height of the board
@@ -179,17 +179,27 @@ class _ValueHead(Module):
                                BatchNorm2d(momentum=bn_mom, num_features=channels_value_head),
                                get_act(act_type))
 
+        self.use_raw_features = use_raw_features
         self.nb_flatten = board_height*board_width*channels_value_head
-        self.body2 = Sequential(Linear(in_features=self.nb_flatten, out_features=fc0),
+        if use_raw_features:
+            self.nb_flatten_raw = board_height*board_width*nb_input_channels
+        else:
+            self.nb_flatten_raw = 0
+
+        self.body2 = Sequential(Linear(in_features=self.nb_flatten+self.nb_flatten_raw, out_features=fc0),
                                 get_act(act_type),
                                 Linear(in_features=fc0, out_features=1),
                                 get_act("tanh"))
 
-    def forward(self, x):
+    def forward(self, x, raw_data=None):
         """
         Compute forward pass
         :param x: Input data to the block
         :return: Activation maps of the block
         """
         x = self.body(x).view(-1, self.nb_flatten)
+        if self.use_raw_features:
+            raw_data = raw_data.view(-1, self.nb_flatten_raw)
+            x = torch.cat((x, raw_data), dim=1)
+
         return self.body2(x)
