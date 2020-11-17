@@ -75,7 +75,7 @@ def train_cnn(train_config):
     value_loss = nn.MSELoss()
 
     total_it = len(train_loader) * train_config["nb_epochs"]
-    lr_schedule, momentum_schedule = get_schedules(total_it, train_config, train_config["plot_schedules"])
+    lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
 
     log_dir = train_config["tensorboard_dir"]
     global_step_start = train_config.get("global_step", 0)
@@ -95,12 +95,11 @@ def train_cnn(train_config):
     return result_dict
 
 
-def get_schedules(total_it, train_config, plot_schedules):
+def get_schedules(total_it, train_config):
     """
     Returns a learning rate and momentum schedule
     :param total_it: Total iterations
     :param train_config: Training configuration dictionary
-    :param plot_schedules: Boolean indicating if schedules shall be plotted
     """
     if train_config["schedule"] == "cosine_annealing":
         lr_schedule = CosineAnnealingSchedule(train_config["min_lr"], train_config["max_lr"], total_it * 0.7)
@@ -116,10 +115,6 @@ def get_schedules(total_it, train_config, plot_schedules):
         raise Exception(f"Invalid schedule type '{train_config['schedule']}' given.")
     momentum_schedule = MomentumSchedule(lr_schedule, train_config["min_lr"], train_config["max_lr"],
                                          train_config["min_momentum"], train_config["max_momentum"])
-    if plot_schedules:
-        # TODO: Plot in tensorboard and remove parameter
-        plot_schedule(lr_schedule, total_it)
-        plot_schedule(momentum_schedule, total_it, ylabel="Momentum")
 
     return lr_schedule, momentum_schedule
 
@@ -295,8 +290,13 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
             combined_loss.backward()
             for param_group in optimizer.param_groups:
-                param_group['lr'] = lr_schedule(local_step)
-                param_group['momentum'] = momentum_schedule(local_step)
+                lr = lr_schedule(local_step)
+                writer_train.add_scalar('Schedules/Learning Rate', lr, global_step)
+                param_group['lr'] = lr
+
+                momentum = momentum_schedule(local_step)
+                writer_train.add_scalar('Schedules/Momentum', momentum, global_step)
+                param_group['momentum'] = momentum
 
             optimizer.step()
 
@@ -464,8 +464,6 @@ def fill_default_config(train_config):
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
         "iteration": 0,
         "global_step": 0,
-        # debugging
-        "plot_schedules": False,
     }
 
     for key in train_config:
