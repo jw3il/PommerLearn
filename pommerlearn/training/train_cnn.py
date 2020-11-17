@@ -34,7 +34,7 @@ def create_model(train_config):
         kernels = [[3]] * 3
         se_types = [None] * 3
         model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
-                       kernels=kernels, se_types=se_types)
+                       kernels=kernels, se_types=se_types, use_raw_features=True, act_type="relu")
     else:
         raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
@@ -78,7 +78,8 @@ def train_cnn(train_config):
     lr_schedule, momentum_schedule = get_schedules(total_it, train_config, train_config["plot_schedules"])
 
     run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 train_config["value_loss_ratio"], train_loader, val_loader, use_cuda, comment="")
+                 train_config["value_loss_ratio"], train_loader, val_loader, use_cuda,
+                 comment=train_config["tensorboard_comment"])
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
@@ -177,8 +178,8 @@ def export_model(model, batch_sizes, input_shape, use_cuda, dir=Path('.')):
         else:
             dummy_input = dummy_input.cpu()
             model = model.cpu()
+            export_to_onnx(model, dummy_input, dir.parent)
 
-        export_to_onnx(model, dummy_input, dir)
         export_as_script_module(model, dummy_input, dir)
 
 
@@ -264,8 +265,13 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
     m_train = Metrics()
     global_step = 0
 
+    # append a '-' before the comment
+    if comment:
+        comment = "-" + comment
     writer_train = SummaryWriter(comment=f'-train{comment}')
     writer_val = SummaryWriter(comment=f'-val{comment}')
+
+    exported_graph = False
 
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
@@ -276,6 +282,11 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
             optimizer.zero_grad()
             if use_cuda:
                 x_train, yv_train, yp_train = x_train.cuda(), yv_train.cuda(), yp_train.cuda()
+
+            if not exported_graph:
+                writer_train.add_graph(model, x_train)
+                exported_graph = True
+
             x_train, yp_train = Variable(x_train), Variable(yp_train)
             combined_loss = update_metrics(m_train, model, policy_loss, value_loss, value_loss_ratio, x_train, yp_train,
                                            yv_train)
@@ -300,6 +311,8 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
                 log_to_tensorboard(writer_train, m_train, global_step)
                 log_to_tensorboard(writer_val, m_val, global_step)
+                writer_train.add_scalar('Hyperparameter/Learning Rate', lr_schedule(global_step), global_step)
+                writer_train.add_scalar('Hyperparameter/Momentum', momentum_schedule(global_step), global_step)
 
                 m_train.reset()
 
@@ -346,7 +359,7 @@ def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_t
     value_out, policy_out = model(x_train)
     cur_policy_loss = policy_loss(policy_out, yp_train)
     cur_value_loss = value_loss(value_out.view(-1), yv_train)
-    combined_loss = cur_policy_loss + value_loss_ratio * cur_value_loss
+    combined_loss = (1 - value_loss_ratio) * cur_policy_loss + value_loss_ratio * cur_value_loss
 
     # update metrics
     _, pred_label = torch.max(policy_out.data, 1)
@@ -428,7 +441,7 @@ def fill_default_config(train_config):
         "max_momentum": 0.95,
         "schedule": "one_cycle",  # "cosine_annealing", "one_cycle", "constant"
         "momentum": 0.9,
-        "weight_decay": 1e-04,
+        "weight_decay": 1e-03,
         "value_loss_ratio": 0.01,
         "test_size": 0.2,
         "batch_size": 128,
@@ -437,6 +450,7 @@ def fill_default_config(train_config):
         "model": "a0",  # "a0", "risev3"
         # debugging
         "plot_schedules": False,
+        "tensorboard_comment": "",
     }
 
     for key in default_config:
