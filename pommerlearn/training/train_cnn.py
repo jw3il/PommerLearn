@@ -255,7 +255,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
     :param value_loss: Value loss object
     :param value_loss_ratio: Value loss ratio
     :param train_loader: Training data loader
-    :param val_loader: Validation data loader
+    :param val_loader: Validation data loader (ignored if None)
     :param use_cuda: True, when GPU should be used
     :param comment: Comment for the summary writers
     :return:
@@ -265,7 +265,8 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
     global_step = 0
 
     writer_train = SummaryWriter(comment=f'-train{comment}')
-    writer_val = SummaryWriter(comment=f'-val{comment}')
+    if val_loader is not None:
+        writer_val = SummaryWriter(comment=f'-val{comment}')
 
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
@@ -292,21 +293,27 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
             progress.update(1)
 
             if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) == len(train_loader):
-                m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, val_loader)
-                print(f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'
-                      f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'
-                      f' train value loss: {m_train.value_loss():5f}, val value loss: {m_val.value_loss():5f},'
-                      f' val policy loss: {m_train.policy_loss():5f}, val policy acc: {m_val.policy_acc():5f}')
+                msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'\
+                      f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'\
+                      f' train value loss: {m_train.value_loss():5f}'
 
                 log_to_tensorboard(writer_train, m_train, global_step)
-                log_to_tensorboard(writer_val, m_val, global_step)
-
                 m_train.reset()
+
+                if val_loader is not None:
+                    # print validation stats
+                    m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, val_loader)
+                    log_to_tensorboard(writer_val, m_val, global_step)
+                    msg += f', val value loss: {m_val.value_loss():5f}, val policy loss: {m_val.policy_loss():5f},'\
+                           f' val policy acc: {m_val.policy_acc():5f}'
+
+                print(msg)
 
     progress.close()
 
     writer_train.close()
-    writer_val.close()
+    if val_loader is not None:
+        writer_val.close()
 
 
 def log_to_tensorboard(writer, metrics, global_step) -> None:
@@ -391,26 +398,30 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
     :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
+
     z_steps = z.attrs["Steps"]
-    x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
-        z['obs'][:z_steps], z['val'][:z_steps], z['act'][:z_steps],
-        test_size=test_size, random_state=random_state
-    )
+    obs = z['obs'][:z_steps]
+    val = z['val'][:z_steps]
+    act = z['act'][:z_steps]
 
-    x_train = torch.Tensor(x_train)
-    yp_train = torch.Tensor(yp_train).long()
-    yv_train = torch.Tensor(yv_train)
-    x_val = torch.Tensor(x_val)
-    yp_val = torch.Tensor(yp_val).long()
-    yv_val = torch.Tensor(yv_val)
+    def get_loader(x, yv, yp):
+        x = torch.Tensor(x)
+        yv = torch.Tensor(yv)
+        yp = torch.Tensor(yp).long()
+        return DataLoader(TensorDataset(x, yv, yp), batch_size=batch_size, shuffle=True)
 
-    data_train = TensorDataset(x_train, yv_train, yp_train)
-    data_val = TensorDataset(x_val, yv_val, yp_val)
+    if test_size == 0:
+        return get_loader(obs, val, act), None
 
-    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(data_val, batch_size=batch_size, shuffle=True)
+    if 0 < test_size < 1:
+        x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
+            obs, val, act,
+            test_size=test_size, random_state=random_state
+        )
 
-    return train_loader, val_loader
+        return get_loader(x_train, yv_train, yp_train), get_loader(x_val, yv_val, yp_val)
+
+    raise ValueError(f"Incorrect test size: {test_size}")
 
 
 def fill_default_config(train_config):
@@ -439,11 +450,10 @@ def fill_default_config(train_config):
         "plot_schedules": False,
     }
 
-    for key in default_config:
-        if key not in train_config:
-            train_config[key] = default_config[key]
+    for key in train_config:
+        default_config[key] = train_config[key]
 
-    return train_config
+    return default_config
 
 
 if __name__ == '__main__':

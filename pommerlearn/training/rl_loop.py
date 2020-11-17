@@ -338,9 +338,10 @@ def main():
     # Info: All path-related arguments should be set inside the rl loop
 
     train_config = {
-        "nb_epochs": 1
+        "nb_epochs": 1,
+        "test_size": 0
     }
-    training.train_cnn.fill_default_config(train_config)
+    train_config = training.train_cnn.fill_default_config(train_config)
 
     use_cuda_models = True
     dataset_args = [
