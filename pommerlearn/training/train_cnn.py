@@ -77,13 +77,22 @@ def train_cnn(train_config):
     total_it = len(train_loader) * train_config["nb_epochs"]
     lr_schedule, momentum_schedule = get_schedules(total_it, train_config, train_config["plot_schedules"])
 
-    run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 train_config["value_loss_ratio"], train_loader, val_loader, use_cuda, comment="")
+    log_dir = train_config["tensorboard_dir"]
+    global_step_start = train_config.get("global_step", 0)
+    global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
+                                   value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
+                                   use_cuda, log_dir, global_step=global_step_start, comment="")
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
     export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
+
+    result_dict = {
+        "global_step": global_step_end
+    }
+
+    return result_dict
 
 
 def get_schedules(total_it, train_config, plot_schedules):
@@ -243,7 +252,7 @@ class Metrics:
 
 
 def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss, value_loss_ratio, train_loader, val_loader,
-                 use_cuda, comment=''):
+                 use_cuda, log_dir, global_step=0, comment=''):
     """
     Trains a given model for a number of epochs
     :param model: Model to optimize
@@ -257,16 +266,19 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
     :param train_loader: Training data loader
     :param val_loader: Validation data loader (ignored if None)
     :param use_cuda: True, when GPU should be used
+    :param log_dir: The (base) log dir for the tensorboard writer(s)
+    :param global_step: The global step used for logging
     :param comment: Comment for the summary writers
     :return:
     """
 
     m_train = Metrics()
-    global_step = 0
+    local_step = 0
 
-    writer_train = SummaryWriter(comment=f'-train{comment}')
+    writer_train = SummaryWriter(log_dir=log_dir)
     if val_loader is not None:
-        writer_val = SummaryWriter(comment=f'-val{comment}')
+        log_dir_val = None if log_dir is None else log_dir + "-val"
+        writer_val = SummaryWriter(log_dir=log_dir_val, comment='-val')
 
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
@@ -283,14 +295,10 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
             combined_loss.backward()
             for param_group in optimizer.param_groups:
-                param_group['lr'] = lr_schedule(global_step)
-                param_group['momentum'] = momentum_schedule(global_step)
+                param_group['lr'] = lr_schedule(local_step)
+                param_group['momentum'] = momentum_schedule(local_step)
 
             optimizer.step()
-
-            global_step += 1
-
-            progress.update(1)
 
             if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) == len(train_loader):
                 msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'\
@@ -309,11 +317,17 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
                 print(msg)
 
+            global_step += 1
+            local_step += 1
+            progress.update(1)
+
     progress.close()
 
     writer_train.close()
     if val_loader is not None:
         writer_val.close()
+
+    return global_step
 
 
 def log_to_tensorboard(writer, metrics, global_step) -> None:
@@ -446,6 +460,10 @@ def fill_default_config(train_config):
         "random_state":  42,
         "nb_epochs":  10,
         "model": "a0",  # "a0", "risev3"
+        # logging
+        "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
+        "iteration": 0,
+        "global_step": 0,
         # debugging
         "plot_schedules": False,
     }

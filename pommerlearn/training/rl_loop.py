@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
+import concurrent.futures
 import training.train_cnn
 import copy
 import shutil
@@ -25,6 +26,8 @@ MODEL_OUT_DIR = BASE_DIR / "model-out"
 MODEL_IN_DIR = BASE_DIR / "model"
 
 WORKING_DIRS = [LOG_DIR, TRAIN_DIR, MODEL_OUT_DIR, MODEL_IN_DIR]
+
+TENSORBOARD_DIR = BASE_DIR / "runs"
 
 # Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
@@ -154,7 +157,7 @@ def get_datatset(dir: Path) -> Path:
     raise ValueError(f"Could not find any dataset in {dir}!")
 
 
-def train(data_dir: Path, out_dir: Path, torch_in_dir: Optional[str], train_config):
+def train(data_dir: Path, out_dir: Path, torch_in_dir: Optional[str], train_config) -> concurrent.futures._base.Future:
     """
     Start a training pass.
 
@@ -174,10 +177,10 @@ def train(data_dir: Path, out_dir: Path, torch_in_dir: Optional[str], train_conf
     training.train_cnn.fill_default_config(local_train_config)
 
     # start training
-    train_thread = threading.Thread(target=training.train_cnn.train_cnn(local_train_config), args=(train_config,))
-    train_thread.start()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(lambda: training.train_cnn.train_cnn(local_train_config))
 
-    return train_thread
+    return future
 
 
 def create_initial_models(model_dir: Path, batch_sizes):
@@ -207,12 +210,13 @@ def subprocess_verbose_wait(sproc):
             print(line.decode("utf-8"), end='')
 
 
-def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=False):
+def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, concurrency=False):
     """
     The main RL loop which alternates between data generation and training:
 
     generation 0 -> training 0 & generation 1 -> training 1 & generation 2 -> ...
 
+    :param run_id: The (unique) id of the run, all data will be archived in ARCHIVE_DIR / run_id
     :param max_iterations: Max number of iterations (-1 for endless loop)
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
@@ -228,8 +232,6 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
     def print_it(msg: str):
         print(f"{datetime.now()} > It. {it}: {msg}")
 
-    run_id = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-
     # Before we can create a dataset, we need an initial model
     if is_empty(MODEL_INIT_DIR):
         create_initial_models(MODEL_IN_DIR, train_config)
@@ -241,7 +243,8 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
     last_model_dir_name = None
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
-    thread_train = None
+    train_future = None
+    train_future_res = None
     # The first iteration does not count, as we only generate a dataset
     while max_iterations < 0 or it <= max_iterations:
         with stop_rl_lock:
@@ -253,12 +256,15 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
         # Start training if training data exists
         if not is_empty(TRAIN_DIR):
             print_it("Start training")
-            thread_train = train(TRAIN_DIR, MODEL_OUT_DIR, last_model_dir_name, train_config)
+            train_future = train(TRAIN_DIR, MODEL_OUT_DIR, last_model_dir_name, train_config)
             # wait until the training is done before we start generating samples
             if not concurrency:
-                thread_train.join()
+                train_future_res = train_future.result()
                 print_it("Training done")
                 move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
+
+                if "iteration" in train_config:
+                    train_config["iteration"] += 1
 
         if not last_iteration:
             # Create a new dataset
@@ -273,11 +279,14 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
         archived_model_dir = ARCHIVE_DIR / run_id / (str(it - 1) + "_model")
         move_content(MODEL_IN_DIR, archived_model_dir)
 
-        if concurrency and thread_train is not None:
-            thread_train.join()
+        if concurrency and train_future is not None:
+            train_future_res = train_future.result()
             print_it("Training done")
             move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
             last_model_dir_name = str(MODEL_IN_DIR)
+
+            if "iteration" in train_config:
+                train_config["iteration"] += 1
         else:
             last_model_dir_name = str(archived_model_dir)
 
@@ -294,6 +303,11 @@ def rl_loop(max_iterations, dataset_args: list, train_config: dict, concurrency=
                 move_content(MODEL_IN_DIR, ARCHIVE_DIR / run_id / (str(it) + "_model"))
 
         it += 1
+
+        if train_future_res is not None:
+            # we executed a training step
+            train_config["global_step"] = train_future_res["global_step"] + 1
+            train_config["iteration"] += 1
 
     print("RL loop done")
 
@@ -335,11 +349,14 @@ def main():
 
     check_clean_working_dirs()
 
+    run_id = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+
     # Info: All path-related arguments should be set inside the rl loop
 
     train_config = {
         "nb_epochs": 1,
-        "test_size": 0
+        "test_size": 0,
+        "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
@@ -353,7 +370,7 @@ def main():
     max_iterations = 5
 
     # Start the rl loop
-    rl_thread = threading.Thread(target=rl_loop, args=(max_iterations, dataset_args, train_config))
+    rl_thread = threading.Thread(target=rl_loop, args=(run_id, max_iterations, dataset_args, train_config))
     rl_thread.start()
 
     # Allow early stopping
