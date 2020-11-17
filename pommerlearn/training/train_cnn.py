@@ -458,6 +458,7 @@ def log_dataset_stats(z, log_dir, iteration):
     steps = np.array(z.attrs["EpisodeSteps"])
     winners = np.array(z.attrs["EpisodeWinner"])
     done = np.array(z.attrs["EpisodeDone"])
+    actions = z.attrs["EpisodeActions"]
 
     num_episodes = len(steps)
 
@@ -469,7 +470,14 @@ def log_dataset_stats(z, log_dir, iteration):
         winner_a = np.sum(winners[:] == a)
         writer.add_scalar(f"Dataset/Win ratio {a}", winner_a / num_episodes, iteration)
 
-    no_winner = np.sum(winners == -1 * done == True)
+        actions_a = []
+        for ep in actions:
+            actions_a += ep[a]
+
+        # TODO: Correct bin borders
+        writer.add_histogram(f"Dataset/Actions {a}", np.array(actions_a), iteration)
+
+    no_winner = np.sum((winners == -1) * (done == True))
     writer.add_scalar(f"Dataset/Draw ratio", no_winner / num_episodes, iteration)
 
     not_done = np.sum(done == False)
