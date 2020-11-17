@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 from nn.a0_resnet import AlphaZeroResnet, init_weights
 from nn.rise_mobile_v3 import RiseV3
+import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -75,24 +76,36 @@ def train_cnn(train_config):
     value_loss = nn.MSELoss()
 
     total_it = len(train_loader) * train_config["nb_epochs"]
-    lr_schedule, momentum_schedule = get_schedules(total_it, train_config, train_config["plot_schedules"])
+    lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
 
-    run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 train_config["value_loss_ratio"], train_loader, val_loader, use_cuda,
-                 comment=train_config["tensorboard_comment"])
+    log_dir = train_config["tensorboard_dir"]
+    iteration = train_config["iteration"]
+
+    log_config(train_config, log_dir, iteration)
+    log_dataset_stats(z, log_dir, iteration)
+
+    global_step_start = train_config["global_step"]
+    global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
+                                   value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
+                                   use_cuda, log_dir, global_step=global_step_start)
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
     export_model_cpu_cuda(model, batch_sizes, input_shape, base_dir)
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
+    result_dict = {
+        "global_step": global_step_end
+    }
 
-def get_schedules(total_it, train_config, plot_schedules):
+    return result_dict
+
+
+def get_schedules(total_it, train_config):
     """
     Returns a learning rate and momentum schedule
     :param total_it: Total iterations
     :param train_config: Training configuration dictionary
-    :param plot_schedules: Boolean indicating if schedules shall be plotted
     """
     if train_config["schedule"] == "cosine_annealing":
         lr_schedule = CosineAnnealingSchedule(train_config["min_lr"], train_config["max_lr"], total_it * 0.7)
@@ -108,10 +121,6 @@ def get_schedules(total_it, train_config, plot_schedules):
         raise Exception(f"Invalid schedule type '{train_config['schedule']}' given.")
     momentum_schedule = MomentumSchedule(lr_schedule, train_config["min_lr"], train_config["max_lr"],
                                          train_config["min_momentum"], train_config["max_momentum"])
-    if plot_schedules:
-        # TODO: Plot in tensorboard and remove parameter
-        plot_schedule(lr_schedule, total_it)
-        plot_schedule(momentum_schedule, total_it, ylabel="Momentum")
 
     return lr_schedule, momentum_schedule
 
@@ -244,7 +253,7 @@ class Metrics:
 
 
 def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss, value_loss_ratio, train_loader, val_loader,
-                 use_cuda, comment=''):
+                 use_cuda, log_dir, global_step=0):
     """
     Trains a given model for a number of epochs
     :param model: Model to optimize
@@ -256,20 +265,20 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
     :param value_loss: Value loss object
     :param value_loss_ratio: Value loss ratio
     :param train_loader: Training data loader
-    :param val_loader: Validation data loader
+    :param val_loader: Validation data loader (ignored if None)
     :param use_cuda: True, when GPU should be used
-    :param comment: Comment for the summary writers
+    :param log_dir: The (base) log dir for the tensorboard writer(s)
+    :param global_step: The global step used for logging
     :return:
     """
 
     m_train = Metrics()
-    global_step = 0
+    local_step = 0
 
-    # append a '-' before the comment
-    if comment:
-        comment = "-" + comment
-    writer_train = SummaryWriter(comment=f'-train{comment}')
-    writer_val = SummaryWriter(comment=f'-val{comment}')
+    writer_train = SummaryWriter(log_dir=log_dir)
+    if val_loader is not None:
+        log_dir_val = None if log_dir is None else log_dir + "-val"
+        writer_val = SummaryWriter(log_dir=log_dir_val, comment='-val')
 
     exported_graph = False
 
@@ -293,36 +302,48 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
             combined_loss.backward()
             for param_group in optimizer.param_groups:
-                param_group['lr'] = lr_schedule(global_step)
-                param_group['momentum'] = momentum_schedule(global_step)
+                lr = lr_schedule(local_step)
+                writer_train.add_scalar('Hyperparameter/Learning Rate', lr, global_step)
+                param_group['lr'] = lr
+
+                momentum = momentum_schedule(local_step)
+                writer_train.add_scalar('Hyperparameter/Momentum', momentum, global_step)
+                param_group['momentum'] = momentum
 
             optimizer.step()
 
-            global_step += 1
-
-            progress.update(1)
-
             if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) == len(train_loader):
-                m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, val_loader)
-                print(f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'
-                      f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'
-                      f' train value loss: {m_train.value_loss():5f}, val value loss: {m_val.value_loss():5f},'
-                      f' val policy loss: {m_train.policy_loss():5f}, val policy acc: {m_val.policy_acc():5f}')
+                msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'\
+                      f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'\
+                      f' train value loss: {m_train.value_loss():5f}'
 
-                log_to_tensorboard(writer_train, m_train, global_step)
-                log_to_tensorboard(writer_val, m_val, global_step)
-                writer_train.add_scalar('Hyperparameter/Learning Rate', lr_schedule(global_step), global_step)
-                writer_train.add_scalar('Hyperparameter/Momentum', momentum_schedule(global_step), global_step)
-
+                # TODO: Log metric in every step
+                log_metrics(writer_train, m_train, global_step)
                 m_train.reset()
+
+                if val_loader is not None:
+                    # print validation stats
+                    m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, val_loader)
+                    log_metrics(writer_val, m_val, global_step)
+                    msg += f', val value loss: {m_val.value_loss():5f}, val policy loss: {m_val.policy_loss():5f},'\
+                           f' val policy acc: {m_val.policy_acc():5f}'
+
+                print(msg)
+
+            global_step += 1
+            local_step += 1
+            progress.update(1)
 
     progress.close()
 
     writer_train.close()
-    writer_val.close()
+    if val_loader is not None:
+        writer_val.close()
+
+    return global_step
 
 
-def log_to_tensorboard(writer, metrics, global_step) -> None:
+def log_metrics(writer, metrics, global_step) -> None:
     """
     Logs all metrics to Tensorboard at the current global step.
 
@@ -404,26 +425,85 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
     :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
+
     z_steps = z.attrs["Steps"]
-    x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
-        z['obs'][:z_steps], z['val'][:z_steps], z['act'][:z_steps],
-        test_size=test_size, random_state=random_state
-    )
+    obs = z['obs'][:z_steps]
+    val = z['val'][:z_steps]
+    act = z['act'][:z_steps]
 
-    x_train = torch.Tensor(x_train)
-    yp_train = torch.Tensor(yp_train).long()
-    yv_train = torch.Tensor(yv_train)
-    x_val = torch.Tensor(x_val)
-    yp_val = torch.Tensor(yp_val).long()
-    yv_val = torch.Tensor(yv_val)
+    def get_loader(x, yv, yp):
+        x = torch.Tensor(x)
+        yv = torch.Tensor(yv)
+        yp = torch.Tensor(yp).long()
+        return DataLoader(TensorDataset(x, yv, yp), batch_size=batch_size, shuffle=True)
 
-    data_train = TensorDataset(x_train, yv_train, yp_train)
-    data_val = TensorDataset(x_val, yv_val, yp_val)
+    if test_size == 0:
+        return get_loader(obs, val, act), None
 
-    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(data_val, batch_size=batch_size, shuffle=True)
+    if 0 < test_size < 1:
+        x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
+            obs, val, act,
+            test_size=test_size, random_state=random_state
+        )
 
-    return train_loader, val_loader
+        return get_loader(x_train, yv_train, yp_train), get_loader(x_val, yv_val, yp_val)
+
+    raise ValueError(f"Incorrect test size: {test_size}")
+
+
+def log_dataset_stats(z, log_dir, iteration):
+    """
+    Log dataset stats to tensorboard.
+
+    :param z: The zarr dataset
+    :param log_dir: The logdir of the summary writer
+    :param iteration: The iteration this dataset belongs to
+    """
+    writer = SummaryWriter(log_dir=log_dir)
+
+    steps = np.array(z.attrs["EpisodeSteps"])
+    winners = np.array(z.attrs["EpisodeWinner"])
+    done = np.array(z.attrs["EpisodeDone"])
+    actions = z.attrs["EpisodeActions"]
+
+    num_episodes = len(steps)
+
+    writer.add_scalar("Dataset/Episodes", num_episodes, iteration)
+    writer.add_scalar("Dataset/Steps mean", steps.mean(), iteration)
+    writer.add_scalar("Dataset/Steps std", steps.std(), iteration)
+
+    for a in range(0, 4):
+        winner_a = np.sum(winners[:] == a)
+        writer.add_scalar(f"Dataset/Win ratio {a}", winner_a / num_episodes, iteration)
+
+        actions_a = []
+        for ep in actions:
+            actions_a += ep[a]
+
+        # TODO: Correct bin borders
+        writer.add_histogram(f"Dataset/Actions {a}", np.array(actions_a), iteration)
+
+    no_winner = np.sum((winners == -1) * (done == True))
+    writer.add_scalar(f"Dataset/Draw ratio", no_winner / num_episodes, iteration)
+
+    not_done = np.sum(done == False)
+    writer.add_scalar(f"Dataset/Not done ratio", not_done / num_episodes, iteration)
+
+    writer.close()
+
+
+def log_config(train_config, log_dir, iteration):
+    """
+    Log the train config to tensorboard.
+
+    :param train_config: The train config dictionary
+    :param log_dir: The logdir of the summary writer
+    :param iteration: The iteration this config belongs to
+    """
+
+    writer = SummaryWriter(log_dir=log_dir)
+    writer.add_text(f"Train Config", str(train_config), iteration)
+    writer.close()
 
 
 def fill_default_config(train_config):
@@ -448,16 +528,16 @@ def fill_default_config(train_config):
         "random_state":  42,
         "nb_epochs":  10,
         "model": "a0",  # "a0", "risev3"
-        # debugging
-        "plot_schedules": False,
-        "tensorboard_comment": "",
+        # logging
+        "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
+        "iteration": 0,
+        "global_step": 0,
     }
 
-    for key in default_config:
-        if key not in train_config:
-            train_config[key] = default_config[key]
+    for key in train_config:
+        default_config[key] = train_config[key]
 
-    return train_config
+    return default_config
 
 
 if __name__ == '__main__':
