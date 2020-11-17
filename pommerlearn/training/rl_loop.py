@@ -263,9 +263,6 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
                 print_it("Training done")
                 move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
 
-                if "iteration" in train_config:
-                    train_config["iteration"] += 1
-
         if not last_iteration:
             # Create a new dataset
             print_it("Create dataset")
@@ -284,9 +281,6 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
             print_it("Training done")
             move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
             last_model_dir_name = str(MODEL_IN_DIR)
-
-            if "iteration" in train_config:
-                train_config["iteration"] += 1
         else:
             last_model_dir_name = str(archived_model_dir)
 

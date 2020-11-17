@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 from nn.a0_resnet import AlphaZeroResnet, init_weights
 from nn.rise_mobile_v3 import RiseV3
+import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -78,7 +79,11 @@ def train_cnn(train_config):
     lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
 
     log_dir = train_config["tensorboard_dir"]
-    global_step_start = train_config.get("global_step", 0)
+    iteration = train_config["iteration"]
+
+    log_dataset_stats(z, log_dir, iteration)
+
+    global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"], train_loader, val_loader,
                                    use_cuda, log_dir, global_step=global_step_start, comment="")
@@ -305,13 +310,14 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                       f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'\
                       f' train value loss: {m_train.value_loss():5f}'
 
-                log_to_tensorboard(writer_train, m_train, global_step)
+                # TODO: Log metric in every step
+                log_metrics(writer_train, m_train, global_step)
                 m_train.reset()
 
                 if val_loader is not None:
                     # print validation stats
                     m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, val_loader)
-                    log_to_tensorboard(writer_val, m_val, global_step)
+                    log_metrics(writer_val, m_val, global_step)
                     msg += f', val value loss: {m_val.value_loss():5f}, val policy loss: {m_val.policy_loss():5f},'\
                            f' val policy acc: {m_val.policy_acc():5f}'
 
@@ -330,7 +336,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
     return global_step
 
 
-def log_to_tensorboard(writer, metrics, global_step) -> None:
+def log_metrics(writer, metrics, global_step) -> None:
     """
     Logs all metrics to Tensorboard at the current global step.
 
@@ -436,6 +442,39 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
         return get_loader(x_train, yv_train, yp_train), get_loader(x_val, yv_val, yp_val)
 
     raise ValueError(f"Incorrect test size: {test_size}")
+
+
+def log_dataset_stats(z, log_dir, iteration):
+    """
+    Log dataset stats to tensorboard.
+
+    :param z: The zarr dataset
+    :param log_dir: The logdir of the summary writer
+    :param iteration: The iteration this dataset belongs to
+    """
+    writer = SummaryWriter(log_dir=log_dir)
+
+    steps = np.array(z.attrs["EpisodeSteps"])
+    winners = np.array(z.attrs["EpisodeWinner"])
+    done = np.array(z.attrs["EpisodeDone"])
+
+    num_episodes = len(steps)
+
+    writer.add_scalar("Dataset/Episodes", num_episodes, iteration)
+    writer.add_scalar("Dataset/Steps mean", steps.mean(), iteration)
+    writer.add_scalar("Dataset/Steps std", steps.std(), iteration)
+
+    for a in range(0, 4):
+        winner_a = np.sum(winners[:] == a)
+        writer.add_scalar(f"Dataset/Win ratio {a}", winner_a / num_episodes, iteration)
+
+    no_winner = np.sum(winners == -1 * done == True)
+    writer.add_scalar(f"Dataset/Draw ratio", no_winner / num_episodes, iteration)
+
+    not_done = np.sum(done == False)
+    writer.add_scalar(f"Dataset/Not done ratio", not_done / num_episodes, iteration)
+
+    writer.close()
 
 
 def fill_default_config(train_config):
