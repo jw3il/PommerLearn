@@ -26,7 +26,6 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
         env.Step(false);
         if(printSteps)
         {
-            std::cout << "Step: " << currentState.timeStep << std::endl;
             env.Print(false);
         }
 
