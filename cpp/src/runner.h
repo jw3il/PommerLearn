@@ -31,10 +31,12 @@ public:
      * @param targetedLoggedSteps The targeted number of logged steps after this call (soft limit: still add complete episodes). Starts new episodes when this limit is not reached. Ignored if -1.
      * @param maxLoggedSteps The maximum total number of logged steps after this call. Starts new episodes when this limit is not reached. Ignored if -1.
      * @param seed The seed used to generate the training data (for deterministic results). Ignored (initialized with time) if -1.
+     * @param envSeed The seed used to generate the environment. If -1, every episode will use a randomly generated environment.
+     * @param envGenSeedEps The number of episodes after which a new environment generation seed is created.
      * @param printSteps Whether to print the steps.
      * @param ipcManager The IPCManager which is used to save/transmit the episode logs. No logs are saved if this is a nullptr.
      */
-    static void run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps = -1, long maxLoggedSteps = -1, long seed = -1, bool printSteps = false, IPCManager* ipcManager = nullptr);
+    static void run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps, long maxLoggedSteps, long seed, long envSeed, long envGenSeedEps, bool printSteps, IPCManager* ipcManager);
 
     /**
      * @brief run_simple_agents Run the environment with simple agents and optionally collect logs.
@@ -43,10 +45,12 @@ public:
      * @param targetedLoggedSteps The targeted number of logged steps after this call (soft limit: still add complete episodes). Starts new episodes when this limit is not reached. Ignored if -1.
      * @param maxLoggedSteps The maximum total number of logged steps after this call (hard limit). Starts new episodes when this limit is not reached. Ignored if -1.
      * @param seed The seed used to generate the training data (for deterministic results). Ignored (initialized with time) if -1.
+     * @param envSeed The seed used to generate the environment. If -1, every episode will use a randomly generated environment.
+     * @param envGenSeedEps The number of episodes after which a new environment generation seed is created.
      * @param printSteps Whether to print the steps.
      * @param ipcManager The IPCManager which is used to save/transmit the episode logs. No logs are saved if this is a nullptr.
      */
-    static void run_simple_agents(int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps = -1, long maxLoggedSteps = -1, long seed = -1, bool printSteps = false, IPCManager* ipcManager = nullptr);
+    static void run_simple_agents(int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps, long maxLoggedSteps, long seed, long envSeed, long envGenSeedEps, bool printSteps, IPCManager* ipcManager);
 
 private:
 

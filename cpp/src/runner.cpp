@@ -54,13 +54,7 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
     return info;
 }
 
-void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps, long maxLoggedSteps, long seed, bool printSteps, IPCManager* ipcManager) {
-    if(seed == -1)
-    {
-        seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    }
-    auto rng = std::mt19937_64(seed);
-
+void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps, long maxLoggedSteps, long seed, long envSeed, long envGenSeedEps, bool printSteps, IPCManager* ipcManager) {
     // create the sample buffers for all agents wanting to collect samples
     std::vector<SampleCollector*> sampleCollectors;
     if (ipcManager != nullptr) {
@@ -80,16 +74,27 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
     std::array<int, bboard::AGENT_COUNT> nbWins;
     std::fill(nbWins.begin(), nbWins.end(), 0);
 
+    auto rng = std::mt19937_64(seed);
     long totalLoggedSteps = 0;
     int episode = 0;
+    int nextEnvSeedEps = 0;
+    int currentEnvSeed = envSeed;
     for (; (maxEpisodes == -1 || episode < maxEpisodes)
          && (maxLoggedSteps == -1 || totalLoggedSteps < maxLoggedSteps)
          && (targetedLoggedSteps == -1 || totalLoggedSteps < targetedLoggedSteps); episode++) {
 
-        // generate new seeds in every episode
-        seed = rng();
+        // only generate random environments if envSeed == -1
+        if (envSeed == -1) {
+            // generate a new environment seed every envGenSeedEps episodes
+            nextEnvSeedEps--;
+            if (nextEnvSeedEps <= 0) {
+                currentEnvSeed = rng();
+                nextEnvSeedEps = envGenSeedEps;
+            }
+        }
+
         bboard::Environment env;
-        env.MakeGame(agents, gameMode, seed, true);
+        env.MakeGame(agents, gameMode, currentEnvSeed, true);
 
         EpisodeInfo result = Runner::run_env_episode(env, maxEpisodeSteps, printSteps);
 
@@ -144,7 +149,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
         }
         std::cout << ", is draw " << result.isDraw << ", is done " << result.isDone << std::endl;
 
-        std::cout << " > Seed: 0x" << std::hex << seed << std::dec << std::endl;
+        std::cout << " > Seed: 0x" << std::hex << currentEnvSeed << std::dec << std::endl;
     }
 
     // display aggregated statistics
@@ -162,7 +167,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
     std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
 }
 
-void Runner::run_simple_agents(int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps, long maxLoggedSteps, long seed, bool printSteps, IPCManager* ipcManager) {
+void Runner::run_simple_agents(int maxEpisodeSteps, long maxEpisodes, long targetedLoggedSteps, long maxLoggedSteps, long seed, long envSeed, long envGenSeedEps, bool printSteps, IPCManager* ipcManager) {
     // create wrappers to log the actions of some agents
     WrappedLogAgent agentWrappers[4];
     std::array<bboard::Agent*, 4> agents = {&agentWrappers[0], &agentWrappers[1], &agentWrappers[2], &agentWrappers[3]};
@@ -172,7 +177,7 @@ void Runner::run_simple_agents(int maxEpisodeSteps, long maxEpisodes, long targe
         agentWrappers[i].set_agent(std::make_unique<agents::SimpleAgent>(seed + i));
     }
 
-    Runner::run(agents, bboard::GameMode::FreeForAll, maxEpisodeSteps, maxEpisodes, targetedLoggedSteps, maxLoggedSteps, seed, printSteps, ipcManager);
+    Runner::run(agents, bboard::GameMode::FreeForAll, maxEpisodeSteps, maxEpisodes, targetedLoggedSteps, maxLoggedSteps, seed, envSeed, envGenSeedEps, printSteps, ipcManager);
 
     for (int i = 0; i < 4; i++) {
         agentWrappers[i].release_agent();

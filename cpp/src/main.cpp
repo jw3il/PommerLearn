@@ -60,10 +60,10 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     return netBatches;
 }
 
-void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, bool print, IPCManager* ipcManager, std::string modelDir)
+void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, bool print, IPCManager* ipcManager, std::string modelDir, long seed, long envSeed, long envGenSeedEps)
 {
     // TODO: Decouple agent creation
-    srand(time(0));
+    srand(seed);
 
     StateConstants::init(false);
 #ifdef TENSORRT
@@ -123,7 +123,7 @@ void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, 
         new agents::SimpleAgent(rand()),
     };
 
-    Runner::run(agents, gameMode, 800, maxGames, targetedSamples, maxSamples, -1, print, ipcManager);
+    Runner::run(agents, gameMode, 800, maxGames, targetedSamples, maxSamples, seed, envSeed, envGenSeedEps, print, ipcManager);
 }
 
 void generate_sl_data(int nbSamples, IPCManager* ipcManager)
@@ -133,7 +133,7 @@ void generate_sl_data(int nbSamples, IPCManager* ipcManager)
         return;
     }
 
-    Runner::run_simple_agents(800, -1, nbSamples, -1, false, ipcManager);
+    Runner::run_simple_agents(800, -1, nbSamples, -1, -1, -1, 1, false, ipcManager);
 }
 
 int main(int argc, char **argv) {
@@ -145,6 +145,11 @@ int main(int argc, char **argv) {
             // general options
             ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
             ("print", "If set, print the current state of the environment in every step.")
+
+            // seeds
+            ("env_seed", po::value<long>()->default_value(-1), "The seed used for environment generation (= fixed environment in all episodes, ignored if -1)")
+            ("env_gen_seed_eps", po::value<long>()->default_value(1), "The number of episodes a single environment generation seed is reused (= new environment every x episodes).")
+            ("seed", po::value<long>()->default_value(-1), "The seed used for the complete run (ignored if -1)")
 
             // termination options, stop if:
             //   num_games > max_games
@@ -177,6 +182,14 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    long seed = configVals["seed"].as<long>();
+    if(seed == -1)
+    {
+        seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    }
+    long envSeed = configVals["env_seed"].as<long>();
+    long envGenSeedEps = configVals["env_gen_seed_eps"].as<long>();
+
     bool print = configVals.count("print") > 0;
 
     // check whether we want to log the games
@@ -197,10 +210,10 @@ int main(int argc, char **argv) {
     int maxGames = configVals["max_games"].as<int>();
     int samples = configVals["targeted_samples"].as<int>();
     if (configVals["mode"].as<std::string>() == "ffa_sl") {
-        Runner::run_simple_agents(800, maxGames, samples, maxSamples, -1, print, ipcManager.get());
+        Runner::run_simple_agents(800, maxGames, samples, maxSamples, seed, envSeed, envGenSeedEps, print, ipcManager.get());
     }
     else if (configVals["mode"].as<std::string>() == "ffa_mcts") {
-        free_for_all_tourney(maxGames, samples, maxSamples, print, ipcManager.get(), configVals["model_dir"].as<std::string>());
+        free_for_all_tourney(maxGames, samples, maxSamples, print, ipcManager.get(), configVals["model_dir"].as<std::string>(), seed, envSeed, envGenSeedEps);
     }
     else {
         std::cerr << "Unknown mode" << std::endl;
