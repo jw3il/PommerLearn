@@ -60,7 +60,7 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     return netBatches;
 }
 
-void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager, std::string modelDir)
+void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, IPCManager* ipcManager, std::string modelDir)
 {
     // TODO: Decouple agent creation
     srand(time(0));
@@ -123,7 +123,7 @@ void free_for_all_tourney(long maxGames, long maxSamples, IPCManager* ipcManager
         new agents::SimpleAgent(rand()),
     };
 
-    Runner::run(agents, gameMode, 800, maxGames, maxSamples, -1, false, ipcManager);
+    Runner::run(agents, gameMode, 800, maxGames, targetedSamples, maxSamples, -1, false, ipcManager);
 }
 
 void generate_sl_data(int nbSamples, IPCManager* ipcManager)
@@ -144,7 +144,13 @@ int main(int argc, char **argv) {
 
             // general options
             ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
+            // stop training if:
+            //   num_games > max_games
             ("max_games", po::value<int>()->default_value(10), "The max. number of generated games (ignored if -1)")
+            //   || num_samples >= max_samples (hard cut)
+            ("max_samples", po::value<int>()->default_value(-1), "The max. number of generated samples (ignored if -1)")
+            //   || num_samples >= targeted_samples (soft cut, episode will still be added as long as num_samples < max_samples)
+            ("targeted_samples", po::value<int>()->default_value(-1), "The targeted number of generated samples, fully includes the last episode (ignored if -1). ")
 
             // log options
             ("log", "If set, generate enough samples to fill a whole dataset (chunk_size * chunk_count samples)")
@@ -171,7 +177,7 @@ int main(int argc, char **argv) {
 
     // check whether we want to log the games
     std::unique_ptr<FileBasedIPCManager> ipcManager;
-    int maxSamples;
+    int maxSamples = configVals["max_samples"].as<int>();
     if (configVals.count("log")) {
         // read the value config
         ValueConfig valConf;
@@ -181,20 +187,16 @@ int main(int argc, char **argv) {
         ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file_prefix"].as<std::string>(), configVals["chunk_size"].as<int>(), configVals["chunk_count"].as<int>(), valConf);
 
         // fill at most one dataset
-        maxSamples = configVals["chunk_size"].as<int>() * configVals["chunk_count"].as<int>();
-    }
-    else {
-        // unlimited sampling
-        maxSamples = -1;
+        maxSamples = min(maxSamples, configVals["chunk_size"].as<int>() * configVals["chunk_count"].as<int>());
     }
 
     int maxGames = configVals["max_games"].as<int>();
-
+    int samples = configVals["targeted_samples"].as<int>();
     if (configVals["mode"].as<std::string>() == "ffa_sl") {
-        Runner::run_simple_agents(800, maxGames, maxSamples, -1, false, ipcManager.get());
+        Runner::run_simple_agents(800, maxGames, samples, maxSamples, -1, false, ipcManager.get());
     }
     else if (configVals["mode"].as<std::string>() == "ffa_mcts") {
-        free_for_all_tourney(maxGames, maxSamples, ipcManager.get(), configVals["model_dir"].as<std::string>());
+        free_for_all_tourney(maxGames, samples, maxSamples, ipcManager.get(), configVals["model_dir"].as<std::string>());
     }
     else {
         std::cerr << "Unknown mode" << std::endl;

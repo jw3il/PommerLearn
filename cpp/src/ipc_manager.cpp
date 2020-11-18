@@ -77,7 +77,7 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
     buffer.clear();
 }
 
-ulong FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID)
+ulong FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID, const ulong maxSteps)
 {
     if (sampleBuffer.getCount() == 0)
         return 0;
@@ -112,7 +112,7 @@ ulong FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, cons
 
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
-    ulong trimmedSteps = std::min(sampleBuffer.getCount(), this->maxStepCount - this->processedSteps);
+    ulong trimmedSteps = std::min(std::min(maxSteps, sampleBuffer.getCount()), this->maxStepCount - this->processedSteps);
     ulong currentStep = 0;
     ulong remainingSteps = trimmedSteps;
 

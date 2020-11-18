@@ -9,6 +9,7 @@
 #define WITH_BLOSC
 #include "z5/types/types.hxx"
 #include "z5/filesystem/handle.hxx"
+#include "limits.h"
 
 /**
  * @brief The abstract IPCManager class provides an interface to save/transmit (called "write" from now on) training data.
@@ -19,18 +20,20 @@ public:
      * @brief writeAgentExperience Write the experience of a single agent episode.
      * @param sampleBuffer The sample buffer which contains the experience of the agent episode.
      * @param agentID The id of the agent which collected this experience.
+     * @param maxSteps The maximum amount of steps which will be written from the sample buffer (default: all samples).
      * @returns the number of added samples.
      */
-    virtual ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID) = 0;
+    virtual ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID, const ulong maxSteps=ULONG_MAX) = 0;
 
     /**
      * @brief writeAgentExperience Write the experience of the given collector.
      * @param collector The SampleCollector which collected experience in an episode.
+     * @param maxSteps The maximum amount of steps which will be written from the sample buffer (default: all samples).
      * @returns the number of added samples.
      */
-    inline ulong writeAgentExperience(SampleCollector* collector)
+    inline ulong writeAgentExperience(SampleCollector* collector, const ulong maxSteps=ULONG_MAX)
     {
-        return writeAgentExperience(*collector->get_buffer(), collector->get_buffer_agent_id());
+        return writeAgentExperience(*collector->get_buffer(), collector->get_buffer_agent_id(), maxSteps);
     }
 
     /**
@@ -75,9 +78,9 @@ public:
      */
     FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount, ValueConfig valConfig);
 
-    ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID);
-    void writeNewEpisode(const EpisodeInfo& info);
-    void flush();
+    ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID, const ulong maxSteps) override;
+    void writeNewEpisode(const EpisodeInfo& info) override;
+    void flush() override;
 
 private:
     /**
