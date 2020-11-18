@@ -63,6 +63,15 @@ void FileBasedIPCManager::flushSampleBuffer(z5::filesystem::handle::File file) {
     auto polDataset = z5::openDataset(file, "pol");
     z5::multiarray::writeSubarray<float>(polDataset, xtPol, polOffset.begin());
 
+    // q values
+
+    std::vector<size_t> qShape = { count, NUM_MOVES };
+    z5::types::ShapeType qOffset = { this->datasetStepCount, 0 };
+
+    auto xtQ = xt::adapt(buffer.getQ(), count * NUM_MOVES, xt::no_ownership(), qShape);
+    auto qDataset = z5::openDataset(file, "q");
+    z5::multiarray::writeSubarray<float>(qDataset, xtQ, qOffset.begin());
+
     // values
 
     std::vector<size_t> valShape = { count };
@@ -253,6 +262,12 @@ void FileBasedIPCManager::createDatasets(z5::filesystem::handle::File file) {
     std::vector<size_t> polShape = { this->maxStepCount, NUM_MOVES };
     std::vector<size_t> polChunks = { this->chunkSize, NUM_MOVES };
     z5::createDataset(file, "pol", "float32", polShape, polChunks, compressor, compressionOptions);
+
+    // q values
+
+    std::vector<size_t> qShape = { this->maxStepCount, NUM_MOVES };
+    std::vector<size_t> qChunks = { this->chunkSize, NUM_MOVES };
+    z5::createDataset(file, "q", "float32", qShape, qChunks, compressor, compressionOptions);
 
     // values
 

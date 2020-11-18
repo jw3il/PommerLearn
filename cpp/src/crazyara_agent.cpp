@@ -1,4 +1,5 @@
 #include "crazyara_agent.h"
+#include <limits>
 
 CrazyAraAgent::CrazyAraAgent(crazyara::Agent* agent, PommermanState* pommermanState, SearchLimits* searchLimits, EvalInfo* evalInfo):
     agent(agent),
@@ -20,6 +21,17 @@ void _get_policy(EvalInfo* info, float* policyProbs) {
     }
 }
 
+void _get_q(EvalInfo* info, float* q) {
+    std::fill_n(q, NUM_MOVES, std::numeric_limits<float>::quiet_NaN());
+    for (size_t i = 0; i < info->legalMoves.size(); i++) {
+        Action a = info->legalMoves.at(i);
+        float qVal = info->qValues.at(i);
+
+        size_t index = StateConstantsPommerman::action_to_index(a);
+        q[index] = qVal;
+    }
+}
+
 bboard::Move CrazyAraAgent::act(const bboard::State *state)
 {
     pommermanState->set_state(state);
@@ -31,8 +43,9 @@ bboard::Move CrazyAraAgent::act(const bboard::State *state)
     if (has_buffer()) {
         pommermanState->get_state_planes(true, planeBuffer);
         _get_policy(evalInfo, policyBuffer);
+        _get_q(evalInfo, qBuffer);
 
-        sampleBuffer->addSample(planeBuffer, bestAction, policyBuffer, evalInfo->bestMoveQ.at(0));
+        sampleBuffer->addSample(planeBuffer, bestAction, policyBuffer, evalInfo->bestMoveQ.at(0), qBuffer);
     }
 
     return bestAction;

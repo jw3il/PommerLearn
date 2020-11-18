@@ -19,6 +19,7 @@ private:
     EvalInfo* evalInfo;
     float planeBuffer[PLANES_TOTAL_FLOATS];
     float policyBuffer[NUM_MOVES];
+    float qBuffer[NUM_MOVES];
 
 public:
     CrazyAraAgent(crazyara::Agent* agent, PommermanState* pommermanState, SearchLimits* searchLimits, EvalInfo* evalInfo);

@@ -36,10 +36,11 @@ public:
      * @param planes Pointer to the input planes (observation).
      * @param moves The move which was chosen based on the given planes.
      * @param moveProbs The move probabilities.
-     * @param qVal The q value for the selected move.
+     * @param val The q value of the selected (best) move.
+     * @param q The q value distribution of all moves.
      * @return Whether the sample has been added (false if the capacity has already been reached).
      */
-    bool addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES], const float qVal);
+    bool addSample(const float* planes, const bboard::Move move, const float moveProbs[NUM_MOVES], const float val, const float q[NUM_MOVES]);
 
     /**
      * @brief setValues Sets all values of the buffer according to the given value.
@@ -64,6 +65,7 @@ public:
     const float* getObs() const;
     const int8_t* getAct() const;
     const float* getPol() const;
+    const float* getQ() const;
     const float* getVal() const;
 
     ulong getCount() const;
@@ -79,6 +81,7 @@ private:
     float* obs;
     int8_t* act;
     float* pol;
+    float* q;
     float* val;
 };
 
