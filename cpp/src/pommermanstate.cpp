@@ -274,17 +274,20 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, 
     {
         if(state.agents[agentID].won)
         {
-            return TERMINAL_WIN;
+            customTerminalValue = 2.0f;
+            return TERMINAL_CUSTOM;
         }
         else
         {
             if(state.isDraw || state.timeStep > 800)
             {
-                return TERMINAL_DRAW;
+                customTerminalValue = 0.0f;
+                return TERMINAL_CUSTOM;
             }
             else
             {
-                return TERMINAL_LOSS;
+                customTerminalValue = -2.0f;
+                return TERMINAL_CUSTOM;
             }
         }
     }
@@ -293,11 +296,12 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, 
     if(state.agents[agentID].dead)
     {
         if (gameMode == bboard::GameMode::FreeForAll) {
-            return TERMINAL_LOSS;
+            customTerminalValue = -2.0f;
+            return TERMINAL_CUSTOM;
         }
         // Partner is still alive
         // TODO: Add evaluation from NN
-        customTerminalValue = -0.5;
+        customTerminalValue = -0.5f;
         return TERMINAL_CUSTOM;
     }
 
