@@ -165,10 +165,6 @@ int main(int argc, char **argv) {
             ("chunk_size", po::value<int>()->default_value(1000), "Max. number of samples in a single file inside the dataset")
             ("chunk_count", po::value<int>()->default_value(100), "Max. number of chunks in a dataset")
 
-            // value options
-            ("discount_factor", po::value<float>()->default_value(1), "The discount factor used to assign values to individual steps (ignored if >= 1)")
-            ("add_agent_vals", po::value<bool>()->default_value(false), "Whether to add weighted agent values in the value calculation")
-
             // mcts options
             ("model_dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
     ;
@@ -196,15 +192,11 @@ int main(int argc, char **argv) {
     std::unique_ptr<FileBasedIPCManager> ipcManager;
     int maxSamples = configVals["max_samples"].as<int>();
     if (configVals.count("log")) {
-        // read the value config
-        ValueConfig valConf;
-        valConf.discountFactor = configVals["discount_factor"].as<float>();
-        valConf.addWeightedAgentValues = configVals["add_agent_vals"].as<bool>();
-
-        ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file_prefix"].as<std::string>(), configVals["chunk_size"].as<int>(), configVals["chunk_count"].as<int>(), valConf);
+        ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file_prefix"].as<std::string>(), configVals["chunk_size"].as<int>(), configVals["chunk_count"].as<int>());
 
         // fill at most one dataset
-        maxSamples = min(maxSamples, configVals["chunk_size"].as<int>() * configVals["chunk_count"].as<int>());
+        int oneDataSet = configVals["chunk_size"].as<int>() * configVals["chunk_count"].as<int>();
+        maxSamples = maxSamples == -1 ? oneDataSet : min(maxSamples, oneDataSet);
     }
 
     int maxGames = configVals["max_games"].as<int>();

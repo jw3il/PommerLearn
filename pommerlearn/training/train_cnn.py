@@ -23,6 +23,7 @@ from pathlib import Path
 from torch.optim.optimizer import Optimizer
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
+from dataset_util import get_value_target
 
 
 def create_model(train_config):
@@ -57,7 +58,8 @@ def train_cnn(train_config):
     use_cuda = torch.cuda.is_available()
     print(f"CUDA enabled: {use_cuda}")
 
-    train_loader, val_loader = prepare_dataset(z, train_config["test_size"], train_config["batch_size"],
+    value_target = get_value_target(z, train_config["discount_factor"])
+    train_loader, val_loader = prepare_dataset(z, value_target, train_config["test_size"], train_config["batch_size"],
                                                train_config["random_state"])
 
     input_shape, model = create_model(train_config)
@@ -104,6 +106,7 @@ def train_cnn(train_config):
 def get_schedules(total_it, train_config):
     """
     Returns a learning rate and momentum schedule
+
     :param total_it: Total iterations
     :param train_config: Training configuration dictionary
     """
@@ -200,6 +203,7 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
 def export_to_onnx(model, dummy_input, dir) -> None:
     """
     Exports the model to ONNX format to allow later import in TensorRT.
+
     :param model: Pytorch model
     :param dummy_input: Dummy input which defines the input shape for the model
     :return:
@@ -213,6 +217,7 @@ def export_to_onnx(model, dummy_input, dir) -> None:
 def export_as_script_module(model, dummy_input, dir) -> None:
     """
     Exports the model to a Torch Script Module to allow later import in C++.
+
     :param model: Pytorch model
     :param dummy_input: Dummy input which defines the input shape for the model
     :return:
@@ -261,6 +266,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                  use_cuda, log_dir, global_step=0):
     """
     Trains a given model for a number of epochs
+
     :param model: Model to optimize
     :param nb_epochs: Number of epochs to train
     :param optimizer: Optimizer to use
@@ -318,9 +324,8 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
             optimizer.step()
 
             if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) == len(train_loader):
-                msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'\
-                      f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f},'\
-                      f' train value loss: {m_train.value_loss():5f}'
+                msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train policy loss: {m_train.policy_loss():5f},'\
+                      f' train policy acc: {m_train.policy_acc():5f}, train value loss: {m_train.value_loss():5f}'
 
                 # TODO: Log metric in every step
                 log_metrics(writer_train, m_train, global_step)
@@ -370,6 +375,7 @@ def log_metrics(writer, metrics, global_step) -> None:
 def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_train, yp_train, yv_train):
     """
     Updates the metrics and calculates the combined loss
+
     :param metric: Metric object
     :param model: Model to optimize
     :param policy_loss: Policy loss object
@@ -402,6 +408,7 @@ def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_t
 def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, data_loader) -> Metrics:
     """
     Returns the validation metrics by evaluating it on the full validation dataset
+
     :param model: Model to evaluate
     :param value_loss_ratio: Value loss ratio
     :param value_loss: Value loss object
@@ -421,20 +428,24 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, dat
     return m_val
 
 
-def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> [DataLoader, DataLoader]:
+def prepare_dataset(z, value_target: np.ndarray, test_size: float, batch_size: int, random_state: int) \
+        -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given zarr dataset object
+
     :param z: Loaded zarr dataset object
+    :param value_target: The value target for all steps in the dataset
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
     :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
 
-    z_steps = z.attrs["Steps"]
+    z_steps = z.attrs['Steps']
     obs = z['obs'][:z_steps]
-    val = z['val'][:z_steps]
     act = z['act'][:z_steps]
+    if len(value_target) != z_steps:
+        raise ValueError(f"Value target size does not match dataset size! Got {len(value_target)}, expected {z_steps}.")
 
     def get_loader(x, yv, yp):
         x = torch.Tensor(x)
@@ -443,11 +454,11 @@ def prepare_dataset(z, test_size: float, batch_size: int, random_state: int) -> 
         return DataLoader(TensorDataset(x, yv, yp), batch_size=batch_size, shuffle=True)
 
     if test_size == 0:
-        return get_loader(obs, val, act), None
+        return get_loader(obs, value_target, act), None
 
     if 0 < test_size < 1:
         x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
-            obs, val, act,
+            obs, value_target, act,
             test_size=test_size, random_state=random_state
         )
 
@@ -525,6 +536,7 @@ def fill_default_config(train_config):
         "output_dir": "./model",
         "model_batch_sizes": [1, 8],
         # hyperparameters
+        "discount_factor": 1,
         "min_lr": 0.0001,
         "max_lr": 0.05,
         "min_momentum": 0.8,

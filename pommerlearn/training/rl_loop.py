@@ -343,7 +343,12 @@ def main():
 
     check_clean_working_dirs()
 
+    # What is the purpose of the current run?
+    run_comment = ""
+
     run_id = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    if len(run_comment) > 0:
+        run_id = run_id + f"-{run_comment}"
 
     # Info: All path-related arguments should be set inside the rl loop
 
@@ -351,6 +356,7 @@ def main():
         "nb_epochs": 3,
         "test_size": 0,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
+        "discount_factor": 0.99,
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
@@ -359,7 +365,9 @@ def main():
     # model_type = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
-        "--max_games=10",
+        "--env_gen_seed_eps=4",
+        "--max_games=-1",
+        "--targeted_samples=30000",
         f"--model_dir={str(MODEL_IN_DIR / model_type)}"
     ]
 

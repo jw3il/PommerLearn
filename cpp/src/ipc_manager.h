@@ -50,22 +50,6 @@ public:
 };
 
 /**
- * @brief Allows to configure how the values of the individual steps are calculated.
- */
-struct ValueConfig {
-    /**
-     * @brief discountFactor Apply backwards discounting of the form discountFactor^k * value. Ignored if >= 1.
-     */
-    float discountFactor = 1;
-
-    /**
-     * @brief addWeightedAgentValues Whether to add weighted values (1 - discountFactor^k) * val_k when the discounted reward is used.
-     * The value of val_k is defined by the agent which fills the buffer.
-     */
-    bool addWeightedAgentValues = false;
-};
-
-/**
  * @brief The FileBasedIPCManager class uses z5 to save logs in files.
  */
 class FileBasedIPCManager : public IPCManager {
@@ -76,7 +60,7 @@ public:
      * @param chunkSize The number of samples which will be saved in one file
      * @param chunkCount The maximum number of chunks of one dataset
      */
-    FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount, ValueConfig valConfig);
+    FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount);
 
     ulong writeAgentExperience(SampleBuffer& sampleBuffer, const int agentID, const ulong maxSteps) override;
     void writeNewEpisode(const EpisodeInfo& info) override;
@@ -94,8 +78,6 @@ private:
 
     std::string fileNamePrefix;
     unsigned long chunkSize, chunkCount, maxStepCount;
-
-    const ValueConfig valConfig;
 
     SampleBuffer sampleBuffer;
 

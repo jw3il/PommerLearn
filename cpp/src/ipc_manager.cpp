@@ -14,8 +14,8 @@
 #include "z5/multiarray/xtensor_access.hxx"
 #include "z5/attributes.hxx"
 
-FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount, ValueConfig valConfig)
-    : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount), valConfig(valConfig),
+FileBasedIPCManager::FileBasedIPCManager(std::string fileNamePrefix, int chunkSize, int chunkCount)
+    : fileNamePrefix(fileNamePrefix), chunkSize(chunkSize), chunkCount(chunkCount),
       sampleBuffer(chunkSize), nextFileId(0), activeFile(getNewFilename())
 {
     this->maxStepCount = chunkSize * chunkCount;
@@ -108,17 +108,6 @@ ulong FileBasedIPCManager::writeAgentExperience(SampleBuffer& sampleBuffer, cons
         this->datasetStepCount = 0;
     }
 
-    // TODO: Adapt value for team mode
-    EpisodeInfo& lastInfo = this->episodeInfos.back();
-    float value = lastInfo.winningAgent == agentID ? 1.0f : (lastInfo.dead[agentID] ? -1.0f : 0.0f);
-
-    if (valConfig.discountFactor < 1) {
-        sampleBuffer.setValuesDiscounted(value, valConfig.discountFactor, valConfig.addWeightedAgentValues);
-    }
-    else {
-        sampleBuffer.setValues(value);
-    }
-
     // compute the amount of steps we are allowed to insert into this dataset
     // TODO: Maybe insert remaining steps into new dataset
     ulong trimmedSteps = std::min(std::min(maxSteps, sampleBuffer.getCount()), this->maxStepCount - this->processedSteps);
@@ -200,8 +189,10 @@ void FileBasedIPCManager::flush() {
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
     attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningAgent;});
     attributes["EpisodeDone"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.isDone;});
+    attributes["EpisodeDraw"] = _mapVector<EpisodeInfo, bool>(episodeInfos, [](EpisodeInfo &info){ return info.isDraw;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
     attributes["EpisodeActions"] = _mapVector<EpisodeInfo, std::array<std::vector<int8_t>, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.actions;});
+    attributes["EpisodeDead"] = _mapVector<EpisodeInfo, std::array<bool, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.dead;});
 
     // total steps
     attributes["Steps"] = this->processedSteps;
