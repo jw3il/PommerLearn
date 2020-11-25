@@ -59,8 +59,7 @@ def train_cnn(train_config):
     print(f"CUDA enabled: {use_cuda}")
 
     value_target = get_value_target(z, train_config["discount_factor"])
-    train_loader, val_loader = prepare_dataset(z, value_target, train_config["test_size"], train_config["batch_size"],
-                                               train_config["random_state"])
+    train_loader, val_loader = prepare_dataset(z, value_target, train_config["test_size"], train_config["batch_size"])
 
     input_shape, model = create_model(train_config)
 
@@ -428,7 +427,17 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, dat
     return m_val
 
 
-def prepare_dataset(z, value_target: np.ndarray, test_size: float, batch_size: int, random_state: int) \
+def split_based_on_idx(array: np.ndarray, split_idx: int) -> (np.ndarray, np.ndarray):
+    """
+    Splits a given array into two halves at the given split index and returns the first and second half
+    :param array: Array to be split
+    :param split_idx: Index where to split
+    :return: 1st half, 2nd half after the split
+    """
+    return array[:split_idx], array[split_idx:]
+
+
+def prepare_dataset(z, value_target: np.ndarray, test_size: float, batch_size: int) \
         -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given zarr dataset object
@@ -437,7 +446,6 @@ def prepare_dataset(z, value_target: np.ndarray, test_size: float, batch_size: i
     :param value_target: The value target for all steps in the dataset
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
-    :param random_state: Seed value for reproducibility
     :return: Training loader, Validation loader
     """
 
@@ -457,11 +465,10 @@ def prepare_dataset(z, value_target: np.ndarray, test_size: float, batch_size: i
         return get_loader(obs, value_target, act), None
 
     if 0 < test_size < 1:
-        x_train, x_val, yv_train, yv_val, yp_train, yp_val = train_test_split(
-            obs, value_target, act,
-            test_size=test_size, random_state=random_state
-        )
-
+        split_idx = len(obs) - int(test_size * len(obs))
+        x_train, x_val = split_based_on_idx(obs, split_idx)
+        yv_train, yv_val = split_based_on_idx(value_target, split_idx)
+        yp_train, yp_val = split_based_on_idx(act, split_idx)
         return get_loader(x_train, yv_train, yp_train), get_loader(x_val, yv_val, yp_val)
 
     raise ValueError(f"Incorrect test size: {test_size}")
@@ -544,7 +551,7 @@ def fill_default_config(train_config):
         "schedule": "one_cycle",  # "cosine_annealing", "one_cycle", "constant"
         "momentum": 0.9,
         "weight_decay": 1e-03,
-        "value_loss_ratio": 0.01,
+        "value_loss_ratio": 0.5, #0.01,
         "test_size": 0.2,
         "batch_size": 128,
         "random_state":  42,
