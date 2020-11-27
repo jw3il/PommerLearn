@@ -1,6 +1,6 @@
 from torch.nn.modules.loss import _WeightedLoss
 from torch import Tensor
-import torch.nn as nn
+import torch.nn.functional as F
 
 
 class CrossEntropyLossContinious(_WeightedLoss):
@@ -18,4 +18,4 @@ class CrossEntropyLossContinious(_WeightedLoss):
         super(CrossEntropyLossContinious, self).__init__()
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        return -(target * nn.LogSoftmax(input)).sum(dim=1).mean()
+        return -(target * F.log_softmax(input, dim=1)).sum(dim=1).mean()

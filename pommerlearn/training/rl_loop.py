@@ -237,7 +237,7 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
         create_initial_models(MODEL_IN_DIR, train_config)
         print("No initial model provided. Using new model.")
     else:
-        shutil.copy(MODEL_INIT_DIR, MODEL_IN_DIR)
+        shutil.copytree(MODEL_INIT_DIR, MODEL_IN_DIR)
         print("Using existing model.")
 
     last_model_dir_name = None
@@ -354,7 +354,7 @@ def main():
 
     train_config = {
         "nb_epochs": 3,
-        "test_size": 0,
+        "test_size": 0.1,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
         "discount_factor": 0.99,
     }
@@ -365,9 +365,9 @@ def main():
     # model_type = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
-        "--env_gen_seed_eps=4",
+        "--env_gen_seed_eps=10",
         "--max_games=-1",
-        "--targeted_samples=30000",
+        "--targeted_samples=50000",
         f"--model_dir={str(MODEL_IN_DIR / model_type)}"
     ]
 
