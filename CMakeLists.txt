@@ -5,6 +5,7 @@ project(PommerLearn CXX)
 
 option(USE_TENSORRT              "Build with TensorRT support"  OFF)
 option(USE_TORCH                 "Build with Torch support"  ON)
+option(USE_PROFILING             "Build with profiling"   OFF)
 
 function(check_env_defined name)
     if(DEFINED ENV{${name}})
@@ -102,6 +103,13 @@ if (USE_TENSORRT)
     target_link_libraries(CrazyAra -L"$ENV{TENSORRT_PATH}/lib")
 
     target_link_libraries(CrazyAra nvonnxparser nvinfer cudart myelin)
+endif()
+
+# -pg performance profiling flags
+if (USE_PROFILING)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
+    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
 endif()
 
 # pomcpp

@@ -67,3 +67,17 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
     ```
     pip install -r requirements.txt
     ```
+
+
+### Performance Profiling 
+
+Install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html):
+* https://github.com/jrfonseca/gprof2dot
+
+Activate the CMake option `USE_PROFILING` in `CMakeLists.txt` and rebuild.
+Run the executable and generate the plot:
+```bash
+./PommerLearn --mode ffa_mcts --max_games 10
+gprof PommerLearn | gprof2dot | dot -Tpng -o profile.png
+```
+
