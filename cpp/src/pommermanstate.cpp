@@ -331,6 +331,12 @@ PommermanState* PommermanState::clone() const
                 clone->planningAgents[i] = ptr->clone();
             }
         }
+
+        clone->hasBufferedActions = hasBufferedActions;
+        if (hasBufferedActions) {
+            std::copy_n(moves, bboard::AGENT_COUNT, clone->moves);
+        }
+
         // we'll also use the agents in the clone
         clone->hasPlanningAgents = true;
     }
