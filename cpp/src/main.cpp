@@ -1,5 +1,6 @@
 #include <iostream>
 #include <array>
+#include <chrono>
 
 #include "runner.h"
 #include "ipc_manager.h"
@@ -76,10 +77,14 @@ void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, 
     searchSettings.batchSize = 8;
     searchSettings.threads = 2;
     searchSettings.useTranspositionTable = false;
+    searchSettings.enhanceChecks = false;
     searchSettings.multiPV = 1;
     searchSettings.virtualLoss = 1;
-    searchSettings.nodePolicyTemperature = 1;
+    searchSettings.nodePolicyTemperature = 1.0f;
     searchSettings.dirichletEpsilon = 0.25f;
+    searchSettings.dirichletAlpha = 0.2f;
+    searchSettings.useRandomPlayout = false;
+    searchSettings.reuseTree = false;
 
     vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches(modelDir, searchSettings);
     PlaySettings playSettings;
@@ -205,7 +210,10 @@ int main(int argc, char **argv) {
         Runner::run_simple_agents(800, maxGames, samples, maxSamples, seed, envSeed, envGenSeedEps, print, ipcManager.get());
     }
     else if (configVals["mode"].as<std::string>() == "ffa_mcts") {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         free_for_all_tourney(maxGames, samples, maxSamples, print, ipcManager.get(), configVals["model_dir"].as<std::string>(), seed, envSeed, envGenSeedEps);
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0f << "[s]" << std::endl;
     }
     else {
         std::cerr << "Unknown mode" << std::endl;
