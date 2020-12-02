@@ -217,6 +217,11 @@ void PommermanState::undo_action(Action action) {
     // TODO
 }
 
+void PommermanState::prepare_action()
+{
+    // TODO
+}
+
 
 unsigned int PommermanState::number_repetitions() const
 {
