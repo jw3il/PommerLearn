@@ -9,7 +9,7 @@ def main():
         agents.SimpleAgent,
         agents.SimpleAgent
     ]
-    util_eval.ffa_eval(agent_classes, episodes=1, verbose=True, visualize=True)
+    util_eval.ffa_eval(agent_classes, episodes=1000, verbose=True, visualize=False)
 
 
 if __name__ == '__main__':

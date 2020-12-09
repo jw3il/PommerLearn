@@ -1,5 +1,6 @@
 import pommerman
 import numpy as np
+import time
 
 import util
 
@@ -52,7 +53,10 @@ def ffa_eval(agent_classes, episodes, verbose, visualize):
     env = pommerman.make('PommeFFACompetition-v0', agent_list)
 
     # first element: result, additional elements: rewards
+    steps = np.empty(episodes)
     results = np.empty((episodes, 1 + len(agent_list)))
+
+    start = time.time()
 
     # Run the episodes just like OpenAI Gym
     for i_episode in range(episodes):
@@ -60,11 +64,15 @@ def ffa_eval(agent_classes, episodes, verbose, visualize):
         done = False
         reward = []
         info = {}
+        step = 0
         while not done:
             if visualize:
                 env.render()
             actions = env.act(state)
             state, reward, done, info = env.step(actions)
+            step += 1
+
+        steps[i_episode] = step
 
         result = info['result']
         # save the result
@@ -72,22 +80,28 @@ def ffa_eval(agent_classes, episodes, verbose, visualize):
         results[i_episode, 1:] = reward
 
         if verbose:
-            print('\r> Episode {} finished with {} ({}) | Stats: {}'.format(
-                i_episode, result, reward, ffa_get_stats_inline(results, i_episode + 1)
+            delta = time.time() - start
+            print('\r{:.2f} sec > Episode {} finished with {} ({}) | Stats: {}'.format(
+                delta, i_episode, result, reward, ffa_get_stats_inline(results, i_episode + 1)
             ))
+            if i_episode % 10 == 9:
+                ffa_print_stats(results, steps, i_episode + 1)
 
     env.close()
 
     if verbose:
-        ffa_print_stats(results, episodes)
+        delta = time.time() - start
+        print("Total time: {:.2f} sec".format(delta))
+        ffa_print_stats(results, steps, episodes)
 
     return results
 
 
-def ffa_print_stats(results, episodes):
+def ffa_print_stats(results, steps, episodes):
     num_won, num_ties = ffa_get_stats(results, episodes)
 
     print("Evaluated {} episodes".format(episodes))
+    print("Average steps: {}".format(steps[:episodes].mean()))
 
     total_won = np.sum(num_won)
     print("Wins: {} ({:.2f}%)".format(total_won, total_won / episodes * 100))
