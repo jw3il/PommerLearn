@@ -47,9 +47,19 @@ struct RunnerConfig
     long envGenSeedEps = 0;
 
     /**
+     * @brief randomAgentPositions Whether to use random agent positions in every episode.
+     */
+    bool randomAgentPositions = true;
+
+    /**
      * @brief printSteps Whether to print the steps.
      */
     bool printSteps = false;
+
+    /**
+     * @brief printFirstLast Whether to print the first and last steps of each episode.
+     */
+    bool printFirstLast = false;
 
     /**
      * @brief ipcManager The IPCManager which is used to save/transmit the episode logs. No logs are saved if this is a nullptr.
@@ -69,9 +79,10 @@ public:
      * @param env The environment to use. Must be initialized.
      * @param maxSteps The maximum number of steps of the episode.
      * @param printSteps Whether to print the steps.
+     * @param printFirstLast Whether to print the first and last steps.
      * @return The result of the episode.
      */
-    static EpisodeInfo run_env_episode(bboard::Environment& env, int maxSteps, bool printSteps=false);
+    static EpisodeInfo run_env_episode(bboard::Environment& env, int maxSteps, bool printSteps=false, bool printFirstLast=false);
 
     /**
      * @brief run Run the environment with the given agents and optionally collect logs.

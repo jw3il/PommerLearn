@@ -13,14 +13,18 @@ Runner::Runner()
     // TODO maybe create persistent environment and reset it?
 }
 
-EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool printSteps)
+EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool printSteps, bool printFirstLast)
 {
     EpisodeInfo info;
     info.initialState = env.GetState();
 
+    if (printSteps || printFirstLast) {
+        env.Print(false);
+    }
+
     const bboard::State& currentState = env.GetState();
     int startSteps = currentState.timeStep;
-    while(!env.IsDone() && (maxSteps <= 0 || currentState.timeStep - startSteps < maxSteps))
+    while (!env.IsDone() && (maxSteps <= 0 || currentState.timeStep - startSteps < maxSteps))
     {
         // execute the step
         env.Step(false);
@@ -37,6 +41,10 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
                 info.actions[i].push_back((int8_t)env.GetLastMove(i));
             }
         }
+    }
+
+    if (printFirstLast && !printSteps) {
+        env.Print(false);
     }
 
     info.winningTeam = env.GetWinningTeam();
@@ -75,12 +83,15 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
     std::fill(nbWins.begin(), nbWins.end(), 0);
 
     auto boardRNG = std::mt19937_64(config.seed);
+    auto agentPositionRNG = std::mt19937_64(config.seed);
+
+    long currentEnvSeed = config.envSeed;
+    long currentAgentPositionSeed = -1;
 
     long totalEpisodeSteps = 0;
     long totalLoggedSteps = 0;
     int episode = 0;
     int nextEnvSeedEps = 0;
-    int currentEnvSeed = config.envSeed;
     for (; (config.maxEpisodes == -1 || episode < config.maxEpisodes)
          && (config.maxLoggedSteps == -1 || totalLoggedSteps < config.maxLoggedSteps)
          && (config.targetedLoggedSteps == -1 || totalLoggedSteps < config.targetedLoggedSteps); episode++) {
@@ -95,10 +106,14 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
             }
         }
 
-        bboard::Environment env;
-        env.MakeGame(agents, gameMode, currentEnvSeed, currentEnvSeed);
+        if (config.randomAgentPositions) {
+            currentAgentPositionSeed = agentPositionRNG();
+        }
 
-        EpisodeInfo result = Runner::run_env_episode(env, config.maxEpisodeSteps, config.printSteps);
+        bboard::Environment env;
+        env.MakeGame(agents, gameMode, currentEnvSeed, currentAgentPositionSeed);
+
+        EpisodeInfo result = Runner::run_env_episode(env, config.maxEpisodeSteps, config.printSteps, config.printFirstLast);
 
         totalEpisodeSteps += result.steps;
 

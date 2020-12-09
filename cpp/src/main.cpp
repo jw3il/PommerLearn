@@ -140,11 +140,13 @@ int main(int argc, char **argv) {
             // general options
             ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
             ("print", "If set, print the current state of the environment in every step.")
+            ("print_first_last", "If set, print the first and last environment state of each episode.")
 
-            // seeds
+            // seeds and environment generation
             ("env_seed", po::value<long>()->default_value(-1), "The seed used for environment generation (= fixed environment in all episodes, ignored if -1)")
             ("env_gen_seed_eps", po::value<long>()->default_value(1), "The number of episodes a single environment generation seed is reused (= new environment every x episodes).")
             ("seed", po::value<long>()->default_value(-1), "The seed used for the complete run (ignored if -1)")
+            ("fix_agent_positions", "If set, the agent starting positions will be fixed across all episodes.")
 
             // termination options, stop if:
             //   num_games > max_games
@@ -178,10 +180,6 @@ int main(int argc, char **argv) {
     {
         seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     }
-    long envSeed = configVals["env_seed"].as<long>();
-    long envGenSeedEps = configVals["env_gen_seed_eps"].as<long>();
-
-    bool print = configVals.count("print") > 0;
 
     // check whether we want to log the games
     std::unique_ptr<FileBasedIPCManager> ipcManager;
@@ -194,18 +192,17 @@ int main(int argc, char **argv) {
         maxSamples = maxSamples == -1 ? oneDataSet : min(maxSamples, oneDataSet);
     }
 
-    int maxGames = configVals["max_games"].as<int>();
-    int samples = configVals["targeted_samples"].as<int>();
-
     RunnerConfig config;
     config.maxEpisodeSteps = 800;
-    config.maxEpisodes = maxGames;
-    config.targetedLoggedSteps = samples;
+    config.maxEpisodes = configVals["max_games"].as<int>();
+    config.targetedLoggedSteps = configVals["targeted_samples"].as<int>();;
     config.maxLoggedSteps = maxSamples;
     config.seed = seed;
-    config.envSeed = envSeed;
-    config.envGenSeedEps = envGenSeedEps;
-    config.printSteps = print;
+    config.envSeed = configVals["env_seed"].as<long>();
+    config.envGenSeedEps = configVals["env_gen_seed_eps"].as<long>();
+    config.randomAgentPositions = configVals.count("fix_agent_positions") == 0;
+    config.printSteps = configVals.count("print") > 0;
+    config.printFirstLast = configVals.count("print_first_last") > 0;
     config.ipcManager = ipcManager.get();
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
