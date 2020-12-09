@@ -61,10 +61,10 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     return netBatches;
 }
 
-void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, bool print, IPCManager* ipcManager, std::string modelDir, long seed, long envSeed, long envGenSeedEps)
+void free_for_all_tourney(std::string modelDir, RunnerConfig config)
 {
     // TODO: Decouple agent creation
-    srand(seed);
+    srand(config.seed);
 
     StateConstants::init(false);
 #ifdef TENSORRT
@@ -122,23 +122,13 @@ void free_for_all_tourney(long maxGames, long targetedSamples, long maxSamples, 
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
         new CrazyAraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo),
-        // new CrazyAraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo);
+        // new CrazyAraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo),
         new agents::SimpleAgent(rand()),
         new agents::SimpleAgent(rand()),
         new agents::SimpleAgent(rand()),
     };
 
-    Runner::run(agents, gameMode, 800, maxGames, targetedSamples, maxSamples, seed, envSeed, envGenSeedEps, print, ipcManager);
-}
-
-void generate_sl_data(int nbSamples, IPCManager* ipcManager)
-{
-    if (ipcManager == nullptr) {
-        std::cout << "Cannot generate SL data without an IPCManager instance!" << std::endl;
-        return;
-    }
-
-    Runner::run_simple_agents(800, -1, nbSamples, -1, -1, -1, 1, false, ipcManager);
+    Runner::run(agents, gameMode, config);
 }
 
 int main(int argc, char **argv) {
@@ -206,18 +196,33 @@ int main(int argc, char **argv) {
 
     int maxGames = configVals["max_games"].as<int>();
     int samples = configVals["targeted_samples"].as<int>();
-    if (configVals["mode"].as<std::string>() == "ffa_sl") {
-        Runner::run_simple_agents(800, maxGames, samples, maxSamples, seed, envSeed, envGenSeedEps, print, ipcManager.get());
+
+    RunnerConfig config;
+    config.maxEpisodeSteps = 800;
+    config.maxEpisodes = maxGames;
+    config.targetedLoggedSteps = samples;
+    config.maxLoggedSteps = maxSamples;
+    config.seed = seed;
+    config.envSeed = envSeed;
+    config.envGenSeedEps = envGenSeedEps;
+    config.printSteps = print;
+    config.ipcManager = ipcManager.get();
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+    std::string mode = configVals["mode"].as<std::string>();
+    if (mode == "ffa_sl") {
+        Runner::run_simple_agents(config);
     }
-    else if (configVals["mode"].as<std::string>() == "ffa_mcts") {
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-        free_for_all_tourney(maxGames, samples, maxSamples, print, ipcManager.get(), configVals["model_dir"].as<std::string>(), seed, envSeed, envGenSeedEps);
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0f << "[s]" << std::endl;
+    else if (mode == "ffa_mcts") {
+        free_for_all_tourney(configVals["model_dir"].as<std::string>(), config);
     }
     else {
         std::cerr << "Unknown mode" << std::endl;
     }
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0f << "[s]" << std::endl;
 
     if(ipcManager.get() != nullptr)
     {

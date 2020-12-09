@@ -219,7 +219,11 @@ void PommermanState::undo_action(Action action) {
 
 void PommermanState::prepare_action()
 {
-    // TODO
+    if (hasPlanningAgents) {
+        // buffer actions instead of calculcating them
+        // each time we execute do_action (= expand the node)
+        planning_agents_act();
+    }
 }
 
 
