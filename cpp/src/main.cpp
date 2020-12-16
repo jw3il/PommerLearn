@@ -61,7 +61,7 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     return netBatches;
 }
 
-void free_for_all_tourney(std::string modelDir, RunnerConfig config)
+void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet)
 {
     // TODO: Decouple agent creation
     srand(config.seed);
@@ -94,9 +94,6 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config)
     // searchLimits.moveOverhead = 20;
     EvalInfo evalInfo;
 
-    RawNetAgent rawNetAgent(&netSingle, &playSettings, true);
-    MCTSAgent mctsAgent(&netSingle, netBatches, &searchSettings, &playSettings);
-
     bboard::Environment env;
     bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
 
@@ -121,12 +118,21 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config)
     pommermanState.set_planning_agents(planningAgents);
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
-        new CrazyAraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo),
-        // new CrazyAraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo),
+        nullptr,
         new agents::SimpleAgent(rand()),
         new agents::SimpleAgent(rand()),
         new agents::SimpleAgent(rand()),
     };
+
+    RawNetAgent rawNetAgent(&netSingle, &playSettings, true);
+    MCTSAgent mctsAgent(&netSingle, netBatches, &searchSettings, &playSettings);
+
+    if (useRawNet) {
+        agents[0] = new CrazyAraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo);
+    }
+    else {
+        agents[0] = new CrazyAraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo);
+    }
 
     Runner::run(agents, gameMode, config);
 }
@@ -164,6 +170,7 @@ int main(int argc, char **argv) {
 
             // mcts options
             ("model_dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
+            ("raw_net_agent", "If set, uses the raw net agent instead of the mcts agent.")
     ;
 
     po::variables_map configVals;
@@ -212,7 +219,10 @@ int main(int argc, char **argv) {
         Runner::run_simple_agents(config);
     }
     else if (mode == "ffa_mcts") {
-        free_for_all_tourney(configVals["model_dir"].as<std::string>(), config);
+        bool useRawNetAgent = configVals.count("raw_net_agent") > 0;
+        std::string modelDir = configVals["model_dir"].as<std::string>();
+
+        free_for_all_tourney(modelDir, config, useRawNetAgent);
     }
     else {
         std::cerr << "Unknown mode" << std::endl;
