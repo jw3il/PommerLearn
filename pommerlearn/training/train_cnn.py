@@ -21,6 +21,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from pathlib import Path
 from torch.optim.optimizer import Optimizer
+from torch.nn.functional import kl_div
 
 from training.loss.cross_entropy_continious import CrossEntropyLossContinious
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
@@ -244,6 +245,7 @@ class Metrics:
         self.total_cnt = 0
         self.sum_combined_loss = 0
         self.sum_policy_loss = 0
+        self.sum_policy_kl = 0
         self.sum_value_loss = 0
         self.steps = 0
 
@@ -252,6 +254,7 @@ class Metrics:
         self.total_cnt = 0
         self.sum_combined_loss = 0
         self.sum_policy_loss = 0
+        self.sum_policy_kl = 0
         self.sum_value_loss = 0
         self.steps = 0
 
@@ -263,6 +266,9 @@ class Metrics:
 
     def policy_loss(self):
         return self.sum_policy_loss / self.steps
+
+    def policy_kl(self):
+        return self.sum_policy_kl / self.steps
 
     def policy_acc(self):
         return self.correct_cnt / self.total_cnt
@@ -314,6 +320,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                 writer_train.add_graph(model, x_train)
                 exported_graph = True
 
+            model.train()
             x_train, ya_train, yp_train = Variable(x_train), Variable(ya_train), Variable(yp_train)
             combined_loss = update_metrics(m_train, model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
                                            ya_train, yp_train, fit_pol_dist)
@@ -339,6 +346,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                 m_train.reset()
 
                 if val_loader is not None:
+                    model.eval()
                     # print validation stats
                     m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda,
                                          val_loader)
@@ -375,7 +383,8 @@ def log_metrics(writer, metrics, global_step) -> None:
     writer.add_scalar('Loss/Policy', metrics.policy_loss(), global_step)
     writer.add_scalar('Loss/Combined', metrics.combined_loss(), global_step)
 
-    writer.add_scalar('Policy Accuracy', metrics.policy_acc(), global_step)
+    writer.add_scalar('Policy/Accuracy', metrics.policy_acc(), global_step)
+    writer.add_scalar('Policy/KL divergence', metrics.policy_kl(), global_step)
 
     writer.flush()
 
@@ -414,6 +423,8 @@ def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_t
     metric.total_cnt += x_train.data.size()[0]
     metric.correct_cnt += float((pred_label == ya_train.data).sum())
     metric.sum_policy_loss += float(cur_policy_loss.data)
+    kl_value = kl_div(torch.nn.functional.log_softmax(policy_out, dim=1), yp_train, reduction='batchmean')
+    metric.sum_policy_kl += float(kl_value)
     metric.sum_value_loss += float(cur_value_loss.data)
     metric.sum_combined_loss += float(combined_loss.data)
     metric.steps += 1
@@ -583,7 +594,7 @@ def fill_default_config(train_config):
         "schedule": "one_cycle",  # "cosine_annealing", "one_cycle", "constant"
         "momentum": 0.9,
         "weight_decay": 1e-03,
-        "value_loss_ratio": 0.5, #0.01,
+        "value_loss_ratio": 0.1, #0.01,
         "test_size": 0.2,
         "batch_size": 128,
         "random_state":  42,
