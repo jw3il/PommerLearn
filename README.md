@@ -60,7 +60,13 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 
 * Build the C++ environment with the provided `CMakeLists.txt`.
 
-    The current version requires you to set the env variable CONDA_ENV_PATH to the path of your conda environment (e.g. `~/conda/envs/pommer`)
+    The current version requires you to set the env variables
+    
+    * `CONDA_ENV_PATH`: path of your conda environment (e.g. `~/conda/envs/pommer`)
+    * `BLAZE_PATH`: blaze installation path (e.g. `/usr/local/include`)
+    * `CUDA_PATH`: cuda installation path (e.g. `/usr/local/cuda`)
+    * `TENSORRT_PATH` (when using the CrazyAra TensorRT backend, e.g. `/usr/src/tensorrt`)
+    * `Torch_DIR` (when using the CrazyAra Torch backend)
 
 * The python dependencies can be installed with
 
