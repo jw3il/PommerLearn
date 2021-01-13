@@ -20,21 +20,6 @@
 
 namespace po = boost::program_options;
 
-void load_models()
-{
-#ifdef TENSORRT
-    make_unique<TensorrtAPI>(1, 1, "model/", "float32");
-    make_unique<TensorrtAPI>(1, 1, "model/", "float16");
-    make_unique<TensorrtAPI>(1, 1, "model/", "int8");
-
-    make_unique<TensorrtAPI>(1, 8, "model/", "float32");
-    make_unique<TensorrtAPI>(1, 8, "model/", "float16");
-    make_unique<TensorrtAPI>(1, 8, "model/", "int8");
-#elif defined (TORCH)
-    make_unique<TorchAPI>("cpu", 0, 1, "model/");
-#endif
-}
-
 vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirectory, const SearchSettings& searchSettings)
 {
     vector<unique_ptr<NeuralNetAPI>> netBatches;
