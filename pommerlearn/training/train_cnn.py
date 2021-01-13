@@ -23,7 +23,7 @@ from torch.optim.optimizer import Optimizer
 from training.loss.cross_entropy_continious import CrossEntropyLossContinious
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
-from dataset_util import create_data_loaders, log_dataset_stats
+from dataset_util import create_data_loaders, log_dataset_stats, get_last_dataset_path
 from training.metrics import Metrics
 
 
@@ -84,7 +84,10 @@ def train_cnn(train_config):
     iteration = train_config["iteration"]
 
     log_config(train_config, log_dir, iteration)
-    log_dataset_stats(train_config["dataset_path"], log_dir, iteration)
+
+    # TODO: Maybe log data sets during RL loop instead?
+    last_dataset_path = get_last_dataset_path(train_config["dataset_path"])
+    log_dataset_stats(last_dataset_path, log_dir, iteration)
 
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
@@ -369,6 +372,10 @@ def log_config(train_config, log_dir, iteration):
 def fill_default_config(train_config):
     default_config = {
         # input
+        # dataset_path: The path information of the zarr dataset(s) which will be used. Should be a single string
+        # (of a path) or a list containing a) strings (paths) or b) tuples of the form (path, proportion) where
+        # 0 <= proportion <= 1 is the proportion of total samples which will be selected from this data set.
+        # Examples: "data_0.zr", [("data_0.zr", 0.25), ("data_1.zr", 0.5), "data_2.zr"]
         "dataset_path": "data_0.zr",
         "torch_input_dir": None,
         # output
