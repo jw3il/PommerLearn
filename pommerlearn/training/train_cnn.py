@@ -36,10 +36,11 @@ def create_model(train_config):
         model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
                                 board_height=input_shape[2])
     elif train_config["model"] == "risev3":
-        kernels = [[3]] * 3
-        se_types = [None] * 3
+        kernels = [3] * 4
+        se_types = [None] * 4
         model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
-                       kernels=kernels, se_types=se_types, use_raw_features=True, act_type="relu")
+                       channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
+                       act_type="relu", use_downsampling=train_config["use_downsampling"])
     else:
         raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
@@ -594,7 +595,7 @@ def fill_default_config(train_config):
         "schedule": "one_cycle",  # "cosine_annealing", "one_cycle", "constant"
         "momentum": 0.9,
         "weight_decay": 1e-03,
-        "value_loss_ratio": 0.1, #0.01,
+        "value_loss_ratio": 0.1,
         "test_size": 0.2,
         "batch_size": 128,
         "random_state":  42,
@@ -605,6 +606,7 @@ def fill_default_config(train_config):
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
         "iteration": 0,
         "global_step": 0,
+        "use_downsampling": False,
     }
 
     for key in train_config:

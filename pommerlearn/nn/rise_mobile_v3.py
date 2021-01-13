@@ -20,8 +20,8 @@ Influenced by the following papers:
     https://arxiv.org/pdf/1807.06521.pdf
 
 """
-from torch.nn import Sequential, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish, Module
-from nn.builder_util import get_act, MixConv, _DepthWiseStem, _ValueHead, _PolicyHead
+from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module
+from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem
 
 
 class _PreactResidualMixConvBlock(Module):
@@ -58,19 +58,82 @@ class _PreactResidualMixConvBlock(Module):
         return x + self.body(x)
 
 
+class _BottlekneckResidualBlock(Module):
+
+    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', use_se=False, bn_mom=0.9):
+        """
+        Returns a residual block without any max pooling operation
+        :param channels: Number of filters for all CNN-layers
+        :param name: Name for the residual block
+        :param act_type: Activation function to use
+        :param use_se: Boolean if a squeeze excitation module will be used
+        :return: symbol
+        """
+        super(_BottlekneckResidualBlock, self).__init__()
+
+        self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               get_act(act_type),
+                               Conv2d(in_channels=channels_operating, out_channels=channels_operating, kernel_size=(kernel, kernel), padding=(kernel // 2, kernel // 2), bias=False, groups=channels_operating),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               get_act(act_type),
+                               Conv2d(in_channels=channels_operating, out_channels=channels, kernel_size=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels))
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+        return x + self.body(x)
+
+
+class _StridedBottlekneckBlock(Module):
+
+    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', use_se=False, bn_mom=0.9):
+        """
+        Returns a residual block without any max pooling operation
+        :param channels: Number of filters for all CNN-layers
+        :param name: Name for the residual block
+        :param act_type: Activation function to use
+        :param use_se: Boolean if a squeeze excitation module will be used
+        :return: symbol
+        """
+        super(_StridedBottlekneckBlock, self).__init__()
+
+        self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               get_act(act_type),
+                               Conv2d(in_channels=channels_operating, out_channels=channels_operating,
+                                      kernel_size=(kernel, kernel), stride=(2, 2), padding=(kernel // 2, kernel // 2), bias=False, groups=channels_operating),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               get_act(act_type),
+                               Conv2d(in_channels=channels_operating, out_channels=channels*2, kernel_size=(1, 1), bias=False),
+                               BatchNorm2d(momentum=bn_mom, num_features=channels*2))
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+        return self.body(x)
+
+
 class RiseV3(Module):
 
-    def __init__(self, channels=256, nb_input_channels=18, channels_operating_init=128, channel_expansion=64, act_type='relu',
-                 channels_value_head=8, channels_policy_head=81, value_fc_size=256, dropout_rate=0.15,
+    def __init__(self, channels=128, nb_input_channels=18, channels_operating=256, act_type='relu',
+                 channels_value_head=1, channels_policy_head=81, value_fc_size=256,
                  select_policy_from_plane=False, kernels=None, n_labels=6, se_ratio=4,
                  se_types=None, use_avg_features=False, use_raw_features=False, value_nb_hidden=7,
                  value_fc_size_hidden=256, value_dropout=0.15, use_more_features=False, bn_mom=0.9,
-                 board_height=11, board_width=11,
+                 board_height=11, board_width=11, use_downsampling=True,
                  ):
         """
         RISEv3 architecture
         :param channels: Main number of channels
-        :param channels_operating_init: Initial number of channels at the start of the net for the depthwise convolution
+        :param channels_operating: Initial number of channels at the start of the net for the depthwise convolution
         :param channel_expansion: Number of channels to add after each residual block
         :param act_type: Activation type to use
         :param channels_value_head: Number of channels for the value head
@@ -111,28 +174,29 @@ class RiseV3(Module):
             if se_type not in valid_se_types:
                 raise Exception(f"Unavailable se_type: {se_type}. Available se_types include {se_types}")
 
-        cur_channels = channels_operating_init
-
         res_blocks = []
-        for idx, cur_kernels in enumerate(kernels):
-            if 5 in cur_kernels:
-                temp_channels = cur_channels // 2
+        expansion_factor = 1
+        for idx, cur_kernel in enumerate(kernels):
+            if use_downsampling and idx >= len(kernels) / 2:
+                use_downsampling = False
+                res_blocks.append(_StridedBottlekneckBlock(channels=channels, channels_operating=channels_operating*2,
+                                                            kernel=cur_kernel, act_type=act_type,
+                                                            use_se=False, bn_mom=bn_mom))
+                expansion_factor = 2
+                board_width = round(board_width * 0.5)
+                board_height = round(board_height * 0.5)
             else:
-                temp_channels = cur_channels
-            res_blocks.append(_PreactResidualMixConvBlock(channels=channels, channels_operating=temp_channels,
-                                                          kernels=cur_kernels, act_type=act_type,
-                                                          se_ratio=se_ratio, se_type=se_types[idx], bn_mom=bn_mom))
-            cur_channels += channel_expansion
+                res_blocks.append(_BottlekneckResidualBlock(channels=channels*expansion_factor, channels_operating=channels_operating*expansion_factor,
+                                                            kernel=cur_kernel, act_type=act_type,
+                                                            use_se=False, bn_mom=bn_mom))
 
         self.body = Sequential(
-            _DepthWiseStem(channels=channels, nb_input_channels=nb_input_channels, bn_mom=bn_mom, act_type=act_type),
+            _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
             *res_blocks,
-            BatchNorm2d(momentum=bn_mom, num_features=channels),
-            get_act(act_type),
         )
         # create the two heads which will be used in the hybrid fwd pass
-        self.value_head = _ValueHead(board_height, board_width, channels, channels_value_head, value_fc_size, bn_mom, act_type)
-        self.policy_head = _PolicyHead(board_height, board_width, channels, channels_policy_head, n_labels,
+        self.value_head = _ValueHead(board_height, board_width, channels*2, channels_value_head, value_fc_size, bn_mom, act_type)
+        self.policy_head = _PolicyHead(board_height, board_width, channels*2, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
     def forward(self, x):
