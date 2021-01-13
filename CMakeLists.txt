@@ -33,7 +33,7 @@ include_directories("$ENV{CONDA_ENV_PATH}/include")
 add_definitions(-DMODE_POMMERMAN)
 # add_definitions(-DDISABLE_UCI_INFO)  # optional
 add_definitions(-DMCTS_STORE_STATES)
-
+add_definitions(-DMCTS_SINGLE_PLAYER)
 
 check_env_defined("BLAZE_PATH")
 include_directories("$ENV{BLAZE_PATH}/include")
