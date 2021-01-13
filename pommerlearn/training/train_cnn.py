@@ -15,18 +15,16 @@ from nn.a0_resnet import AlphaZeroResnet, init_weights
 from nn.rise_mobile_v3 import RiseV3
 import numpy as np
 import torch
-from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from sklearn.model_selection import train_test_split
 from pathlib import Path
 from torch.optim.optimizer import Optimizer
-from torch.nn.functional import kl_div
 
 from training.loss.cross_entropy_continious import CrossEntropyLossContinious
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
-from dataset_util import get_value_target
+from dataset_util import create_data_loaders, log_dataset_stats
+from training.metrics import Metrics
 
 
 def create_model(train_config):
@@ -53,16 +51,11 @@ def create_optimizer(model: nn.Module, train_config: dict):
 
 
 def train_cnn(train_config):
-    z = zarr.open(train_config["dataset_path"], 'r')
-    z_samples = z.attrs["Steps"]
-
-    print(f"Opened dataset with {z_samples} samples from {len(z.attrs['EpisodeSteps'])} episodes")
-
     use_cuda = torch.cuda.is_available()
     print(f"CUDA enabled: {use_cuda}")
 
-    value_target = get_value_target(z, train_config["discount_factor"])
-    train_loader, val_loader = prepare_dataset(z, value_target, train_config["test_size"], train_config["batch_size"])
+    train_loader, val_loader = create_data_loaders(train_config["dataset_path"], train_config["discount_factor"],
+                                                   train_config["test_size"], train_config["batch_size"])
 
     input_shape, model = create_model(train_config)
 
@@ -91,7 +84,7 @@ def train_cnn(train_config):
     iteration = train_config["iteration"]
 
     log_config(train_config, log_dir, iteration)
-    log_dataset_stats(z, log_dir, iteration)
+    log_dataset_stats(train_config["dataset_path"], log_dir, iteration)
 
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
@@ -236,44 +229,6 @@ def export_as_script_module(model, dummy_input, dir) -> None:
     traced_script_module.save(str(dir / Path(f"model-bsize-{dummy_input.size(0)}.pt")))
 
 
-class Metrics:
-    """
-    Class which stores metric attributes as a struct
-    """
-    def __init__(self):
-        self.correct_cnt = 0
-        self.total_cnt = 0
-        self.sum_combined_loss = 0
-        self.sum_policy_loss = 0
-        self.sum_policy_kl = 0
-        self.sum_value_loss = 0
-        self.steps = 0
-
-    def reset(self):
-        self.correct_cnt = 0
-        self.total_cnt = 0
-        self.sum_combined_loss = 0
-        self.sum_policy_loss = 0
-        self.sum_policy_kl = 0
-        self.sum_value_loss = 0
-        self.steps = 0
-
-    def combined_loss(self):
-        return self.sum_combined_loss / self.steps
-
-    def value_loss(self):
-        return self.sum_value_loss / self.steps
-
-    def policy_loss(self):
-        return self.sum_policy_loss / self.steps
-
-    def policy_kl(self):
-        return self.sum_policy_kl / self.steps
-
-    def policy_acc(self):
-        return self.correct_cnt / self.total_cnt
-
-
 def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss, fit_pol_dist,
                  value_loss_ratio, train_loader, val_loader, use_cuda, log_dir, global_step=0):
     """
@@ -322,7 +277,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
             model.train()
             x_train, ya_train, yp_train = Variable(x_train), Variable(ya_train), Variable(yp_train)
-            combined_loss = update_metrics(m_train, model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
+            combined_loss = m_train.update(model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
                                            ya_train, yp_train, fit_pol_dist)
 
             combined_loss.backward()
@@ -342,7 +297,7 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                       f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f}'
 
                 # TODO: Log metric in every step
-                log_metrics(writer_train, m_train, global_step)
+                m_train.log_to_tensorboard(writer_train, global_step)
                 m_train.reset()
 
                 if val_loader is not None:
@@ -350,7 +305,8 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                     # print validation stats
                     m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda,
                                          val_loader)
-                    log_metrics(writer_val, m_val, global_step)
+
+                    m_val.log_to_tensorboard(writer_val, global_step)
                     msg += f', val value loss: {m_val.value_loss():5f}, val policy loss: {m_val.policy_loss():5f},'\
                            f' val policy acc: {m_val.policy_acc():5f}'
 
@@ -367,69 +323,6 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
         writer_val.close()
 
     return global_step
-
-
-def log_metrics(writer, metrics, global_step) -> None:
-    """
-    Logs all metrics to Tensorboard at the current global step.
-
-    :param global_step: Global step of batch update
-    :param metrics: Metrics which shall be logged
-    :param writer: Tensorobard writer handle
-    :return:
-    """
-
-    writer.add_scalar('Loss/Value', metrics.value_loss(), global_step)
-    writer.add_scalar('Loss/Policy', metrics.policy_loss(), global_step)
-    writer.add_scalar('Loss/Combined', metrics.combined_loss(), global_step)
-
-    writer.add_scalar('Policy/Accuracy', metrics.policy_acc(), global_step)
-    writer.add_scalar('Policy/KL divergence', metrics.policy_kl(), global_step)
-
-    writer.flush()
-
-
-def update_metrics(metric, model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train, ya_train, yp_train,
-                   fit_pol_dist):
-    """
-    Updates the metrics and calculates the combined loss
-
-    :param metric: Metric object
-    :param model: Model to optimize
-    :param policy_loss: Policy loss object
-    :param value_loss: Value loss object
-    :param value_loss_ratio: Value loss ratio
-    :param x_train: Training samples
-    :param yv_train: Target labels for value
-    :param ya_train: Target labels for policy
-    :param yp_train: Target policy distribution
-    :param fit_pol_dist: Whether to use the policy distribution for the policy loss target
-    :return: The combined loss
-    """
-
-    # get the combined loss
-    value_out, policy_out = model(x_train)
-    # TODO: Improve code design, this should be handled automatically
-    if fit_pol_dist:
-        cur_policy_loss = policy_loss(policy_out, yp_train)
-    else:
-        cur_policy_loss = policy_loss(policy_out, ya_train)
-
-    cur_value_loss = value_loss(value_out.view(-1), yv_train)
-    combined_loss = (1 - value_loss_ratio) * cur_policy_loss + value_loss_ratio * cur_value_loss
-
-    # update metrics
-    _, pred_label = torch.max(policy_out.data, 1)
-    metric.total_cnt += x_train.data.size()[0]
-    metric.correct_cnt += float((pred_label == ya_train.data).sum())
-    metric.sum_policy_loss += float(cur_policy_loss.data)
-    kl_value = kl_div(torch.nn.functional.log_softmax(policy_out, dim=1), yp_train, reduction='batchmean')
-    metric.sum_policy_kl += float(kl_value)
-    metric.sum_value_loss += float(cur_value_loss.data)
-    metric.sum_combined_loss += float(combined_loss.data)
-    metric.steps += 1
-
-    return combined_loss
 
 
 def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda, data_loader) -> Metrics:
@@ -454,113 +347,9 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
 
         x, ya_val = Variable(x, requires_grad=False), Variable(ya_val, requires_grad=False)
 
-        update_metrics(m_val, model, policy_loss, value_loss, value_loss_ratio, x, yv_val, ya_val, yp_val,
-                       fit_pol_dist)
+        m_val.update(model, policy_loss, value_loss, value_loss_ratio, x, yv_val, ya_val, yp_val, fit_pol_dist)
 
     return m_val
-
-
-def split_based_on_idx(array: np.ndarray, split_idx: int) -> (np.ndarray, np.ndarray):
-    """
-    Splits a given array into two halves at the given split index and returns the first and second half
-    :param array: Array to be split
-    :param split_idx: Index where to split
-    :return: 1st half, 2nd half after the split
-    """
-    return array[:split_idx], array[split_idx:]
-
-
-def prepare_dataset(z, value_target: np.ndarray, test_size: float, batch_size: int) \
-        -> [DataLoader, DataLoader]:
-    """
-    Returns pytorch dataset loaders for a given zarr dataset object
-
-    :param z: Loaded zarr dataset object
-    :param value_target: The value target for all steps in the dataset
-    :param test_size: Percentage of data to use for testing
-    :param batch_size: Batch size to use for training
-    :return: Training loader, Validation loader
-    """
-
-    z_steps = z.attrs['Steps']
-    obs = z['obs'][:z_steps]
-    act = z['act'][:z_steps]
-    pol = z['pol'][:z_steps]
-    if len(value_target) != z_steps:
-        raise ValueError(f"Value target size does not match dataset size! Got {len(value_target)}, expected {z_steps}.")
-
-    def get_loader(x, yv, ya, yp):
-        x = torch.Tensor(x)
-        yv = torch.Tensor(yv)
-        ya = torch.Tensor(ya).long()
-        yp = torch.Tensor(yp)
-        return DataLoader(TensorDataset(x, yv, ya, yp), batch_size=batch_size, shuffle=True)
-
-    if test_size == 0:
-        return get_loader(obs, value_target, act, pol), None
-
-    if 0 < test_size < 1:
-        split_idx = len(obs) - int(test_size * len(obs))
-        x_train, x_val = split_based_on_idx(obs, split_idx)
-        yv_train, yv_val = split_based_on_idx(value_target, split_idx)
-        ya_train, ya_val = split_based_on_idx(act, split_idx)
-        yp_train, yp_val = split_based_on_idx(pol, split_idx)
-        return get_loader(x_train, yv_train, ya_train, yp_train), get_loader(x_val, yv_val, ya_val, yp_val)
-
-    raise ValueError(f"Incorrect test size: {test_size}")
-
-
-def log_dataset_stats(z, log_dir, iteration):
-    """
-    Log dataset stats to tensorboard.
-
-    :param z: The zarr dataset
-    :param log_dir: The logdir of the summary writer
-    :param iteration: The iteration this dataset belongs to
-    """
-    writer = SummaryWriter(log_dir=log_dir)
-
-    z_steps = z.attrs['Steps']
-    steps = np.array(z.attrs["EpisodeSteps"])
-    winners = np.array(z.attrs["EpisodeWinner"])
-    done = np.array(z.attrs["EpisodeDone"])
-    actions = z.attrs["EpisodeActions"]
-
-    pol = z['pol'][:z_steps]
-    pol_entropy = -np.sum(pol * np.log(pol, out=np.zeros_like(pol), where=(pol != 0)), axis=1)
-    writer.add_scalar("Dataset/Policy entropy mean", pol_entropy.mean(), iteration)
-    writer.add_scalar("Dataset/Policy entropy std", pol_entropy.std(), iteration)
-    writer.add_text("Dataset/Policy NaN", str(np.isnan(pol).any()), iteration)
-
-    num_episodes = len(steps)
-
-    writer.add_scalar("Dataset/Episodes", num_episodes, iteration)
-    writer.add_scalar("Dataset/Steps mean", steps.mean(), iteration)
-    writer.add_scalar("Dataset/Steps std", steps.std(), iteration)
-
-    for a in range(0, 4):
-        winner_a = np.sum(winners[:] == a)
-        writer.add_scalar(f"Dataset/Win ratio {a}", winner_a / num_episodes, iteration)
-
-        actions_a = []
-        episode_steps = np.empty(len(actions))
-        for i, ep in enumerate(actions):
-            ep_actions = ep[a]
-            episode_steps[i] = len(ep_actions)
-            actions_a += ep_actions
-
-        writer.add_scalar(f"Dataset/Steps mean {a}", episode_steps.mean(), iteration)
-
-        # TODO: Correct bin borders
-        writer.add_histogram(f"Dataset/Actions {a}", np.array(actions_a), iteration)
-
-    no_winner = np.sum((winners == -1) * (done == True))
-    writer.add_scalar(f"Dataset/Draw ratio", no_winner / num_episodes, iteration)
-
-    not_done = np.sum(done == False)
-    writer.add_scalar(f"Dataset/Not done ratio", not_done / num_episodes, iteration)
-
-    writer.close()
 
 
 def log_config(train_config, log_dir, iteration):
@@ -586,7 +375,7 @@ def fill_default_config(train_config):
         "output_dir": "./model",
         "model_batch_sizes": [1, 8],
         # hyperparameters
-        "discount_factor": 1,
+        "discount_factor": 0.9,
         "min_lr": 0.0001,
         "max_lr": 0.05,
         "min_momentum": 0.8,
