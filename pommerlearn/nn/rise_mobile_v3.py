@@ -21,7 +21,7 @@ Influenced by the following papers:
 
 """
 from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module
-from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem
+from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se
 
 
 class _PreactResidualMixConvBlock(Module):
@@ -60,17 +60,20 @@ class _PreactResidualMixConvBlock(Module):
 
 class _BottlekneckResidualBlock(Module):
 
-    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', use_se=False, bn_mom=0.9):
+    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', se_type=None, bn_mom=0.9):
         """
         Returns a residual block without any max pooling operation
         :param channels: Number of filters for all CNN-layers
         :param name: Name for the residual block
         :param act_type: Activation function to use
-        :param use_se: Boolean if a squeeze excitation module will be used
+        :param se_type: Squeeze excitation module that will be used
         :return: symbol
         """
         super(_BottlekneckResidualBlock, self).__init__()
 
+        self.se_type = se_type
+        if se_type:
+            self.se = get_se(se_type=se_type, channels=channels, use_hard_sigmoid=False)
         self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
                                BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
                                get_act(act_type),
@@ -86,22 +89,26 @@ class _BottlekneckResidualBlock(Module):
         :param x: Input data to the block
         :return: Activation maps of the block
         """
+        if self.se_type:
+            return x + self.body(self.se(x))
         return x + self.body(x)
 
 
 class _StridedBottlekneckBlock(Module):
 
-    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', use_se=False, bn_mom=0.9):
+    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', se_type=None, bn_mom=0.9):
         """
         Returns a residual block without any max pooling operation
         :param channels: Number of filters for all CNN-layers
         :param name: Name for the residual block
         :param act_type: Activation function to use
-        :param use_se: Boolean if a squeeze excitation module will be used
+        :param se_type: Squeeze excitation module that will be used
         :return: symbol
         """
         super(_StridedBottlekneckBlock, self).__init__()
-
+        self.use_se = se_type
+        if se_type:
+            self.se = get_se(se_type=se_type, channels=channels, use_hard_sigmoid=False)
         self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
                                BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
                                get_act(act_type),
@@ -118,6 +125,8 @@ class _StridedBottlekneckBlock(Module):
         :param x: Input data to the block
         :return: Activation maps of the block
         """
+        if self.use_se:
+            return self.body(self.se(x))
         return self.body(x)
 
 
@@ -180,23 +189,23 @@ class RiseV3(Module):
             if use_downsampling and idx >= len(kernels) / 2:
                 use_downsampling = False
                 res_blocks.append(_StridedBottlekneckBlock(channels=channels, channels_operating=channels_operating*2,
-                                                            kernel=cur_kernel, act_type=act_type,
-                                                            use_se=False, bn_mom=bn_mom))
+                                                           kernel=cur_kernel, act_type=act_type,
+                                                           se_type=se_types[idx], bn_mom=bn_mom))
                 expansion_factor = 2
                 board_width = round(board_width * 0.5)
                 board_height = round(board_height * 0.5)
             else:
                 res_blocks.append(_BottlekneckResidualBlock(channels=channels*expansion_factor, channels_operating=channels_operating*expansion_factor,
                                                             kernel=cur_kernel, act_type=act_type,
-                                                            use_se=False, bn_mom=bn_mom))
+                                                            se_type=se_types[idx], bn_mom=bn_mom))
 
         self.body = Sequential(
             _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
             *res_blocks,
         )
         # create the two heads which will be used in the hybrid fwd pass
-        self.value_head = _ValueHead(board_height, board_width, channels*2, channels_value_head, value_fc_size, bn_mom, act_type)
-        self.policy_head = _PolicyHead(board_height, board_width, channels*2, channels_policy_head, n_labels,
+        self.value_head = _ValueHead(board_height, board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
+        self.policy_head = _PolicyHead(board_height, board_width, channels*expansion_factor, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
     def forward(self, x):

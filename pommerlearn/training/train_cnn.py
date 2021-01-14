@@ -35,7 +35,7 @@ def create_model(train_config):
                                 board_height=input_shape[2])
     elif train_config["model"] == "risev3":
         kernels = [3] * 4
-        se_types = [None] * 4
+        se_types = [train_config["se_type"]] * 4
         model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
                        channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
                        act_type="relu", use_downsampling=train_config["use_downsampling"])
@@ -403,6 +403,7 @@ def fill_default_config(train_config):
         "iteration": 0,
         "global_step": 0,
         "use_downsampling": False,
+        "se_type": None,
     }
 
     for key in train_config:

@@ -1,11 +1,10 @@
 """
 Utility methods for building the neural network architectures.
 """
-from typing import Any
-
+import math
 import torch
-from torch.nn import Sequential, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish,\
-    Module
+from torch.nn import Sequential, Conv1d, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish,\
+    Module, AdaptiveAvgPool2d
 
 
 def get_act(act_type):
@@ -23,6 +22,88 @@ def get_act(act_type):
     if act_type == "hard_swish":
         return Hardswish()
     raise NotImplementedError
+
+
+def get_se(se_type, channels, use_hard_sigmoid=False):
+    """Wrapper method for different squeeze excitation types"""
+    if se_type == "ca_se":
+        return _ChannelAttentionModule(channels=channels, use_hard_sigmoid=use_hard_sigmoid)
+    if se_type == "eca_se":
+        return _EfficientChannelAttentionModule(channels=channels, use_hard_sigmoid=use_hard_sigmoid)
+    raise NotImplementedError
+
+
+class _EfficientChannelAttentionModule(torch.nn.Module):
+    def __init__(self, channels, gamma=2, b=1, use_hard_sigmoid=False):
+        """
+        ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks - Wang et al. - https://arxiv.org/pdf/1910.03151.pdf
+        :param channels: Number of channels for 1st conv operation
+        :param bn_mom: Batch normalization momentum parameter
+        :param act_type: Activation type to use
+        :param nb_input_channels: Number of input channels of the board representation
+        """
+        super(_EfficientChannelAttentionModule, self).__init__()
+        t = int(abs((math.log(channels, 2) + b) / gamma))
+        kernel = t if t % 2 else t + 1
+
+        if use_hard_sigmoid:
+            act_type = "hard_sigmoid"
+        else:
+            act_type = "sigmoid"
+        self.avg_pool = AdaptiveAvgPool2d(1)
+        self.body = Sequential(
+            Conv1d(in_channels=channels, out_channels=channels, kernel_size=kernel, padding=kernel//2, stride=1,
+                   bias=True),
+            get_act(act_type))
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+        batch_size, channels, _, _ = x.size()
+        out = self.avg_pool(x).view(batch_size, channels, 1)
+        out = self.body(out).view(batch_size, channels, 1, 1)
+        return x * out.expand_as(x)
+
+
+class _ChannelAttentionModule(torch.nn.Module):
+    def __init__(self, channels, reduction=2, use_hard_sigmoid=False):
+        """
+        Channel-wise attention module, Squeeze-and-Excitation Networks Jie Hu1, Li Shen, Gang Sun - https://arxiv.org/pdf/1709.01507v2.pdf
+        :param channels: Number of input channels
+        :param reduction: Reduction factor for the number of hidden units
+        """
+        super(_ChannelAttentionModule, self).__init__()
+
+        if use_hard_sigmoid:
+            act_type = "hard_sigmoid"
+        else:
+            act_type = "sigmoid"
+        self.avg_pool = AdaptiveAvgPool2d(1)
+        self.body = Sequential(
+            Conv1d(in_channels=channels, out_channels=channels, kernel_size=kernel, padding=kernel//2, stride=1,
+                   bias=True),
+            get_act("sigmoid"))
+
+        self.fc = Sequential(
+            Linear(channels, channels // reduction, bias=False),
+            ReLU(inplace=True),
+            Linear(channels // reduction, channels, bias=False),
+            get_act(act_type)
+        )
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+        batch_size, channels, _, _ = x.size()
+        y = self.avg_pool(x).view(batch_size, channels)
+        y = self.fc(y).view(batch_size, channels, 1, 1)
+        return x * y.expand_as(x)
 
 
 class MixConv(Module):
