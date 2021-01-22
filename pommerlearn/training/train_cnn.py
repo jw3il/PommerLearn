@@ -374,6 +374,17 @@ def log_config(train_config, log_dir, iteration):
 
 
 def fill_default_config(train_config):
+    default_data_transform = RandomTransform(
+        Identity(),
+        Rotate90(1),
+        Rotate90(2),
+        Rotate90(3),
+        FlipX(),
+        ComposeTransform(FlipX(), Rotate90(1)),
+        ComposeTransform(FlipX(), Rotate90(2)),
+        ComposeTransform(FlipX(), Rotate90(3)),
+    )
+
     default_config = {
         # input
         # dataset_path: The path information of the zarr dataset(s) which will be used. Should be a single string
@@ -381,7 +392,7 @@ def fill_default_config(train_config):
         # 0 <= proportion <= 1 is the proportion of total samples which will be selected from this data set.
         # Examples: "data_0.zr", [("data_0.zr", 0.25), ("data_1.zr", 0.5), "data_2.zr"]
         "dataset_path": "data_0.zr",
-        "dataset_train_transform": None, # RandomTransform(Identity(), FlipX(), FlipY(), ComposeTransform(FlipX(), FlipY()))
+        "dataset_train_transform": default_data_transform, # None
         "torch_input_dir": None,
         # output
         "output_dir": "./model",
