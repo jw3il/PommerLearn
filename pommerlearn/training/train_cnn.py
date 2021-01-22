@@ -11,6 +11,8 @@ import zarr
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
+
+from data_augmentation import *
 from nn.a0_resnet import AlphaZeroResnet, init_weights
 from nn.rise_mobile_v3 import RiseV3
 import numpy as np
@@ -56,7 +58,8 @@ def train_cnn(train_config):
     print(f"CUDA enabled: {use_cuda}")
 
     train_loader, val_loader = create_data_loaders(train_config["dataset_path"], train_config["discount_factor"],
-                                                   train_config["test_size"], train_config["batch_size"])
+                                                   train_config["test_size"], train_config["batch_size"],
+                                                   train_config["batch_size_test"], train_config["dataset_train_transform"])
 
     input_shape, model = create_model(train_config)
 
@@ -371,6 +374,17 @@ def log_config(train_config, log_dir, iteration):
 
 
 def fill_default_config(train_config):
+    default_data_transform = RandomTransform(
+        Identity(),
+        Rotate90(1),
+        Rotate90(2),
+        Rotate90(3),
+        FlipX(),
+        ComposeTransform(FlipX(), Rotate90(1)),
+        ComposeTransform(FlipX(), Rotate90(2)),
+        ComposeTransform(FlipX(), Rotate90(3)),
+    )
+
     default_config = {
         # input
         # dataset_path: The path information of the zarr dataset(s) which will be used. Should be a single string
@@ -378,6 +392,7 @@ def fill_default_config(train_config):
         # 0 <= proportion <= 1 is the proportion of total samples which will be selected from this data set.
         # Examples: "data_0.zr", [("data_0.zr", 0.25), ("data_1.zr", 0.5), "data_2.zr"]
         "dataset_path": "data_0.zr",
+        "dataset_train_transform": default_data_transform, # None
         "torch_input_dir": None,
         # output
         "output_dir": "./model",
@@ -394,6 +409,7 @@ def fill_default_config(train_config):
         "value_loss_ratio": 0.1,
         "test_size": 0.2,
         "batch_size": 128,
+        "batch_size_test": 128,
         "random_state":  42,
         "nb_epochs":  10,
         "model": "a0",  # "a0", "risev3"

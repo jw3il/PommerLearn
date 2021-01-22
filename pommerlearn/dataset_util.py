@@ -1,30 +1,40 @@
+from collections import namedtuple
 from pathlib import Path
-from typing import List, Union, Tuple, Optional
+from typing import List, Union, Tuple, Optional, NamedTuple
 
 import numpy as np
 import torch
 from pommerman import constants
 import zarr
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, Dataset
 from torch.utils.tensorboard import SummaryWriter
+from data_augmentation import *
 
 
-class Samples:
+class PommerDataset(Dataset):
     """
-    A container for all samples which belong to a data set.
+    A pommerman dataset.
     """
-
-    def __init__(self, obs: np.ndarray, val: np.ndarray, act: np.ndarray, pol: np.ndarray):
+    def __init__(self, obs, val, act, pol, transform=None):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
+
+        if isinstance(obs, np.ndarray):
+            self.dtype = np.ndarray
+        elif isinstance(obs, torch.Tensor):
+            self.dtype = torch.Tensor
+        else:
+            assert False, "Invalid data type!"
 
         self.obs = obs
         self.val = val
         self.act = act
         self.pol = pol
 
+        self.transform = transform
+
     @staticmethod
-    def from_zarr(path: Path, discount_factor: float, verbose: bool = False):
+    def from_zarr(path: Path, discount_factor: float, transform=None, verbose: bool = False):
         z = zarr.open(str(path), 'r')
 
         if verbose:
@@ -40,10 +50,10 @@ class Samples:
         act = z['act'][:z_steps]
         pol = z['pol'][:z_steps]
 
-        return Samples(obs, value_target, act, pol)
+        return PommerDataset(obs, value_target, act, pol, transform)
 
     @staticmethod
-    def create_empty(count):
+    def create_empty(count, transform=None):
         """
         Create an empty sample container.
 
@@ -54,7 +64,7 @@ class Samples:
         act = np.empty(count, dtype=int)
         pol = np.empty((count, 6), dtype=float)
 
-        return Samples(obs, val, act, pol)
+        return PommerDataset(obs, val, act, pol, transform)
 
     def split_based_on_idx(self, split_idx: int, from_idx: int = 0, to_idx: int = None):
         """
@@ -74,17 +84,17 @@ class Samples:
         act_1, act_2 = split_arr_based_on_idx(self.act[from_idx:to_idx], split_idx)
         pol_1, pol_2 = split_arr_based_on_idx(self.pol[from_idx:to_idx], split_idx)
 
-        first = Samples(obs_1, val_1, act_1, pol_1)
-        second = Samples(obs_2, val_2, act_2, pol_2)
+        first = PommerDataset(obs_1, val_1, act_1, pol_1)
+        second = PommerDataset(obs_2, val_2, act_2, pol_2)
         return first, second
 
-    def to_tensor_dataset(self):
-        obs_prime = torch.Tensor(self.obs)
-        val_prime = torch.Tensor(self.val)
-        act_prime = torch.Tensor(self.act).long()
-        pol_prime = torch.Tensor(self.pol)
+    def as_tensor(self):
+        obs_prime = torch.as_tensor(self.obs, dtype=torch.float)
+        val_prime = torch.as_tensor(self.val, dtype=torch.float)
+        act_prime = torch.as_tensor(self.act, dtype=torch.int)
+        pol_prime = torch.as_tensor(self.pol, dtype=torch.float)
 
-        return TensorDataset(obs_prime, val_prime, act_prime, pol_prime)
+        return PommerDataset(obs_prime, val_prime, act_prime, pol_prime, transform=self.transform)
 
     def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None):
         """
@@ -128,6 +138,17 @@ class Samples:
 
     def __len__(self):
         return len(self.obs)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        sample = PommerSample(self.obs[idx], self.val[idx], self.act[idx], self.pol[idx])
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        return sample
 
 
 def get_agent_actions(z, episode):
@@ -233,7 +254,8 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
 
 
 def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], discount_factor: float,
-                        test_size: float, batch_size: int, verbose: bool = True) -> [DataLoader, DataLoader]:
+                        test_size: float, batch_size: int, batch_size_test: int, train_transform = None,
+                        verbose: bool = True) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
 
@@ -243,6 +265,8 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     :param discount_factor: The discount factor which should be used
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
+    :param batch_size_test: Batch size to use for testing
+    :param train_transform: Data transformation for train data loading
     :param verbose: Log debug information
     :return: Training loader, validation loader
     """
@@ -281,18 +305,18 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         print(f"Loading {total_train_samples + total_test_samples} samples from {len(path_infos)} dataset(s) with "
               f"test size {test_size}")
 
-    buffer_train = Samples.create_empty(total_train_samples)
-    buffer_test = Samples.create_empty(total_test_samples)
+    data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform)
+    data_test = PommerDataset.create_empty(total_test_samples)
 
     # create a container for all samples
     if verbose:
-        print(f"Created buffers with (train: {len(buffer_train)}, test: {len(buffer_test)}) samples")
+        print(f"Created containers with (train: {len(data_train)}, test: {len(data_test)}) samples")
 
     buffer_train_idx = 0
     buffer_test_idx = 0
     for info in path_infos:
         path, proportion = get_elems(info)
-        elem_samples = Samples.from_zarr(path, discount_factor, verbose)
+        elem_samples = PommerDataset.from_zarr(path, discount_factor, verbose)
 
         assert 0 <= proportion <= 1, f"Invalid proportion {proportion}"
 
@@ -311,8 +335,9 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         test_nb = int(elem_samples_nb * test_size)
         train_nb = elem_samples_nb - test_nb
 
-        buffer_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb)
-        buffer_test.set(elem_samples, buffer_test_idx, elem_samples_from + train_nb, test_nb)
+        data_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb)
+        data_test.set(elem_samples, buffer_test_idx, elem_samples_from + train_nb, test_nb)
+        del elem_samples
 
         # copy first num_samples samples
         if verbose:
@@ -326,14 +351,14 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         f"The number of copied samples is wrong.. " \
         f"{(buffer_train_idx, total_train_samples, buffer_test_idx, total_test_samples)}"
 
-    def get_loader(samples: Samples):
-        return DataLoader(samples.to_tensor_dataset(), batch_size=batch_size, shuffle=True)
-
     if verbose:
         print("Creating DataLoaders..", end='')
 
-    train_loader = get_loader(buffer_train)
-    test_loader = get_loader(buffer_test) if total_test_samples > 0 else None
+    data_train = data_train.as_tensor()
+    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=2)
+
+    data_test = data_test.as_tensor()
+    test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=2) if total_test_samples > 0 else None
 
     if verbose:
         print(" done.")
