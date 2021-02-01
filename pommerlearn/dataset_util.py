@@ -19,11 +19,10 @@ class PommerDataset(Dataset):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
 
-        if isinstance(obs, np.ndarray):
-            self.dtype = np.ndarray
-        elif isinstance(obs, torch.Tensor):
-            self.dtype = torch.Tensor
-        else:
+        if not isinstance(obs, np.ndarray)\
+                or not isinstance(val, np.ndarray)\
+                or not isinstance(act, np.ndarray)\
+                or not isinstance(pol, np.ndarray):
             assert False, "Invalid data type!"
 
         self.obs = obs
@@ -88,14 +87,6 @@ class PommerDataset(Dataset):
         second = PommerDataset(obs_2, val_2, act_2, pol_2)
         return first, second
 
-    def as_tensor(self):
-        obs_prime = torch.as_tensor(self.obs, dtype=torch.float)
-        val_prime = torch.as_tensor(self.val, dtype=torch.float)
-        act_prime = torch.as_tensor(self.act, dtype=torch.int)
-        pol_prime = torch.as_tensor(self.pol, dtype=torch.float)
-
-        return PommerDataset(obs_prime, val_prime, act_prime, pol_prime, transform=self.transform)
-
     def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None):
         """
         Sets own_samples[to_index:to_index + count] = other_samples[from_index:from_index + count].
@@ -112,30 +103,6 @@ class PommerDataset(Dataset):
         self.act[to_index:to_index + count] = other_samples.act[from_index:from_index + count]
         self.pol[to_index:to_index + count] = other_samples.pol[from_index:from_index + count]
 
-    def append(self, other_samples):
-        """
-        Appends samples to this sample object.
-
-        :param other_samples: The samples which should be appended to this sample object
-        """
-
-        self.obs = np.append(self.obs, other_samples.obs, axis=0)
-        self.val = np.append(self.val, other_samples.val, axis=0)
-        self.act = np.append(self.act, other_samples.act, axis=0)
-        self.pol = np.append(self.pol, other_samples.pol, axis=0)
-
-    def shuffle(self):
-        random_state = np.random.get_state()
-
-        def deterministic_shuffle(arr):
-            np.random.set_state(random_state)
-            np.random.shuffle(arr)
-
-        deterministic_shuffle(self.obs)
-        deterministic_shuffle(self.val)
-        deterministic_shuffle(self.act)
-        deterministic_shuffle(self.val)
-
     def __len__(self):
         return len(self.obs)
 
@@ -143,7 +110,12 @@ class PommerDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample = PommerSample(self.obs[idx], self.val[idx], self.act[idx], self.pol[idx])
+        sample = PommerSample(
+            torch.tensor(self.obs[idx], dtype=torch.float),
+            torch.tensor(self.val[idx], dtype=torch.float),
+            torch.tensor(self.act[idx], dtype=torch.int),
+            torch.tensor(self.pol[idx], dtype=torch.float),
+        )
 
         if self.transform is not None:
             sample = self.transform(sample)
@@ -354,10 +326,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     if verbose:
         print("Creating DataLoaders..", end='')
 
-    data_train = data_train.as_tensor()
     train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=2)
-
-    data_test = data_test.as_tensor()
     test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=2) if total_test_samples > 0 else None
 
     if verbose:
