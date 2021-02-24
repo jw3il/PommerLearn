@@ -225,9 +225,17 @@ def export_to_onnx(model, dummy_input, dir) -> None:
     :param dummy_input: Dummy input which defines the input shape for the model
     :return:
     """
-    input_names = ["data"]
-    output_names = ["value_out", "policy_out"]
-    torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{dummy_input.size(0)}.onnx")), input_names=input_names,
+    batch_size = dummy_input.size(0)
+
+    if model.is_stateful:
+        input_names = ["data", "state"]
+        output_names = ["value_out", "policy_out", "next_state"]
+        dummy_input = (dummy_input, model.get_init_state(batch_size, "cpu"))
+    else:
+        input_names = ["data"]
+        output_names = ["value_out", "policy_out"]
+
+    torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{batch_size}.onnx")), input_names=input_names,
                       output_names=output_names)
 
 

@@ -44,29 +44,30 @@ class SimpleLSTM(PommerModel):
         ), input_dims=4)
 
     def get_init_state(self, batch_size: int, device):
-        return (
-            torch.zeros((self.lstm.num_layers, batch_size, self.lstm.hidden_size), requires_grad=False).to(device),
-            torch.zeros((self.lstm.num_layers, batch_size, self.lstm.hidden_size), requires_grad=False).to(device)
-        )
+        # (h0, c0) as single tensor
+        return torch.zeros(self.get_state_shape(batch_size), requires_grad=False).to(device)
+
+    def get_state_shape(self, batch_size: int):
+        return 2, self.lstm.num_layers, batch_size, self.lstm.hidden_size
 
     def forward(self, x: torch.Tensor, hidden_state: torch.Tensor = None):
-        # batch without seq: 4, batch & seq: 5,
+        # batch without seq: 4, batch & seq: 5
         single_input = len(x.shape) == 4
         if single_input:
-            # unsqueeze single input (add sequence dimension)
+            # unsqueeze single input (add sequence dimension) => process a batch of 1-element sequences
             x = x.unsqueeze(1)
-
-        # print("Input", x.shape)
 
         embedding = self.body(x)
 
-        # print("Embedding", embedding.shape)
+        if hidden_state is None:
+            output, next_hidden_state_pair = self.lstm(embedding)
+        else:
+            output, next_hidden_state_pair = self.lstm(embedding, (hidden_state[0], hidden_state[1]))
 
-        # TODO: CN and HN should be parameters!
-        output, next_hidden_state = self.lstm(embedding, hidden_state)
-        # print("Output", output.shape)
+        next_h = next_hidden_state_pair[0].unsqueeze(0)
+        next_c = next_hidden_state_pair[1].unsqueeze(0)
+        next_hidden_state = torch.cat((next_h, next_c), dim=0)
 
-        # TODO: Store hn and cn
         value = self.value_head(output)
         policy = self.policy_head(output)
 
