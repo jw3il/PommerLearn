@@ -20,8 +20,9 @@ Influenced by the following papers:
     https://arxiv.org/pdf/1807.06521.pdf
 
 """
-from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module
-
+from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module, Linear, BatchNorm1d
+from torch import split, cat
+from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se, _ValueHeadFlat, _PolicyHeadFlat
 from nn.PommerModel import PommerModel
 from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se, TimeDistributed
 
@@ -132,6 +133,52 @@ class _StridedBottlekneckBlock(Module):
         return self.body(x)
 
 
+class MLPBlock(Module):
+    def __init__(self, act_type='relu', bn_mom=0.9, in_features=256, out_features=256):
+        """
+        Simple multi layer perceptron block
+        :param act_type: Activation type
+        :param bn_mom: Batch momentum
+        :param in_features: Number of input features
+        :param out_features: Nubmer of output features
+        """
+        super(MLPBlock, self).__init__()
+
+        self.body = Sequential(
+            Linear(in_features=in_features, out_features=out_features),
+            BatchNorm1d(momentum=bn_mom, num_features=out_features),
+            get_act(act_type))
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+
+        return self.body(x)
+
+
+def _get_res_blocks(act_type, bn_mom, channels, channels_operating, kernels,
+                    se_types, use_downsampling):
+    """Helper function which generates the residual blocks for Risev3"""
+    res_blocks = []
+    expansion_factor = 1
+    for idx, cur_kernel in enumerate(kernels):
+        if use_downsampling and idx >= len(kernels) / 2:
+            use_downsampling = False
+            res_blocks.append(_StridedBottlekneckBlock(channels=channels, channels_operating=channels_operating * 2,
+                                                       kernel=cur_kernel, act_type=act_type,
+                                                       se_type=se_types[idx], bn_mom=bn_mom))
+            expansion_factor = 2
+        else:
+            res_blocks.append(_BottlekneckResidualBlock(channels=channels * expansion_factor,
+                                                        channels_operating=channels_operating * expansion_factor,
+                                                        kernel=cur_kernel, act_type=act_type,
+                                                        se_type=se_types[idx], bn_mom=bn_mom))
+    return res_blocks
+
+
 class RiseV3(PommerModel):
 
     def __init__(self, channels=128, nb_input_channels=18, channels_operating=256, act_type='relu',
@@ -139,7 +186,7 @@ class RiseV3(PommerModel):
                  select_policy_from_plane=False, kernels=None, n_labels=6, se_ratio=4,
                  se_types=None, use_avg_features=False, use_raw_features=False, value_nb_hidden=7,
                  value_fc_size_hidden=256, value_dropout=0.15, use_more_features=False, bn_mom=0.9,
-                 board_height=11, board_width=11, use_downsampling=True,
+                 board_height=11, board_width=11, use_downsampling=True, slice_scalars=False, nb_scalar_features=4,
                  ):
         """
         RISEv3 architecture
@@ -170,11 +217,18 @@ class RiseV3(PommerModel):
         :param use_avg_features: If true the value head receives the avg of the each channel of the original input
         :param use_raw_features: If true the value receives the raw features of the pieces positions one hot encoded
         :param value_nb_hidden: Number of hidden layers of the vlaue head
+        :param use_downsampling: If true in the middle of the network a strided convolution will be used to downsample
+         the spatial dimensionality and the number of channels will be doubled.
+        :param slice_scalars: If true, the scalar features will be sliced and processed in an independent MLP.
+        Later the spatial and scalar embeddings will be merged again.
         :return: symbol
         """
         super(RiseV3, self).__init__(is_stateful=False)
 
         self.use_raw_features = use_raw_features
+        self.nb_input_channels = nb_input_channels
+        self.nb_scalar_features = nb_scalar_features
+        self.slice_scalars = slice_scalars
 
         if len(kernels) != len(se_types):
             raise Exception(f'The length of "kernels": {len(kernels)} must be the same as'
@@ -185,29 +239,39 @@ class RiseV3(PommerModel):
             if se_type not in valid_se_types:
                 raise Exception(f"Unavailable se_type: {se_type}. Available se_types include {se_types}")
 
-        res_blocks = []
-        expansion_factor = 1
-        for idx, cur_kernel in enumerate(kernels):
-            if use_downsampling and idx >= len(kernels) / 2:
-                use_downsampling = False
-                res_blocks.append(_StridedBottlekneckBlock(channels=channels, channels_operating=channels_operating*2,
-                                                           kernel=cur_kernel, act_type=act_type,
-                                                           se_type=se_types[idx], bn_mom=bn_mom))
-                expansion_factor = 2
-                board_width = round(board_width * 0.5)
-                board_height = round(board_height * 0.5)
-            else:
-                res_blocks.append(_BottlekneckResidualBlock(channels=channels*expansion_factor, channels_operating=channels_operating*expansion_factor,
-                                                            kernel=cur_kernel, act_type=act_type,
-                                                            se_type=se_types[idx], bn_mom=bn_mom))
+        res_blocks = _get_res_blocks(act_type, bn_mom, channels, channels_operating,
+                                          kernels, se_types, use_downsampling)
+        expansion_factor = 2 if use_downsampling else 1
+        if use_downsampling:
+            board_width = round(board_width * 0.5)
+            board_height = round(board_height * 0.5)
 
-        self.body = Sequential(
+        if self.slice_scalars:
+            nb_input_channels -= self.nb_scalar_features
+
+        self.body_spatial = Sequential(
             _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
             *res_blocks,
         )
+        if slice_scalars:
+            mlp_blocks = [MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
+                                   out_features=channels_operating)] * len(res_blocks)
+            self.body_scalars = Sequential(
+                MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_scalar_features,
+                         out_features=channels_operating),
+                *mlp_blocks,
+            )
+
         # create the two heads which will be used in the hybrid fwd pass
-        self.value_head = _ValueHead(board_height, board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
-        self.policy_head = _PolicyHead(board_height, board_width, channels*expansion_factor, channels_policy_head, n_labels,
+        if self.slice_scalars:
+            self.policy_embeddings_features = channels*board_height*board_width*expansion_factor
+            self.body_merged = MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating+self.policy_embeddings_features,
+                                        out_features=channels_operating*2)
+            self.value_head = _ValueHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type)
+            self.policy_head = _PolicyHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels)
+        else:
+            self.value_head = _ValueHead(board_height, board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
+            self.policy_head = _PolicyHead(board_height, board_width, channels*expansion_factor, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
     def forward(self, x):
@@ -217,7 +281,17 @@ class RiseV3(PommerModel):
         :param x: Input to the ResidualBlock
         :return: Value & Policy Output
         """
-        out = self.body(x)
+
+        if self.slice_scalars:
+            spatial_features, scalar_features = split(x, self.nb_input_channels-self.nb_scalar_features, 1)
+            scalar_features = scalar_features[:, :, 0, 0]  # slices the first entry of each plane along channels
+            out_spatial = self.body_spatial(spatial_features).view(-1, self.policy_embeddings_features)
+            out_scalar = self.body_scalars(scalar_features)
+            out = cat((out_spatial, out_scalar), 1)
+            out = self.body_merged(out)
+        else:
+            out = self.body_spatial(x)
+
         if self.use_raw_features:
             value = self.value_head(out, x)
         else:

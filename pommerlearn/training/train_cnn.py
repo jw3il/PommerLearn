@@ -34,14 +34,17 @@ def create_model(train_config):
     input_shape = (18, 11, 11)
     valid_models = ["a0", "risev3"]
     if train_config["model"] == "a0":
-        model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[2],
-                                board_height=input_shape[1])
+        model = AlphaZeroResnet(num_res_blocks=train_config["num_res_blocks"], nb_input_channels=input_shape[0], board_width=input_shape[2],
+                                board_height=input_shape[1], act_type=train_config["act_type"],
+                                channels_policy_head=["channels_policy_head"])
     elif train_config["model"] == "risev3":
-        kernels = [3] * 4
-        se_types = [train_config["se_type"]] * 4
+        kernels = [3] * train_config["num_res_blocks"]
+        se_types = [train_config["se_type"]] * train_config["num_res_blocks"]
         model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[2], board_height=input_shape[1],
                        channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
-                       act_type="relu", use_downsampling=train_config["use_downsampling"])
+                       act_type=train_config["act_type"], use_downsampling=train_config["use_downsampling"],
+                       channels_policy_head=train_config["channels_policy_head"],
+                       slice_scalars=train_config["slice_scalars"])
     elif train_config["model"] == "lstm":
         model = SimpleLSTM(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
                            num_res_blocks=3, hidden_size=256, lstm_num_layers=1)
@@ -509,7 +512,7 @@ def fill_default_config(train_config):
         # 0 <= proportion <= 1 is the proportion of total samples which will be selected from this data set.
         # Examples: "data_0.zr", [("data_0.zr", 0.25), ("data_1.zr", 0.5), "data_2.zr"]
         "dataset_path": "data_0.zr",
-        "dataset_train_transform": default_data_transform, # None
+        "dataset_train_transform": default_data_transform,  # None
         "torch_input_dir": None,
         # output
         "output_dir": "./model",
@@ -534,6 +537,10 @@ def fill_default_config(train_config):
         "fit_policy_distribution": True,
         "use_downsampling": True,
         "se_type": None,
+        "num_res_blocks": 4,
+        "act_type": "relu",
+        "channels_policy_head": 16,
+        "slice_scalars": False,
         # logging
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
         "iteration": 0,
