@@ -18,6 +18,9 @@ PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode):
     hasBufferedActions(false)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
+    if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
+        auxiliaryOutputs.resize(StateConstantsPommerman::NB_AUXILIARY_OUTPUTS());
+    }
 }
 
 void PommermanState::set_state(const bboard::State* state)
@@ -349,6 +352,9 @@ PommermanState* PommermanState::clone() const
         // we'll also use the agents in the clone
         clone->hasPlanningAgents = true;
     }
+    if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
+        clone->auxiliaryOutputs = auxiliaryOutputs;  // deep copy auxiliary outputs
+    }
     return clone;
 }
 
@@ -362,4 +368,11 @@ Tablebase::WDLScore PommermanState::check_for_tablebase_wdl(Tablebase::ProbeStat
 {
     result = Tablebase::FAIL;
     return Tablebase::WDLScoreNone;
+}
+
+void PommermanState::set_auxiliary_outputs(const float *auxiliaryOutputs)
+{
+    if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
+        std::copy(auxiliaryOutputs, auxiliaryOutputs+StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), this->auxiliaryOutputs.begin());
+    }
 }

@@ -7,7 +7,6 @@ Created on 16.06.20
 Basic training script to replicate behaviour of baseline agent
 """
 
-import zarr
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
@@ -25,7 +24,7 @@ from torch.optim.optimizer import Optimizer
 
 from nn.simple_lstm import SimpleLSTM
 from training.loss.cross_entropy_continious import CrossEntropyLossContinious
-from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
+from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
 from dataset_util import create_data_loaders, log_dataset_stats, get_last_dataset_path
 from training.metrics import Metrics
@@ -35,12 +34,12 @@ def create_model(train_config):
     input_shape = (18, 11, 11)
     valid_models = ["a0", "risev3"]
     if train_config["model"] == "a0":
-        model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[1],
-                                board_height=input_shape[2])
+        model = AlphaZeroResnet(num_res_blocks=3, nb_input_channels=input_shape[0], board_width=input_shape[2],
+                                board_height=input_shape[1])
     elif train_config["model"] == "risev3":
         kernels = [3] * 4
         se_types = [train_config["se_type"]] * 4
-        model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
+        model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[2], board_height=input_shape[1],
                        channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
                        act_type="relu", use_downsampling=train_config["use_downsampling"])
     elif train_config["model"] == "lstm":

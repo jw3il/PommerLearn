@@ -19,22 +19,25 @@
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
 {
 public:
-    static int BOARD_WIDTH() {
+    static uint BOARD_WIDTH() {
         return 11;
     }
-    static int BOARD_HEIGHT() {
+    static uint BOARD_HEIGHT() {
         return 11;
     }
-    static int NB_CHANNELS_TOTAL() {
+    static uint NB_CHANNELS_TOTAL() {
         return 18;
     }
-    static int NB_LABELS() {
+    static uint NB_LABELS() {
         return 6;
     }
-    static int NB_LABELS_POLICY_MAP() {
+    static uint NB_LABELS_POLICY_MAP() {
         return 6;
     }
-    static int NB_PLAYERS() {
+    static uint NB_AUXILIARY_OUTPUTS() {
+        return 0;  // TODO
+    }
+    static uint NB_PLAYERS() {
         return 4;
     }
     static std::string action_to_uci(Action action, bool is960) {
@@ -57,7 +60,7 @@ public:
     }
     template<PolicyType p = normal, MirrorType m = notMirrored>
     static MoveIdx action_to_index(Action action) {
-        return std::clamp(action, 0, NUM_MOVES);
+        return std::clamp(int(action), 0, NUM_MOVES);
     }
     static void init(bool isPolicyMap) {
         return; // pass
@@ -75,6 +78,7 @@ public:
     bool usePartialObservability;
     bboard::ObservationParameters params;
     int eventHash;
+    std::vector<float> auxiliaryOutputs;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.
@@ -122,6 +126,7 @@ public:
     bool gives_check(Action action) const override;
     void print(std::ostream& os) const override;
     Tablebase::WDLScore check_for_tablebase_wdl(Tablebase::ProbeState& result) override;
+    void set_auxiliary_outputs(const float* auxiliaryOutputs) override;
     PommermanState* clone() const override;
 };
 
