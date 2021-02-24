@@ -60,6 +60,8 @@ since more data was available.'
 import torch
 import torch.nn as nn
 from torch.nn import Sequential, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish
+
+from nn.PommerModel import PommerModel
 from nn.builder_util import get_act, _Stem, _PolicyHead, _ValueHead
 
 
@@ -99,7 +101,7 @@ class ResidualBlock(torch.nn.Module):
         return x + self.body(x)
     
 
-class AlphaZeroResnet(torch.nn.Module):
+class AlphaZeroResnet(PommerModel):
     """ Creates the alpha zero net description based on the given parameters."""
 
     def __init__(
@@ -128,7 +130,7 @@ class AlphaZeroResnet(torch.nn.Module):
         :return: net description
         """
 
-        super(AlphaZeroResnet, self).__init__()
+        super(AlphaZeroResnet, self).__init__(is_stateful=False)
 
         res_blocks = []
         for i in range(num_res_blocks):
@@ -155,4 +157,4 @@ class AlphaZeroResnet(torch.nn.Module):
         value = self.value_head(out)
         policy = self.policy_head(out)
 
-        return [value, policy]
+        return value, policy

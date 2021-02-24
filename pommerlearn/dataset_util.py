@@ -15,26 +15,33 @@ class PommerDataset(Dataset):
     """
     A pommerman dataset.
     """
-    def __init__(self, obs, val, act, pol, transform=None):
+    def __init__(self, obs, val, act, pol, ids, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
 
-        if isinstance(obs, np.ndarray):
-            self.dtype = np.ndarray
-        elif isinstance(obs, torch.Tensor):
-            self.dtype = torch.Tensor
-        else:
+        if not isinstance(obs, np.ndarray)\
+                or not isinstance(val, np.ndarray)\
+                or not isinstance(act, np.ndarray)\
+                or not isinstance(pol, np.ndarray):
             assert False, "Invalid data type!"
+
+        self.sequence_length = sequence_length
+        self.episode = None
+
+        if self.sequence_length is not None:
+            assert self.sequence_length >= 1, "Invalid sequence length!"
 
         self.obs = obs
         self.val = val
         self.act = act
         self.pol = pol
+        self.ids = ids
+        self.return_ids = return_ids
 
         self.transform = transform
 
     @staticmethod
-    def from_zarr(path: Path, discount_factor: float, transform=None, verbose: bool = False):
+    def from_zarr(path: Path, discount_factor: float, transform=None, return_ids=False, verbose: bool = False):
         z = zarr.open(str(path), 'r')
 
         if verbose:
@@ -49,11 +56,12 @@ class PommerDataset(Dataset):
         obs = z['obs'][:z_steps]
         act = z['act'][:z_steps]
         pol = z['pol'][:z_steps]
+        ids = get_unique_agent_episode_id(z)
 
-        return PommerDataset(obs, value_target, act, pol, transform)
+        return PommerDataset(obs, value_target, act, pol, ids, transform=transform, return_ids=return_ids)
 
     @staticmethod
-    def create_empty(count, transform=None):
+    def create_empty(count, transform=None, sequence_length=None, return_ids=False):
         """
         Create an empty sample container.
 
@@ -63,38 +71,10 @@ class PommerDataset(Dataset):
         val = np.empty(count, dtype=float)
         act = np.empty(count, dtype=int)
         pol = np.empty((count, 6), dtype=float)
+        ids = np.empty(count, dtype=int)
 
-        return PommerDataset(obs, val, act, pol, transform)
-
-    def split_based_on_idx(self, split_idx: int, from_idx: int = 0, to_idx: int = None):
-        """
-        Splits samples[from_idx:to_idx] into two halves at the given split index and returns the first and second half
-
-        :param samples: Samples to be split
-        :param split_idx: Index where to split
-        :param from_idx: The index where the splitting starts
-        :param to_idx: The index where the splitting ends (None = until end)
-        :return: 1st half, 2nd half after the split
-        """
-        if to_idx is None:
-            to_idx = len(self) - from_idx
-
-        obs_1, obs_2 = split_arr_based_on_idx(self.obs[from_idx:to_idx], split_idx)
-        val_1, val_2 = split_arr_based_on_idx(self.val[from_idx:to_idx], split_idx)
-        act_1, act_2 = split_arr_based_on_idx(self.act[from_idx:to_idx], split_idx)
-        pol_1, pol_2 = split_arr_based_on_idx(self.pol[from_idx:to_idx], split_idx)
-
-        first = PommerDataset(obs_1, val_1, act_1, pol_1)
-        second = PommerDataset(obs_2, val_2, act_2, pol_2)
-        return first, second
-
-    def as_tensor(self):
-        obs_prime = torch.as_tensor(self.obs, dtype=torch.float)
-        val_prime = torch.as_tensor(self.val, dtype=torch.float)
-        act_prime = torch.as_tensor(self.act, dtype=torch.int)
-        pol_prime = torch.as_tensor(self.pol, dtype=torch.float)
-
-        return PommerDataset(obs_prime, val_prime, act_prime, pol_prime, transform=self.transform)
+        return PommerDataset(obs, val, act, pol, ids, transform=transform, sequence_length=sequence_length,
+                             return_ids=return_ids)
 
     def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None):
         """
@@ -112,29 +92,8 @@ class PommerDataset(Dataset):
         self.act[to_index:to_index + count] = other_samples.act[from_index:from_index + count]
         self.pol[to_index:to_index + count] = other_samples.pol[from_index:from_index + count]
 
-    def append(self, other_samples):
-        """
-        Appends samples to this sample object.
-
-        :param other_samples: The samples which should be appended to this sample object
-        """
-
-        self.obs = np.append(self.obs, other_samples.obs, axis=0)
-        self.val = np.append(self.val, other_samples.val, axis=0)
-        self.act = np.append(self.act, other_samples.act, axis=0)
-        self.pol = np.append(self.pol, other_samples.pol, axis=0)
-
-    def shuffle(self):
-        random_state = np.random.get_state()
-
-        def deterministic_shuffle(arr):
-            np.random.set_state(random_state)
-            np.random.shuffle(arr)
-
-        deterministic_shuffle(self.obs)
-        deterministic_shuffle(self.val)
-        deterministic_shuffle(self.act)
-        deterministic_shuffle(self.val)
+        if self.ids is not None:
+            self.ids[to_index:to_index + count] = other_samples.ids[from_index:from_index + count]
 
     def __len__(self):
         return len(self.obs)
@@ -143,12 +102,73 @@ class PommerDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample = PommerSample(self.obs[idx], self.val[idx], self.act[idx], self.pol[idx])
+        if self.sequence_length is None:
+            # return a single sample
 
-        if self.transform is not None:
-            sample = self.transform(sample)
+            sample = PommerSample(
+                torch.tensor(self.obs[idx], dtype=torch.float),
+                torch.tensor(self.val[idx], dtype=torch.float),
+                torch.tensor(self.act[idx], dtype=torch.int),
+                torch.tensor(self.pol[idx], dtype=torch.float),
+            )
 
-        return sample
+            if self.transform is not None:
+                sample = self.transform(sample)
+
+            if self.return_ids:
+                return (self.ids[idx], *sample)
+            else:
+                return sample
+        else:
+            # build a sequence of samples
+            sequence = PommerSample(
+                torch.zeros((self.sequence_length, 18, 11, 11), dtype=torch.float),
+                torch.zeros(self.sequence_length, dtype=torch.float),
+                torch.zeros(self.sequence_length, dtype=torch.int),
+                torch.zeros((self.sequence_length, 6), dtype=torch.float)
+            )
+
+            random_state = np.random.get_state()
+
+            if self.return_ids:
+                ids = np.empty(self.sequence_length, dtype=np.int).fill(-1)
+
+            # TODO: Instead of manual padding, use PackedSequence
+
+            # the last element in the sequence is the current sample
+            current_id = self.ids[idx]
+            for a in range(0, self.sequence_length):
+                data_idx = idx - a
+                seq_idx = -1 - a
+
+                if data_idx < 0 or self.ids[data_idx] != current_id:
+                    # we reached a different episode / the beginning of the dataset
+                    # TODO: Add masking?
+                    break
+                elif self.return_ids:
+                    ids[seq_idx] = self.ids[data_idx]
+
+                sample = PommerSample(
+                    torch.tensor(self.obs[data_idx], dtype=torch.float),
+                    torch.tensor(self.val[data_idx], dtype=torch.float),
+                    torch.tensor(self.act[data_idx], dtype=torch.int),
+                    torch.tensor(self.pol[data_idx], dtype=torch.float),
+                )
+
+                # TODO: It looks like this really slows it down.. instead transform whole sequence at once?
+                if self.transform is not None:
+                    np.random.set_state(random_state)
+                    sample = self.transform(sample)
+
+                sequence.obs[seq_idx] = sample.obs
+                sequence.val[seq_idx] = sample.val
+                sequence.act[seq_idx] = sample.act
+                sequence.pol[seq_idx] = sample.pol
+
+            if self.return_ids:
+                return (ids, *sequence)
+            else:
+                return sequence
 
 
 def get_agent_actions(z, episode):
@@ -172,6 +192,30 @@ def get_agent_episode_slice(z, agent_episode):
 
 def last_episode_is_cut(z):
     return np.sum(z.attrs.get('AgentSteps')) != z.attrs.get('Steps')
+
+
+def get_unique_agent_episode_id(z) -> np.ndarray:
+    """
+    Creates unique ids for every new agent episode in the environment and returns an array containing the id of each
+    individual step.
+
+    :param z: The zarr dataset
+    :return: The unique agent episode ids in z
+    """
+    total_steps = z.attrs.get('Steps')
+    agent_steps = np.array(z.attrs.get('AgentSteps'))
+
+    ids = np.empty(total_steps, dtype=np.int)
+    current_id = 0
+    current_step = 0
+
+    for steps in agent_steps:
+        end = min(current_step + steps, total_steps)
+        ids[current_step:end] = current_id
+        current_step += steps
+        current_id += 1
+
+    return ids
 
 
 def get_value_target(z, discount_factor: float) -> np.ndarray:
@@ -255,7 +299,7 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
 
 def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], discount_factor: float,
                         test_size: float, batch_size: int, batch_size_test: int, train_transform = None,
-                        verbose: bool = True) -> [DataLoader, DataLoader]:
+                        verbose: bool = True, sequence_length=None, num_workers=2) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
 
@@ -268,6 +312,8 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     :param batch_size_test: Batch size to use for testing
     :param train_transform: Data transformation for train data loading
     :param verbose: Log debug information
+    :param sequence_length: Sequence length used in the train loader
+    :param num_workers: The number of workers used for loading
     :return: Training loader, validation loader
     """
 
@@ -305,12 +351,14 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         print(f"Loading {total_train_samples + total_test_samples} samples from {len(path_infos)} dataset(s) with "
               f"test size {test_size}")
 
-    data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform)
-    data_test = PommerDataset.create_empty(total_test_samples)
+    data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform,
+                                            sequence_length=sequence_length)
+    data_test = PommerDataset.create_empty(total_test_samples, return_ids=(sequence_length is not None))
 
     # create a container for all samples
     if verbose:
-        print(f"Created containers with (train: {len(data_train)}, test: {len(data_test)}) samples")
+        print(f"Created containers with (train: {len(data_train)}, test: {len(data_test)}) samples "
+              f"and train sequence length {sequence_length}")
 
     buffer_train_idx = 0
     buffer_test_idx = 0
@@ -354,11 +402,8 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     if verbose:
         print("Creating DataLoaders..", end='')
 
-    data_train = data_train.as_tensor()
-    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=2)
-
-    data_test = data_test.as_tensor()
-    test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=2) if total_test_samples > 0 else None
+    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=num_workers) if total_test_samples > 0 else None
 
     if verbose:
         print(" done.")

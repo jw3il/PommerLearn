@@ -18,4 +18,4 @@ class CrossEntropyLossContinious(_WeightedLoss):
         super(CrossEntropyLossContinious, self).__init__()
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        return -(target * F.log_softmax(input, dim=1)).sum(dim=1).mean()
+        return -(target * F.log_softmax(input, dim=-1)).sum(dim=-1).mean()

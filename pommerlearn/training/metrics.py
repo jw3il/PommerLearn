@@ -1,5 +1,9 @@
+from typing import Optional
+
 import torch
 from torch.nn.functional import kl_div, log_softmax
+
+from nn.PommerModel import PommerModel
 
 
 class Metrics:
@@ -24,8 +28,8 @@ class Metrics:
         self.sum_value_loss = 0
         self.steps = 0
 
-    def update(self, model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train, ya_train, yp_train,
-                       fit_pol_dist):
+    def update(self, model: PommerModel, policy_loss, value_loss, value_loss_ratio, x_train, yv_train, ya_train, yp_train,
+                       fit_pol_dist, normalize_loss_nb_samples: Optional[int] = None, model_state = None):
         """
         Updates the metrics and calculates the combined loss
 
@@ -38,32 +42,66 @@ class Metrics:
         :param ya_train: Target labels for policy
         :param yp_train: Target policy distribution
         :param fit_pol_dist: Whether to use the policy distribution for the policy loss target
-        :return: The combined loss
+        :param normalize_loss_nb_samples: Whether to normalize the calculated losses according to some default number
+                                          of samples. This is important when you have varying number of samples.
+        :param model_state: The current state of the model (optional)
+        :return: A tuple of the combined loss and (optionally) the next state
         """
 
         # get the combined loss
-        value_out, policy_out = model(x_train)
+        # TODO: Create a separate method instead?
+        if model.is_stateful:
+            value_out, policy_out, next_state = model(x_train, model_state)
+        else:
+            value_out, policy_out = model(x_train)
+
         # TODO: Improve code design, this should be handled automatically
         if fit_pol_dist:
             cur_policy_loss = policy_loss(policy_out, yp_train)
         else:
             cur_policy_loss = policy_loss(policy_out, ya_train)
 
-        cur_value_loss = value_loss(value_out.view(-1), yv_train)
+        cur_value_loss = value_loss(value_out.squeeze(-1), yv_train)
         combined_loss = (1 - value_loss_ratio) * cur_policy_loss + value_loss_ratio * cur_value_loss
 
         # update metrics
-        _, pred_label = torch.max(policy_out.data, 1)
-        self.total_cnt += x_train.data.size()[0]
-        self.correct_cnt += float((pred_label == ya_train.data).sum())
-        self.sum_policy_loss += float(cur_policy_loss.data)
-        kl_value = kl_div(log_softmax(policy_out, dim=1), yp_train, reduction='batchmean')
-        self.sum_policy_kl += float(kl_value)
-        self.sum_value_loss += float(cur_value_loss.data)
-        self.sum_combined_loss += float(combined_loss.data)
-        self.steps += 1
+        _, pred_label = torch.max(policy_out.data, -1)
 
-        return combined_loss
+        if len(x_train.data.size()) == 5:
+            self.total_cnt += x_train.data.size()[0] * x_train.data.size()[1]
+        else:
+            self.total_cnt += x_train.data.size()[0]
+
+        if normalize_loss_nb_samples is None:
+            normalization_factor = 1
+        else:
+            if len(x_train.shape) == 4:
+                # regular batch
+                nb_samples = x_train.shape[0]
+            elif len(x_train.shape) == 5:
+                # sequence
+                nb_samples = x_train.shape[0] * x_train.shape[1]
+            else:
+                raise ValueError(f"Unsupported input dimension! Got shape: {x_train.shape}")
+
+            normalization_factor = float(nb_samples) / normalize_loss_nb_samples
+
+        self.correct_cnt += float((pred_label == ya_train.data).sum())
+
+        self.sum_policy_loss += normalization_factor * float(cur_policy_loss.data)
+        kl_value = kl_div(log_softmax(policy_out, dim=1), yp_train, reduction='batchmean')
+        self.sum_policy_kl += normalization_factor * float(kl_value)
+        self.sum_value_loss += normalization_factor * float(cur_value_loss.data)
+        self.sum_combined_loss += normalization_factor * float(combined_loss.data)
+
+        self.steps += normalization_factor
+
+        weighted_loss = combined_loss * normalization_factor
+
+        if model.is_stateful:
+            return weighted_loss, next_state
+        else:
+            return weighted_loss, None
 
     def combined_loss(self):
         return self.sum_combined_loss / self.steps
