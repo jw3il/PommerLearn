@@ -4,7 +4,7 @@ Utility methods for building the neural network architectures.
 import math
 import torch
 from torch.nn import Sequential, Conv1d, Conv2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh, Linear, Hardsigmoid, Hardswish,\
-    Module, AdaptiveAvgPool2d
+    Module, AdaptiveAvgPool2d, BatchNorm1d
 
 
 def get_act(act_type):
@@ -318,3 +318,61 @@ class TimeDistributed(Module):
             return out.view(shape[0], shape[1], *out.shape[1:])
 
         return out
+
+
+class _ValueHeadFlat(Module):
+    def __init__(self, in_features=512, fc0=256, bn_mom=0.9, act_type="relu"):
+        """
+        Value head which uses flattened features as input
+        :param in_features: Number of input features
+        :param fc0: Number of units in Dense/Fully-Connected layer
+        :param bn_mom: Batch normalization momentum parameter
+        :param act_type: Activation type to use
+        """
+
+        super(_ValueHeadFlat, self).__init__()
+
+        self.body = Sequential(Linear(in_features=in_features, out_features=fc0),
+                               BatchNorm1d(momentum=bn_mom, num_features=fc0),
+                               get_act(act_type),
+                               Linear(in_features=fc0, out_features=1),
+                               get_act("tanh")
+                               )
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+        return self.body(x)
+
+
+class _PolicyHeadFlat(Module):
+    def __init__(self, in_features=512, fc0=256, bn_mom=0.9, act_type="relu", n_labels=4992):
+        """
+        Definition of the value head proposed by the alpha zero authors
+        :param policy_channels: Number of channels for 1st conv operation in branch 0
+        :param bn_mom: Batch normalization momentum parameter
+        :param act_type: Activation type to use
+        channelwise squeeze excitation, channel-spatial-squeeze-excitation, respectively
+        """
+
+        super(_PolicyHeadFlat, self).__init__()
+
+        self.body = Sequential()
+        # self.select_policy_from_plane = select_policy_from_plane
+
+        self.body = Sequential(Linear(in_features=in_features, out_features=fc0),
+                               BatchNorm1d(momentum=bn_mom, num_features=fc0),
+                               get_act(act_type),
+                               Linear(in_features=fc0, out_features=n_labels),
+                               )
+
+    def forward(self, x):
+        """
+        Compute forward pass
+        :param x: Input data to the block
+        :return: Activation maps of the block
+        """
+        return self.body(x)
