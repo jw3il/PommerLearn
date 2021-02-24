@@ -21,7 +21,9 @@ Influenced by the following papers:
 
 """
 from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module
-from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se
+
+from nn.PommerModel import PommerModel
+from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se, TimeDistributed
 
 
 class _PreactResidualMixConvBlock(Module):
@@ -130,7 +132,7 @@ class _StridedBottlekneckBlock(Module):
         return self.body(x)
 
 
-class RiseV3(Module):
+class RiseV3(PommerModel):
 
     def __init__(self, channels=128, nb_input_channels=18, channels_operating=256, act_type='relu',
                  channels_value_head=1, channels_policy_head=81, value_fc_size=256,
@@ -170,7 +172,7 @@ class RiseV3(Module):
         :param value_nb_hidden: Number of hidden layers of the vlaue head
         :return: symbol
         """
-        super(RiseV3, self).__init__()
+        super(RiseV3, self).__init__(is_stateful=False)
 
         self.use_raw_features = use_raw_features
 
@@ -223,4 +225,4 @@ class RiseV3(Module):
 
         policy = self.policy_head(out)
 
-        return [value, policy]
+        return value, policy

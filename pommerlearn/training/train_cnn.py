@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 
 from data_augmentation import *
+from nn import PommerModel
 from nn.a0_resnet import AlphaZeroResnet, init_weights
 from nn.rise_mobile_v3 import RiseV3
 import numpy as np
@@ -22,6 +23,7 @@ from tqdm import tqdm
 from pathlib import Path
 from torch.optim.optimizer import Optimizer
 
+from nn.simple_lstm import SimpleLSTM
 from training.loss.cross_entropy_continious import CrossEntropyLossContinious
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, plot_schedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
@@ -41,6 +43,9 @@ def create_model(train_config):
         model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
                        channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
                        act_type="relu", use_downsampling=train_config["use_downsampling"])
+    elif train_config["model"] == "lstm":
+        model = SimpleLSTM(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
+                           num_res_blocks=3, hidden_size=256, lstm_num_layers=1)
     else:
         raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
@@ -57,11 +62,16 @@ def train_cnn(train_config):
     use_cuda = torch.cuda.is_available()
     print(f"CUDA enabled: {use_cuda}")
 
+    input_shape, model = create_model(train_config)
+
+    train_sequence_length = train_config["sequence_length"] if model.is_stateful else None
+
     train_loader, val_loader = create_data_loaders(train_config["dataset_path"], train_config["discount_factor"],
                                                    train_config["test_size"], train_config["batch_size"],
-                                                   train_config["batch_size_test"], train_config["dataset_train_transform"])
-
-    input_shape, model = create_model(train_config)
+                                                   train_config["batch_size_test"],
+                                                   train_transform=train_config["dataset_train_transform"],
+                                                   sequence_length=train_sequence_length,
+                                                   num_workers=train_config["num_workers"])
 
     if use_cuda:
         model = model.cuda()
@@ -236,8 +246,8 @@ def export_as_script_module(model, dummy_input, dir) -> None:
     traced_script_module.save(str(dir / Path(f"model-bsize-{dummy_input.size(0)}.pt")))
 
 
-def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss, fit_pol_dist,
-                 value_loss_ratio, train_loader, val_loader, use_cuda, log_dir, global_step=0):
+def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
+                 fit_pol_dist, value_loss_ratio, train_loader, val_loader, use_cuda, log_dir, global_step=0):
     """
     Trains a given model for a number of epochs
 
@@ -279,12 +289,19 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
                 x_train, yv_train, ya_train, yp_train = x_train.cuda(), yv_train.cuda(), ya_train.cuda(), yp_train.cuda()
 
             if not exported_graph:
-                writer_train.add_graph(model, x_train)
+                if model.is_stateful:
+                    init_state = model.get_init_state(1, device="cuda:0" if use_cuda else "cpu")
+                    writer_train.add_graph(model, [x_train[0][None], init_state])
+                else:
+                    writer_train.add_graph(model, x_train[0][None])
+
                 exported_graph = True
 
             model.train()
+
+            # TODO: Only for recurrent networks!
             x_train, ya_train, yp_train = Variable(x_train), Variable(ya_train), Variable(yp_train)
-            combined_loss = m_train.update(model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
+            combined_loss, _ = m_train.update(model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
                                            ya_train, yp_train, fit_pol_dist)
 
             combined_loss.backward()
@@ -309,9 +326,12 @@ def run_training(model, nb_epochs, optimizer, lr_schedule, momentum_schedule, va
 
                 if val_loader is not None:
                     model.eval()
-                    # print validation stats
-                    m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda,
-                                         val_loader)
+                    if model.is_stateful:
+                        m_val = get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
+                                                  use_cuda, val_loader)
+                    else:
+                        m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda,
+                                             val_loader)
 
                     m_val.log_to_tensorboard(writer_val, global_step)
                     msg += f', val value loss: {m_val.value_loss():5f}, val policy loss: {m_val.policy_loss():5f},'\
@@ -355,6 +375,96 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
         x, ya_val = Variable(x, requires_grad=False), Variable(ya_val, requires_grad=False)
 
         m_val.update(model, policy_loss, value_loss, value_loss_ratio, x, yv_val, ya_val, yp_val, fit_pol_dist)
+
+    return m_val
+
+
+def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda, data_loader,
+                 verbose = False) -> Metrics:
+    """
+    Returns the validation metrics by evaluating it on the full validation dataset
+
+    :param model: Model to evaluate
+    :param value_loss_ratio: Value loss ratio
+    :param value_loss: Value loss object
+    :param policy_loss: Policy loss object
+    :param fit_pol_dist: Whether to use the policy distribution for the policy loss target
+    :param use_cuda: Boolean whether GPU is used
+    :param data_loader: Data loader object (e.g. val_loader)
+    :param verbose: Whether to output debugging info
+    :return: Updated metric object
+    """
+
+    m_val = Metrics()
+
+    current_episode_id = None
+
+    # for the init state
+    device = "cuda" if use_cuda else "cpu"
+
+    for batch_idx, (ids, obs, val, act, pol) in enumerate(data_loader):
+        if verbose:
+            print("Got test batch with ids: ", ids)
+
+        if current_episode_id is None or current_episode_id != ids[0]:
+            # the first sample from this batch is from a new episode, reset the state
+            model_state = model.get_init_state(1, device)
+
+        if current_episode_id is None:
+            current_episode_id = ids[0]
+
+        current_idx = 0
+        while current_idx < len(ids):
+            current_episode_id = ids[current_idx]
+
+            if ids[-1] == current_episode_id:
+                # we can process the batch until the end
+                until_idx = len(ids)
+                reset_state = False
+            else:
+                # we have to check when the next episode begins
+                for i in range(current_idx, len(ids)):
+                    if ids[i] != current_episode_id:
+                        until_idx = i
+                        break
+
+                # and reset the state after these samples
+                reset_state = True
+
+            obs_part = obs[current_idx:until_idx]
+            val_part = val[current_idx:until_idx]
+            act_part = act[current_idx:until_idx]
+            pol_part = pol[current_idx:until_idx]
+
+            if use_cuda:
+                obs_part = obs_part.cuda()
+                val_part = val_part.cuda()
+                act_part = act_part.cuda()
+                pol_part = pol_part.cuda()
+
+            # transform batch to sequence
+            obs_part = obs_part.unsqueeze(0)
+            val_part = val_part.unsqueeze(0)
+            act_part = act_part.unsqueeze(0)
+            pol_part = pol_part.unsqueeze(0)
+
+            if verbose:
+                print(f"Prepared data for range {current_idx} until {until_idx}")
+
+            # update loss & get next state
+            loss, next_state = m_val.update(model, policy_loss, value_loss, value_loss_ratio, obs_part, val_part,
+                                            act_part, pol_part, fit_pol_dist, model_state=model_state,
+                                            normalize_loss_nb_samples=data_loader.batch_size)
+
+            current_idx = until_idx
+            if reset_state:
+                model_state = model.get_init_state(1, device)
+                if verbose:
+                    print("Reset state")
+            else:
+                model_state = next_state
+                if verbose:
+                    print("Use next state")
 
     return m_val
 
@@ -408,18 +518,21 @@ def fill_default_config(train_config):
         "weight_decay": 1e-03,
         "value_loss_ratio": 0.1,
         "test_size": 0.2,
-        "batch_size": 128,
+        "batch_size": 128,  # warning: should be adapted when using sequences
         "batch_size_test": 128,
         "random_state":  42,
         "nb_epochs":  10,
-        "model": "a0",  # "a0", "risev3"
+        "model": "risev3",  # "a0", "risev3", "lstm"
+        "sequence_length": 8,  # only used when model is stateful
         "fit_policy_distribution": True,
+        "use_downsampling": True,
+        "se_type": None,
         # logging
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
         "iteration": 0,
         "global_step": 0,
-        "use_downsampling": False,
-        "se_type": None,
+        # training
+        "num_workers": 4
     }
 
     for key in train_config:

@@ -284,3 +284,37 @@ class _ValueHead(Module):
             x = torch.cat((x, raw_data), dim=1)
 
         return self.body2(x)
+
+
+# Inspired by https://discuss.pytorch.org/t/any-pytorch-function-can-work-as-keras-timedistributed/1346/4
+# see https://keras.io/api/layers/recurrent_layers/time_distributed/
+class TimeDistributed(Module):
+    """
+    This wrapper module applies a module independently to each temporal step given by the input data.
+    """
+    def __init__(self, module: Module, input_dims: int):
+        """
+        :param module: The module to be wrapped (e.g. Conv2d)
+        :param input_dims: The regular input dims *without* the time dimension.
+        """
+        super().__init__()
+        self.module = module
+        self.input_dims = input_dims
+        self.time_series_dims = input_dims + 1
+
+    def forward(self, x):
+        shape = x.shape
+        reshape = len(shape) == self.time_series_dims
+
+        # TODO: Check if view is enough (do we need contiguous()?)
+        if reshape:
+            # transform input to 4 dims (combine batch x time)
+            x = x.view(shape[0] * shape[1], *shape[2:])
+
+        out = self.module(x)
+
+        if reshape:
+            # transform output back to 5 dims
+            return out.view(shape[0], shape[1], *out.shape[1:])
+
+        return out
