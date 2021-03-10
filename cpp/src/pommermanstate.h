@@ -18,6 +18,8 @@
 
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
 {
+private:
+    static uint auxiliaryOutputs;
 public:
     static uint BOARD_WIDTH() {
         return 11;
@@ -35,7 +37,7 @@ public:
         return 6;
     }
     static uint NB_AUXILIARY_OUTPUTS() {
-        return 0;  // TODO
+        return auxiliaryOutputs;
     }
     static uint NB_PLAYERS() {
         return 4;
@@ -63,14 +65,17 @@ public:
         return std::clamp(int(action), 0, NUM_MOVES);
     }
     static void init(bool isPolicyMap) {
-        return; // pass
+        return;
+    }
+    static void set_auxiliary_outputs(uint auxiliaryOutputs) {
+        StateConstantsPommerman::auxiliaryOutputs = auxiliaryOutputs;
     }
 };
 
 class PommermanState : public State
 {
 public:
-    PommermanState(uint agentID, bboard::GameMode gameMode);
+    PommermanState(uint agentID, bboard::GameMode gameMode, bool statefulModel);
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
     const uint agentID;
@@ -79,6 +84,7 @@ public:
     bboard::ObservationParameters params;
     int eventHash;
     std::vector<float> auxiliaryOutputs;
+    bool statefulModel;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.

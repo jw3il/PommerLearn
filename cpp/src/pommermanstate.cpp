@@ -8,12 +8,14 @@
 #include "data_representation.h"
 #include "agents.hpp"
 
+uint StateConstantsPommerman::auxiliaryOutputs = 0;
 
-PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode):
+PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode, bool statefulModel):
     agentID(agentID),
     gameMode(gameMode),
     usePartialObservability(false),
     eventHash(0),
+    statefulModel(statefulModel),
     hasPlanningAgents(false),
     hasBufferedActions(false)
 {
@@ -168,6 +170,21 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
 {
     // TODO
     StateToPlanes(&state, 0, inputPlanes);
+    if (this->statefulModel)
+    {
+        // add auxiliary outputs
+        uint start = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
+        if (state.timeStep == 0)
+        {
+            // auxillary outputs are not filled yet => start with empty state
+            std::fill_n(&inputPlanes[start], StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), 0.0f);
+        }
+        else
+        {
+            // use the last outputs as an input (assumes that all of them are the state)
+            std::copy_n(auxiliaryOutputs.begin(), StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), &inputPlanes[start]);
+        }
+    }
 }
 
 unsigned int PommermanState::steps_from_null() const
@@ -333,7 +350,7 @@ bool PommermanState::gives_check(Action action) const
 
 PommermanState* PommermanState::clone() const
 {
-    PommermanState* clone = new PommermanState(agentID, gameMode);
+    PommermanState* clone = new PommermanState(agentID, gameMode, statefulModel);
     clone->state = state;
     if (hasPlanningAgents) {
         // clone all agents
