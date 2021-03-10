@@ -44,10 +44,9 @@ def create_model(train_config):
                        channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
                        act_type=train_config["act_type"], use_downsampling=train_config["use_downsampling"],
                        channels_policy_head=train_config["channels_policy_head"],
-                       slice_scalars=train_config["slice_scalars"])
-    elif train_config["model"] == "lstm":
-        model = SimpleLSTM(nb_input_channels=input_shape[0], board_width=input_shape[1], board_height=input_shape[2],
-                           num_res_blocks=3, hidden_size=256, lstm_num_layers=1)
+                       slice_scalars=train_config["slice_scalars"],
+                       use_flat_core=train_config["use_flat_core"],
+                       use_lstm=train_config["use_lstm"])
     else:
         raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
@@ -540,7 +539,9 @@ def fill_default_config(train_config):
         "num_res_blocks": 4,
         "act_type": "relu",
         "channels_policy_head": 16,
-        "slice_scalars": False,
+        "use_flat_core": True,
+        "slice_scalars": False,  # only with flat core
+        "use_lstm": False,  # only with flat core
         # logging
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
         "iteration": 0,

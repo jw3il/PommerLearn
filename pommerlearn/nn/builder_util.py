@@ -306,15 +306,14 @@ class TimeDistributed(Module):
         shape = x.shape
         reshape = len(shape) == self.time_series_dims
 
-        # TODO: Check if view is enough (do we need contiguous()?)
         if reshape:
-            # transform input to 4 dims (combine batch x time)
-            x = x.view(shape[0] * shape[1], *shape[2:])
+            # combine batch and time dimensions
+            x = x.contiguous().view(shape[0] * shape[1], *shape[2:])
 
         out = self.module(x)
 
         if reshape:
-            # transform output back to 5 dims
+            # restore original batch and time dimensions
             return out.view(shape[0], shape[1], *out.shape[1:])
 
         return out

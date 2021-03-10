@@ -20,8 +20,9 @@ Influenced by the following papers:
     https://arxiv.org/pdf/1807.06521.pdf
 
 """
-from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module, Linear, BatchNorm1d
-from torch import split, cat
+import torch
+from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module, Linear, BatchNorm1d, LSTM
+from torch import split, cat, Tensor
 from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se, _ValueHeadFlat, _PolicyHeadFlat
 from nn.PommerModel import PommerModel
 from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, get_se, TimeDistributed
@@ -187,6 +188,7 @@ class RiseV3(PommerModel):
                  se_types=None, use_avg_features=False, use_raw_features=False, value_nb_hidden=7,
                  value_fc_size_hidden=256, value_dropout=0.15, use_more_features=False, bn_mom=0.9,
                  board_height=11, board_width=11, use_downsampling=True, slice_scalars=False, nb_scalar_features=4,
+                 use_flat_core=True, use_lstm=False,
                  ):
         """
         RISEv3 architecture
@@ -223,12 +225,14 @@ class RiseV3(PommerModel):
         Later the spatial and scalar embeddings will be merged again.
         :return: symbol
         """
-        super(RiseV3, self).__init__(is_stateful=False)
+        super(RiseV3, self).__init__(is_stateful=use_lstm)
 
         self.use_raw_features = use_raw_features
         self.nb_input_channels = nb_input_channels
         self.nb_scalar_features = nb_scalar_features
         self.slice_scalars = slice_scalars
+        self.use_flat_core = use_flat_core
+        self.use_lstm = use_lstm
 
         if len(kernels) != len(se_types):
             raise Exception(f'The length of "kernels": {len(kernels)} must be the same as'
@@ -249,49 +253,103 @@ class RiseV3(PommerModel):
         if self.slice_scalars:
             nb_input_channels -= self.nb_scalar_features
 
-        self.body_spatial = Sequential(
+        self.body_spatial = TimeDistributed(Sequential(
             _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
             *res_blocks,
-        )
+        ), 4)
+        self.nb_body_spatial_out = channels * board_height * board_width * expansion_factor
+
         if slice_scalars:
-            mlp_blocks = [MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
-                                   out_features=channels_operating)] * len(res_blocks)
+            mlp_blocks = [TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
+                                   out_features=channels_operating), 2)] * len(res_blocks)
             self.body_scalars = Sequential(
-                MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_scalar_features,
-                         out_features=channels_operating),
+                TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_scalar_features,
+                         out_features=channels_operating), 2),
                 *mlp_blocks,
             )
 
         # create the two heads which will be used in the hybrid fwd pass
-        if self.slice_scalars:
-            self.policy_embeddings_features = channels*board_height*board_width*expansion_factor
-            self.body_merged = MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating+self.policy_embeddings_features,
-                                        out_features=channels_operating*2)
-            self.value_head = _ValueHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type)
-            self.policy_head = _PolicyHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels)
+        if self.use_flat_core:
+            nb_merged_features = self.nb_body_spatial_out + (channels_operating if self.slice_scalars else 0)
+            self.body_merged = TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_merged_features,
+                                        out_features=channels_operating*2), 2)
+
+            if self.use_lstm:
+                self.lstm = LSTM(input_size=channels_operating*2, hidden_size=channels_operating*2, batch_first=True,
+                                 num_layers=1)
+
+            self.value_head = TimeDistributed(_ValueHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type), 2)
+            self.policy_head = TimeDistributed(_PolicyHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels), 2)
         else:
             self.value_head = _ValueHead(board_height, board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
             self.policy_head = _PolicyHead(board_height, board_width, channels*expansion_factor, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
-    def forward(self, x):
+    def get_init_state(self, batch_size: int, device):
+        # (h0, c0) as single tensor
+        return torch.zeros(self.get_state_shape(batch_size), requires_grad=False).to(device)
+
+    def get_state_shape(self, batch_size: int):
+        return 2, self.lstm.num_layers, batch_size, self.lstm.hidden_size
+
+    def forward(self, x, hidden_state: Tensor = None):
         """
         Implementation of the forward pass of the full network
         Uses a broadcast add operation for the shortcut and the output of the residual block
         :param x: Input to the ResidualBlock
+        :param hidden_state: Input to lstm
         :return: Value & Policy Output
         """
 
-        if self.slice_scalars:
-            spatial_features, scalar_features = split(x, self.nb_input_channels-self.nb_scalar_features, 1)
-            scalar_features = scalar_features[:, :, 0, 0]  # slices the first entry of each plane along channels
-            out_spatial = self.body_spatial(spatial_features).view(-1, self.policy_embeddings_features)
-            out_scalar = self.body_scalars(scalar_features)
-            out = cat((out_spatial, out_scalar), 1)
+        next_hidden_state = None
+        if self.use_flat_core:
+            # shape: (batch[, sequence], channels, y, x) => (batch[, sequence], flat)
+            if self.slice_scalars:
+                spatial_features, scalar_features = split(x, self.nb_input_channels - self.nb_scalar_features, dim=-3)
+
+                out_spatial = self.body_spatial(spatial_features)
+                out_spatial = out_spatial.view(*out_spatial.shape[:-3], self.nb_body_spatial_out)
+
+                # slices the first entry of each plane along channels
+                if len(scalar_features.shape) == 4:
+                    scalar_features = scalar_features[:, :, 0, 0]
+                elif len(scalar_features.shape) == 5:
+                    scalar_features = scalar_features[:, :, :, 0, 0]
+                out_scalar = self.body_scalars(scalar_features)
+
+                out = cat((out_spatial, out_scalar), dim=-1)
+            else:
+                out = self.body_spatial(x)
+                out = out.view(*out.shape[:-3], self.nb_body_spatial_out)
+
+            # merged body
             out = self.body_merged(out)
+
+            # optional: lstm
+            if self.use_lstm:
+                # first ensure that we always have a sequence dimension for the lstm
+                # batch without seq: 2 (batch, features) vs 3 (batch, sequence, features)
+                no_sequence_dimension = len(out.shape) == 2
+                if no_sequence_dimension:
+                    # unsqueeze single input (add sequence dimension) => process a batch of 1-element sequences
+                    out = out.unsqueeze(1)
+
+                if hidden_state is None:
+                    out, next_hidden_state_pair = self.lstm(out)
+                else:
+                    out, next_hidden_state_pair = self.lstm(out, (hidden_state[0], hidden_state[1]))
+
+                next_h = next_hidden_state_pair[0].unsqueeze(0)
+                next_c = next_hidden_state_pair[1].unsqueeze(0)
+                next_hidden_state = cat((next_h, next_c), dim=0)
+
+                # return to original input dimension
+                if no_sequence_dimension:
+                    out.squeeze(1)
         else:
             out = self.body_spatial(x)
 
+        # use the output to create value/policy predictions
         if self.use_raw_features:
             value = self.value_head(out, x)
         else:
@@ -299,4 +357,8 @@ class RiseV3(PommerModel):
 
         policy = self.policy_head(out)
 
-        return value, policy
+        if self.use_lstm:
+            # additional outputs which will be processed/decoded manually
+            return value, policy, next_hidden_state
+        else:
+            return value, policy
