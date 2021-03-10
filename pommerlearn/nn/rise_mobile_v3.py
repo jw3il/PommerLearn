@@ -20,6 +20,8 @@ Influenced by the following papers:
     https://arxiv.org/pdf/1807.06521.pdf
 
 """
+from typing import Optional
+
 import torch
 from torch.nn import Sequential, Conv2d, BatchNorm2d, Hardsigmoid, Hardswish, Module, Linear, BatchNorm1d, LSTM
 from torch import split, cat, Tensor
@@ -225,7 +227,7 @@ class RiseV3(PommerModel):
         Later the spatial and scalar embeddings will be merged again.
         :return: symbol
         """
-        super(RiseV3, self).__init__(is_stateful=use_lstm)
+        super(RiseV3, self).__init__(is_stateful=use_lstm, state_batch_dim=2)
 
         self.use_raw_features = use_raw_features
         self.nb_input_channels = nb_input_channels
@@ -233,6 +235,9 @@ class RiseV3(PommerModel):
         self.slice_scalars = slice_scalars
         self.use_flat_core = use_flat_core
         self.use_lstm = use_lstm
+
+        self.board_width = board_width
+        self.board_height = board_height
 
         if len(kernels) != len(se_types):
             raise Exception(f'The length of "kernels": {len(kernels)} must be the same as'
@@ -247,8 +252,11 @@ class RiseV3(PommerModel):
                                           kernels, se_types, use_downsampling)
         expansion_factor = 2 if use_downsampling else 1
         if use_downsampling:
-            board_width = round(board_width * 0.5)
-            board_height = round(board_height * 0.5)
+            out_board_width = round(board_width * 0.5)
+            out_board_height = round(board_height * 0.5)
+        else:
+            out_board_width = board_width
+            out_board_height = board_height
 
         if self.slice_scalars:
             nb_input_channels -= self.nb_scalar_features
@@ -257,7 +265,7 @@ class RiseV3(PommerModel):
             _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
             *res_blocks,
         ), 4)
-        self.nb_body_spatial_out = channels * board_height * board_width * expansion_factor
+        self.nb_body_spatial_out = channels * out_board_width * out_board_height * expansion_factor
 
         if slice_scalars:
             mlp_blocks = [TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
@@ -285,23 +293,52 @@ class RiseV3(PommerModel):
             self.policy_head = _PolicyHead(board_height, board_width, channels*expansion_factor, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
-    def get_init_state(self, batch_size: int, device):
-        # (h0, c0) as single tensor
-        return torch.zeros(self.get_state_shape(batch_size), requires_grad=False).to(device)
-
     def get_state_shape(self, batch_size: int):
+        # expected size by LSTM: 2 x (num_layers * num_directions, batch, hidden_size)
         return 2, self.lstm.num_layers, batch_size, self.lstm.hidden_size
 
-    def forward(self, x, hidden_state: Tensor = None):
+    def unflatten(self, flat_batches):
+        assert self.has_state_input is not None, \
+            "You first have to set the input dimensions before you can unflatten the input."
+
+        batch_size = flat_batches.shape[0]
+
+        nb_x_elem_in_sequence = 1 if self.sequence_length is None else self.sequence_length
+        nb_single_x_elem = self.nb_input_channels * self.board_width * self.board_height
+        nb_all_x_elem = nb_single_x_elem * nb_x_elem_in_sequence
+
+        if self.has_state_input:
+            x, state_bf = torch.split(flat_batches, nb_all_x_elem, dim=-1)
+        else:
+            x = flat_batches
+            state_bf = None
+
+        if self.sequence_length is None:
+            x = x.view(batch_size, self.nb_input_channels, self.board_height, self.board_width)
+        else:
+            x = x.view(batch_size, self.sequence_length, self.nb_input_channels, self.board_height,
+                       self.board_width)
+
+        if state_bf is not None:
+            state_bf = state_bf.view(*self.transpose_state_shape(self.get_state_shape(batch_size)))
+
+        return x, state_bf
+
+    def forward(self, flat_input):
         """
         Implementation of the forward pass of the full network
+
         Uses a broadcast add operation for the shortcut and the output of the residual block
-        :param x: Input to the ResidualBlock
-        :param hidden_state: Input to lstm
-        :return: Value & Policy Output
+
+        :param flat_input: Flattened input (is reshaped internally)
+        :return: Value, policy and auxiliary output
         """
 
-        next_hidden_state = None
+        # input shape processing
+        x, state_bf = self.unflatten(flat_input)
+
+        # actual forward pass
+        next_hidden_state_bf = None
         if self.use_flat_core:
             # shape: (batch[, sequence], channels, y, x) => (batch[, sequence], flat)
             if self.slice_scalars:
@@ -334,14 +371,19 @@ class RiseV3(PommerModel):
                     # unsqueeze single input (add sequence dimension) => process a batch of 1-element sequences
                     out = out.unsqueeze(1)
 
-                if hidden_state is None:
+                if state_bf is None:
                     out, next_hidden_state_pair = self.lstm(out)
                 else:
-                    out, next_hidden_state_pair = self.lstm(out, (hidden_state[0], hidden_state[1]))
+                    # transpose batch_first state to expected input
+                    state = self.transpose_state(state_bf)
+                    out, next_hidden_state_pair = self.lstm(out, (state[0], state[1]))
 
                 next_h = next_hidden_state_pair[0].unsqueeze(0)
                 next_c = next_hidden_state_pair[1].unsqueeze(0)
                 next_hidden_state = cat((next_h, next_c), dim=0)
+
+                # transpose output to batch first
+                next_hidden_state_bf = self.transpose_state(next_hidden_state)
 
                 # return to original input dimension
                 if no_sequence_dimension:
@@ -359,6 +401,6 @@ class RiseV3(PommerModel):
 
         if self.use_lstm:
             # additional outputs which will be processed/decoded manually
-            return value, policy, next_hidden_state
+            return value, policy, next_hidden_state_bf
         else:
             return value, policy

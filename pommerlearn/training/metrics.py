@@ -51,9 +51,9 @@ class Metrics:
         # get the combined loss
         # TODO: Create a separate method instead?
         if model.is_stateful:
-            value_out, policy_out, next_state = model(x_train, model_state)
+            value_out, policy_out, next_state = model(model.flatten(x_train, model_state))
         else:
-            value_out, policy_out = model(x_train)
+            value_out, policy_out = model(model.flatten(x_train, None))
 
         # TODO: Improve code design, this should be handled automatically
         if fit_pol_dist:
