@@ -19,7 +19,7 @@
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
 {
 private:
-    static uint auxiliaryOutputs;
+    static uint auxiliaryStateSize;
 public:
     static uint BOARD_WIDTH() {
         return 11;
@@ -37,7 +37,13 @@ public:
         return 6;
     }
     static uint NB_AUXILIARY_OUTPUTS() {
-        return auxiliaryOutputs;
+        return auxiliaryStateSize;
+    }
+    static uint AUXILIARY_STATE_BEGIN() {
+        return 0;
+    }
+    static uint AUXILIARY_STATE_SIZE() {
+        return auxiliaryStateSize;
     }
     static uint NB_PLAYERS() {
         return 4;
@@ -67,8 +73,8 @@ public:
     static void init(bool isPolicyMap) {
         return;
     }
-    static void set_auxiliary_outputs(uint auxiliaryOutputs) {
-        StateConstantsPommerman::auxiliaryOutputs = auxiliaryOutputs;
+    static void set_auxiliary_outputs(uint stateSize) {
+        StateConstantsPommerman::auxiliaryStateSize = stateSize;
     }
 };
 

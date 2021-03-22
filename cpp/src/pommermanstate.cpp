@@ -8,7 +8,7 @@
 #include "data_representation.h"
 #include "agents.hpp"
 
-uint StateConstantsPommerman::auxiliaryOutputs = 0;
+uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
 PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode, bool statefulModel):
     agentID(agentID),
@@ -22,6 +22,10 @@ PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode, bool sta
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
         auxiliaryOutputs.resize(StateConstantsPommerman::NB_AUXILIARY_OUTPUTS());
+    }
+    else if (statefulModel)
+    {
+        throw "You have not set an auxiliary (state) output but you claim that your model is stateful.";
     }
 }
 
@@ -173,16 +177,21 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
     if (this->statefulModel)
     {
         // add auxiliary outputs
-        uint start = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
+        uint observationSize = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
+
+        uint stateBegin = StateConstantsPommerman::AUXILIARY_STATE_BEGIN();
+        float* statePointer = &inputPlanes[observationSize + stateBegin];
+        uint stateSize = StateConstantsPommerman::AUXILIARY_STATE_SIZE();
+
         if (state.timeStep == 0)
         {
             // auxillary outputs are not filled yet => start with empty state
-            std::fill_n(&inputPlanes[start], StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), 0.0f);
+            std::fill_n(statePointer, stateSize, 0.0f);
         }
         else
         {
-            // use the last outputs as an input (assumes that all of them are the state)
-            std::copy_n(auxiliaryOutputs.begin(), StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), &inputPlanes[start]);
+            // use the last auxiliary outputs as an input for the next state
+            std::copy_n(auxiliaryOutputs.begin() + stateBegin, stateSize, statePointer);
         }
     }
 }
