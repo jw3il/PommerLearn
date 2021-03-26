@@ -268,13 +268,13 @@ class RiseV3(PommerModel):
         self.nb_body_spatial_out = channels * out_board_width * out_board_height * expansion_factor
 
         if slice_scalars:
-            mlp_blocks = [TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
-                                   out_features=channels_operating), 2)] * len(res_blocks)
-            self.body_scalars = Sequential(
-                TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_scalar_features,
-                         out_features=channels_operating), 2),
+            mlp_blocks = [MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
+                                   out_features=channels_operating)] * len(res_blocks)
+            self.body_scalars = TimeDistributed(Sequential(
+                MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_scalar_features,
+                         out_features=channels_operating),
                 *mlp_blocks,
-            )
+            ), 2)
 
         # create the two heads which will be used in the hybrid fwd pass
         if self.use_flat_core:
