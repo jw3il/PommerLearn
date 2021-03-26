@@ -28,6 +28,7 @@ from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, LinearWa
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
 from dataset_util import create_data_loaders, log_dataset_stats, get_last_dataset_path
 from training.metrics import Metrics
+from training.train_util import rm_dir
 
 
 def create_model(train_config):
@@ -184,20 +185,31 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
     :param torch_cuda: Whether to export as script module with cuda inputs
     :param onnx: Whether to export as onnx
     """
-    dir.mkdir(parents=True, exist_ok=True)
+
+    if dir.exists():
+        # make sure that all the content is deleted first so we don't run into strange caching issues
+        rm_dir(dir, keep_empty_dir=False)
+
+    dir.mkdir(parents=True, exist_ok=False)
 
     onnx_dir = dir / "onnx"
     if torch_cpu:
-        onnx_dir.mkdir(parents=True, exist_ok=True)
+        onnx_dir.mkdir(parents=True, exist_ok=False)
 
     cpu_dir = dir / "torch_cpu"
     if torch_cpu:
-        cpu_dir.mkdir(parents=True, exist_ok=True)
+        cpu_dir.mkdir(parents=True, exist_ok=False)
 
     torch_cuda = torch_cuda and torch.cuda.is_available()
     cuda_dir = dir / "torch_cuda"
     if torch_cuda:
-        cuda_dir.mkdir(parents=True, exist_ok=True)
+        cuda_dir.mkdir(parents=True, exist_ok=False)
+
+    if model.is_stateful:
+        init_state = model.get_init_state_bf(1, "cpu")
+        print(f"Debug Info: Model state size = {init_state.numel()}")
+    else:
+        print(f"Debug Info: Model state size = 0 (stateless)")
 
     for batch_size in batch_sizes:
         dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
