@@ -43,6 +43,7 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     #endif
         }
     }
+    netBatches[0]->validate_neural_network();
     return netBatches;
 }
 
