@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
+import numpy as np
 from abc import ABCMeta
 
 
@@ -21,16 +22,17 @@ class PommerModel(nn.Module, metaclass=ABCMeta):
         self.sequence_length = None
         self.has_state_input = None
 
-    def get_init_state_bf(self, batch_size: int, device):
+    def get_init_state_bf_flat(self, batch_size: int, device):
         """
-        Get an initial state for the given batch size with the batch dimension first
+        Get an initial state for the given batch size with the batch dimension first and flattened
         (only required if the model is stateful).
 
         :param batch_size: The batch size
         :returns: The shape of a state, as required by the used stateful module
         """
         bf_shape = self.transpose_state_shape(self.get_state_shape(batch_size))
-        return torch.zeros(bf_shape, requires_grad=False).to(device)
+        bf_shape_flat = (batch_size, np.prod(bf_shape[1:]).item())
+        return torch.zeros(bf_shape_flat, requires_grad=False).to(device)
 
     @abc.abstractmethod
     def get_state_shape(self, batch_size: int) -> Tuple[int]:
@@ -61,22 +63,21 @@ class PommerModel(nn.Module, metaclass=ABCMeta):
 
         return transposed_shape
 
-    def flatten(self, x: torch.Tensor, state_bf: Optional[torch.Tensor]) -> torch.Tensor:
+    def flatten(self, x: torch.Tensor, state_bf_flat: Optional[torch.Tensor]) -> torch.Tensor:
         """
         Flattens and concatenates model input and state tensors.
 
         :param x: The (spacial) input of the model.
-        :param state_bf: The current state (batch-dim first).
+        :param state_bf_flat: The current state (batch-dim first and flattened).
         :returns: A flattened concatenation of the given tensors
         """
         batch_size = x.shape[0]
+        x_batches_flat = x.view(batch_size, -1)
 
-        if state_bf is None:
-            return x.view(batch_size, -1)
+        if state_bf_flat is None:
+            return x_batches_flat
 
-        # state is not none, we have to append the state to each sequence in the batch
-        x_batches = x.view(batch_size, -1)
-        state_bf_batches = state_bf.view(batch_size, -1)
+        assert state_bf_flat.shape[0] == batch_size
 
         # concatenate the batches
-        return torch.cat((x_batches, state_bf_batches), dim=1)
+        return torch.cat((x_batches_flat, state_bf_flat), dim=1)

@@ -172,7 +172,8 @@ def export_initial_model(train_config, base_dir: Path):
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
 
-def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True, torch_cuda=True, onnx=True):
+def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True, torch_cuda=True, onnx=True,
+                 verbose=False):
     """
     Exports the model in ONNX and Torch Script Module.
 
@@ -184,6 +185,7 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
     :param torch_cpu: Whether to export as script module with cpu inputs
     :param torch_cuda: Whether to export as script module with cuda inputs
     :param onnx: Whether to export as onnx
+    :param verbose: Print debug information
     """
 
     if dir.exists():
@@ -205,18 +207,12 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
     if torch_cuda:
         cuda_dir.mkdir(parents=True, exist_ok=False)
 
-    if model.is_stateful:
-        init_state = model.get_init_state_bf(1, "cpu")
-        print(f"Debug Info: Model state size = {init_state.numel()}")
-    else:
-        print(f"Debug Info: Model state size = 0 (stateless)")
-
     for batch_size in batch_sizes:
         dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
 
         if model.is_stateful:
-            dummy_input = model.flatten(dummy_input, model.get_init_state_bf(batch_size, "cpu"))
-            model.set_input_options(sequence_length=1, has_state_input=True)
+            dummy_input = model.flatten(dummy_input, model.get_init_state_bf_flat(batch_size, "cpu"))
+            model.set_input_options(sequence_length=None, has_state_input=True)
         else:
             dummy_input = model.flatten(dummy_input, None)
             model.set_input_options(sequence_length=None, has_state_input=False)
@@ -235,6 +231,13 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
             dummy_input = dummy_input.cuda()
             model = model.cuda()
             export_as_script_module(model, batch_size, dummy_input, cuda_dir)
+
+        if verbose:
+            print("Input shape: ")
+            print(dummy_input.shape)
+            print("Output shape: ")
+            for i, e in enumerate(model(dummy_input)):
+                print(f"{i}: {e.shape}")
 
 
 def export_to_onnx(model, batch_size, dummy_input, dir) -> None:
@@ -320,7 +323,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 if model.is_stateful:
                     print("")
                     model.set_input_options(sequence_length=x_train[0].shape[0], has_state_input=True)
-                    init_state = model.get_init_state_bf(1, device="cuda:0" if use_cuda else "cpu")
+                    init_state = model.get_init_state_bf_flat(1, device="cuda:0" if use_cuda else "cpu")
                     writer_train.add_graph(model, model.flatten(x_train[0][None], init_state))
                 else:
                     model.set_input_options(sequence_length=None, has_state_input=False)
@@ -448,7 +451,7 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_
 
         if current_episode_id is None or current_episode_id != ids[0]:
             # the first sample from this batch is from a new episode, reset the state
-            model_state = model.get_init_state_bf(1, device)
+            model_state = model.get_init_state_bf_flat(1, device)
 
         if current_episode_id is None:
             current_episode_id = ids[0]
@@ -499,7 +502,7 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_
 
             current_idx = until_idx
             if reset_state:
-                model_state = model.get_init_state_bf(1, device)
+                model_state = model.get_init_state_bf_flat(1, device)
                 if verbose:
                     print("Reset state")
             else:

@@ -314,8 +314,10 @@ class RiseV3(PommerModel):
             state_bf = None
 
         if self.sequence_length is None:
+            # no sequence dimension
             x = x.view(batch_size, self.nb_input_channels, self.board_height, self.board_width)
         else:
+            # with sequence dimension (for training)
             x = x.view(batch_size, self.sequence_length, self.nb_input_channels, self.board_height,
                        self.board_width)
 
@@ -387,7 +389,7 @@ class RiseV3(PommerModel):
 
                 # return to original input dimension
                 if no_sequence_dimension:
-                    out.squeeze(1)
+                    out = out.squeeze(1)
         else:
             out = self.body_spatial(x)
 
@@ -401,6 +403,7 @@ class RiseV3(PommerModel):
 
         if self.use_lstm:
             # additional outputs which will be processed/decoded manually
-            return value, policy, next_hidden_state_bf
+            next_hidden_state_bf_flat = next_hidden_state_bf.view(next_hidden_state_bf.shape[0], -1)
+            return value, policy, next_hidden_state_bf_flat
         else:
             return value, policy
