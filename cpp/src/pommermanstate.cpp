@@ -60,20 +60,26 @@ void PommermanState::set_observation(const bboard::Observation* obs)
     }
 }
 
+bool _supportedPlanningAgents(PommermanState* state)
+{
+    // supported: full observability of the board and all agent information is known
+    return !state->usePartialObservability || (state->params.agentInfoVisibility == bboard::AgentInfoVisibility::All && !state->params.agentPartialMapView);
+}
+
 void PommermanState::set_partial_observability(const bboard::ObservationParameters* params)
 {
     this->usePartialObservability = true;
     this->params = *params;
 
-    if (this->hasPlanningAgents) {
-        throw std::runtime_error("The combination of partial observability & planning agents is not implemented yet!");
+    if (this->hasPlanningAgents && !_supportedPlanningAgents(this)) {
+        throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
     }
 }
 
 void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents)
 {
-    if (this->usePartialObservability) {
-        throw std::runtime_error("The combination of partial observability & planning agents is not implemented yet!");
+    if (this->usePartialObservability && !_supportedPlanningAgents(this)) {
+        throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
     }
 
     hasPlanningAgents = false;

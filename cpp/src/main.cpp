@@ -86,11 +86,11 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
 
     // partial observability
     bboard::ObservationParameters obsParams;
-    obsParams.agentPartialMapView = true;
-    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
+    obsParams.agentPartialMapView = false;
+    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
     obsParams.exposePowerUps = false;
     obsParams.agentViewSize = 4;
-    // pommermanState.set_partial_observability(&obsParams);
+    pommermanState.set_partial_observability(&obsParams);
 
     // other agents used for planning
     std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> planningAgents = {
