@@ -77,6 +77,17 @@ file(GLOB CrazyAra_source_files
     "deps/CrazyAra/engine/src/manager/*.h"
     "deps/CrazyAra/engine/src/rl/*.cpp"
     "deps/CrazyAra/engine/src/rl/*.h"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/syzygy/tbprobe.h"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/syzygy/tbprobe.cpp"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/types.h"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/types.cpp"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/position.h"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/position.cpp"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/uci.h"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/uci.cpp"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/bitboard.h"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/bitboard.cpp"
+    "deps/CrazyAra/engine/3rdparty/Stockfish/src/*.cpp"
 )
 
 if (USE_TENSORRT)
@@ -90,6 +101,8 @@ endif()
 include_directories("deps/CrazyAra/engine/src")
 include_directories("deps/CrazyAra/engine/src/nn/")
 include_directories("deps/CrazyAra/engine/src/agents/")
+
+include_directories("deps/CrazyAra/engine/3rdparty/Stockfish/src")
 
 add_library(CrazyAra ${CrazyAra_source_files})
 
