@@ -61,14 +61,16 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     searchSettings.virtualLoss = 1;
     searchSettings.batchSize = 8;
     searchSettings.threads = 2;
-    searchSettings.useTranspositionTable = false;
-    searchSettings.enhanceChecks = false;
+    searchSettings.useMCGS = false;
     searchSettings.multiPV = 1;
     searchSettings.virtualLoss = 1;
     searchSettings.nodePolicyTemperature = 1.0f;
     searchSettings.dirichletEpsilon = 0.25f;
     searchSettings.dirichletAlpha = 0.2f;
-    searchSettings.useRandomPlayout = false;
+    searchSettings.epsilonGreedyCounter = 0;
+    searchSettings.epsilonChecksCounter = 0;
+    searchSettings.qVetoDelta = 0.4;
+    searchSettings.qValueWeight = 1.0f;
     searchSettings.reuseTree = false;
 
     vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches(modelDir, searchSettings);

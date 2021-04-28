@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 set (CMAKE_CXX_STANDARD 17)
 project(PommerLearn CXX)
 
-option(USE_TENSORRT              "Build with TensorRT support"  OFF)
-option(USE_TORCH                 "Build with Torch support"  ON)
+option(USE_TENSORRT              "Build with TensorRT support"  ON)
+option(USE_TORCH                 "Build with Torch support"  OFF)
 option(USE_PROFILING             "Build with profiling"   OFF)
 
 function(check_env_defined name)
@@ -47,6 +47,7 @@ if (USE_TENSORRT)
     include_directories("$ENV{CUDA_PATH}/include")
     include_directories("$ENV{TENSORRT_PATH}/include")
     include_directories("$ENV{TENSORRT_PATH}/samples/common/")
+    include_directories("$ENV{TENSORRT_PATH}/parsers/onnx")
     add_definitions(-DTENSORRT)
 endif()
 

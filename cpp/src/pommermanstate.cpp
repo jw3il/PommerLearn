@@ -320,12 +320,6 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, 
     return TERMINAL_NONE;
 }
 
-Result PommermanState::check_result(bool inCheck) const
-{
-    // TODO
-}
-
-
 bool PommermanState::gives_check(Action action) const
 {
     return false;
@@ -356,6 +350,11 @@ PommermanState* PommermanState::clone() const
         clone->auxiliaryOutputs = auxiliaryOutputs;  // deep copy auxiliary outputs
     }
     return clone;
+}
+
+void PommermanState::init(int variant, bool isChess960)
+{
+    // TODO
 }
 
 void PommermanState::print(std::ostream& os) const
