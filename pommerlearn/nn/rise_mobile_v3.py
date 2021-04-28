@@ -289,8 +289,8 @@ class RiseV3(PommerModel):
             self.value_head = TimeDistributed(_ValueHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type), 2)
             self.policy_head = TimeDistributed(_PolicyHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels), 2)
         else:
-            self.value_head = _ValueHead(board_height, board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
-            self.policy_head = _PolicyHead(board_height, board_width, channels*expansion_factor, channels_policy_head, n_labels,
+            self.value_head = _ValueHead(out_board_height, out_board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
+            self.policy_head = _PolicyHead(out_board_height, out_board_width, channels*expansion_factor, channels_policy_head, n_labels,
                                                 bn_mom, act_type, select_policy_from_plane)
 
     def get_state_shape(self, batch_size: int):
