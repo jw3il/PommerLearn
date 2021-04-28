@@ -122,12 +122,12 @@ public:
     Action uci_to_action(std::string &uciStr) const override;
     std::string action_to_san(Action action, const std::vector<Action>& legalActions, bool leadsToWin, bool bookMove) const override;
     TerminalType is_terminal(size_t numberLegalMoves, bool inCheck, float& customTerminalValue) const override;
-    Result check_result(bool inCheck) const override;
     bool gives_check(Action action) const override;
     void print(std::ostream& os) const override;
     Tablebase::WDLScore check_for_tablebase_wdl(Tablebase::ProbeState& result) override;
     void set_auxiliary_outputs(const float* auxiliaryOutputs) override;
     PommermanState* clone() const override;
+    void init(int variant, bool isChess960);
 };
 
 #endif // POMMERMANSTATE_H
