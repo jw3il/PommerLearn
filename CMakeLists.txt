@@ -34,6 +34,7 @@ add_definitions(-DMODE_POMMERMAN)
 # add_definitions(-DDISABLE_UCI_INFO)  # optional
 add_definitions(-DMCTS_STORE_STATES)
 add_definitions(-DMCTS_SINGLE_PLAYER)
+add_definitions(-DYNAMIC_NN_ARCH)
 
 check_env_defined("BLAZE_PATH")
 include_directories("$ENV{BLAZE_PATH}/include")
