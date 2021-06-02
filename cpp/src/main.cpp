@@ -77,7 +77,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     PlaySettings playSettings;
     SearchLimits searchLimits;
     searchLimits.simulations = 100;
-    // searchLimits.movetime = 100;
+     searchLimits.movetime = 100;
     // searchLimits.moveOverhead = 20;
     EvalInfo evalInfo;
 

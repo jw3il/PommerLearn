@@ -164,7 +164,7 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
     // TODO
 }
 
-void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
+void PommermanState::get_state_planes(bool normalize, float *inputPlanes, const std::vector<Action>& legalActions) const
 {
     // TODO
     StateToPlanes(&state, 0, inputPlanes);
@@ -280,7 +280,7 @@ std::string PommermanState::action_to_san(Action action, const std::vector<Actio
     }
 }
 
-TerminalType PommermanState::is_terminal(size_t numberLegalMoves, bool inCheck, float& customTerminalValue) const
+TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customTerminalValue) const
 {
     if(state.finished)
     {

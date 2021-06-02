@@ -11,8 +11,8 @@
 
 #include "state.h"
 #include "bboard.hpp"
+#include <vector>
 #include "data_representation.h"
-
 #include "clonable.h"
 
 
@@ -108,7 +108,7 @@ public:
     // State interface
     std::vector<Action> legal_actions() const override;
     void set(const std::string &fenStr, bool isChess960, int variant) override;
-    void get_state_planes(bool normalize, float *inputPlanes) const override;
+    void get_state_planes(bool normalize, float *inputPlanes, const std::vector<Action>& legalActions) const override;
     unsigned int steps_from_null() const override;
     bool is_chess960() const override;
     std::string fen() const override;
@@ -121,7 +121,7 @@ public:
     void flip() override;
     Action uci_to_action(std::string &uciStr) const override;
     std::string action_to_san(Action action, const std::vector<Action>& legalActions, bool leadsToWin, bool bookMove) const override;
-    TerminalType is_terminal(size_t numberLegalMoves, bool inCheck, float& customTerminalValue) const override;
+    TerminalType is_terminal(size_t numberLegalMoves, float& customTerminalValue) const override;
     bool gives_check(Action action) const override;
     void print(std::ostream& os) const override;
     Tablebase::WDLScore check_for_tablebase_wdl(Tablebase::ProbeState& result) override;
