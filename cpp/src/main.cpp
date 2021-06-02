@@ -99,18 +99,18 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
 
     // other agents used for planning
     std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> planningAgents = {
-        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-        new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
     };
     pommermanState.set_planning_agents(planningAgents);
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
         nullptr,
-        new agents::SimpleAgent(rand()),
-        new agents::SimpleAgent(rand()),
-        new agents::SimpleAgent(rand()),
+        new agents::SimpleUnbiasedAgent(rand()),
+        new agents::SimpleUnbiasedAgent(rand()),
+        new agents::SimpleUnbiasedAgent(rand()),
     };
 
     RawNetAgent rawNetAgent(&netSingle, &playSettings, true);
