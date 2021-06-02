@@ -18,6 +18,8 @@
 
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
 {
+private:
+    static uint auxiliaryStateSize;
 public:
     static uint BOARD_WIDTH() {
         return 11;
@@ -35,7 +37,13 @@ public:
         return 6;
     }
     static uint NB_AUXILIARY_OUTPUTS() {
-        return 0;  // TODO
+        return auxiliaryStateSize;
+    }
+    static uint AUXILIARY_STATE_BEGIN() {
+        return 0;
+    }
+    static uint AUXILIARY_STATE_SIZE() {
+        return auxiliaryStateSize;
     }
     static uint NB_PLAYERS() {
         return 4;
@@ -63,14 +71,17 @@ public:
         return std::clamp(int(action), 0, NUM_MOVES);
     }
     static void init(bool isPolicyMap) {
-        return; // pass
+        return;
+    }
+    static void set_auxiliary_outputs(uint stateSize) {
+        StateConstantsPommerman::auxiliaryStateSize = stateSize;
     }
 };
 
 class PommermanState : public State
 {
 public:
-    PommermanState(uint agentID, bboard::GameMode gameMode);
+    PommermanState(uint agentID, bboard::GameMode gameMode, bool statefulModel);
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
     const uint agentID;
@@ -79,6 +90,7 @@ public:
     bboard::ObservationParameters params;
     int eventHash;
     std::vector<float> auxiliaryOutputs;
+    bool statefulModel;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.
@@ -127,7 +139,7 @@ public:
     Tablebase::WDLScore check_for_tablebase_wdl(Tablebase::ProbeState& result) override;
     void set_auxiliary_outputs(const float* auxiliaryOutputs) override;
     PommermanState* clone() const override;
-    void init(int variant, bool isChess960);
+    void init(int variant, bool isChess960) override;
 };
 
 #endif // POMMERMANSTATE_H

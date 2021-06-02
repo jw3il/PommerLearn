@@ -28,6 +28,7 @@ from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, LinearWa
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
 from dataset_util import create_data_loaders, log_dataset_stats, get_last_dataset_path
 from training.metrics import Metrics
+from training.train_util import rm_dir
 
 
 def create_model(train_config):
@@ -171,7 +172,8 @@ def export_initial_model(train_config, base_dir: Path):
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
 
-def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True, torch_cuda=True, onnx=True):
+def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True, torch_cuda=True, onnx=True,
+                 verbose=False):
     """
     Exports the model in ONNX and Torch Script Module.
 
@@ -183,76 +185,96 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
     :param torch_cpu: Whether to export as script module with cpu inputs
     :param torch_cuda: Whether to export as script module with cuda inputs
     :param onnx: Whether to export as onnx
+    :param verbose: Print debug information
     """
-    dir.mkdir(parents=True, exist_ok=True)
+
+    if dir.exists():
+        # make sure that all the content is deleted first so we don't run into strange caching issues
+        rm_dir(dir, keep_empty_dir=False)
+
+    dir.mkdir(parents=True, exist_ok=False)
 
     onnx_dir = dir / "onnx"
     if torch_cpu:
-        onnx_dir.mkdir(parents=True, exist_ok=True)
+        onnx_dir.mkdir(parents=True, exist_ok=False)
 
     cpu_dir = dir / "torch_cpu"
     if torch_cpu:
-        cpu_dir.mkdir(parents=True, exist_ok=True)
+        cpu_dir.mkdir(parents=True, exist_ok=False)
 
     torch_cuda = torch_cuda and torch.cuda.is_available()
     cuda_dir = dir / "torch_cuda"
     if torch_cuda:
-        cuda_dir.mkdir(parents=True, exist_ok=True)
+        cuda_dir.mkdir(parents=True, exist_ok=False)
 
     for batch_size in batch_sizes:
         dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)
 
+        if model.is_stateful:
+            dummy_input = model.flatten(dummy_input, model.get_init_state_bf_flat(batch_size, "cpu"))
+            model.set_input_options(sequence_length=None, has_state_input=True)
+        else:
+            dummy_input = model.flatten(dummy_input, None)
+            model.set_input_options(sequence_length=None, has_state_input=False)
+
         if onnx:
             dummy_input = dummy_input.cpu()
             model = model.cpu()
-            export_to_onnx(model, dummy_input, onnx_dir)
+            export_to_onnx(model, batch_size, dummy_input, onnx_dir)
 
         if torch_cpu:
             dummy_input = dummy_input.cpu()
             model = model.cpu()
-            export_as_script_module(model, dummy_input, cpu_dir)
+            export_as_script_module(model, batch_size, dummy_input, cpu_dir)
 
         if torch_cuda:
             dummy_input = dummy_input.cuda()
             model = model.cuda()
-            export_as_script_module(model, dummy_input, cuda_dir)
+            export_as_script_module(model, batch_size, dummy_input, cuda_dir)
+
+        if verbose:
+            print("Input shape: ")
+            print(dummy_input.shape)
+            print("Output shape: ")
+            for i, e in enumerate(model(dummy_input)):
+                print(f"{i}: {e.shape}")
 
 
-def export_to_onnx(model, dummy_input, dir) -> None:
+def export_to_onnx(model, batch_size, dummy_input, dir) -> None:
     """
     Exports the model to ONNX format to allow later import in TensorRT.
 
     :param model: Pytorch model
+    :param batch_size: The batch size of the input
     :param dummy_input: Dummy input which defines the input shape for the model
     :return:
     """
-    batch_size = dummy_input.size(0)
-
     if model.is_stateful:
-        input_names = ["data", "state"]
+        input_names = ["flat_in"]
         output_names = ["value_out", "policy_out", "next_state"]
-        dummy_input = (dummy_input, model.get_init_state(batch_size, "cpu"))
     else:
-        input_names = ["data"]
+        input_names = ["flat_in"]
         output_names = ["value_out", "policy_out"]
 
     torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{batch_size}.onnx")), input_names=input_names,
                       output_names=output_names)
 
 
-def export_as_script_module(model, dummy_input, dir) -> None:
+def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
     """
     Exports the model to a Torch Script Module to allow later import in C++.
 
     :param model: Pytorch model
+    :param batch_size: The batch size of the input
     :param dummy_input: Dummy input which defines the input shape for the model
     :return:
     """
+
     # generate a torch.jit.ScriptModule via tracing.
     traced_script_module = torch.jit.trace(model, dummy_input)
 
     # serialize script module to file
-    traced_script_module.save(str(dir / Path(f"model-bsize-{dummy_input.size(0)}.pt")))
+    traced_script_module.save(str(dir / Path(f"model-bsize-{batch_size}.pt")))
 
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
@@ -299,17 +321,28 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
 
             if not exported_graph:
                 if model.is_stateful:
-                    init_state = model.get_init_state(1, device="cuda:0" if use_cuda else "cpu")
-                    writer_train.add_graph(model, [x_train[0][None], init_state])
+                    print("")
+                    model.set_input_options(sequence_length=x_train[0].shape[0], has_state_input=True)
+                    init_state = model.get_init_state_bf_flat(1, device="cuda:0" if use_cuda else "cpu")
+                    writer_train.add_graph(model, model.flatten(x_train[0][None], init_state))
                 else:
-                    writer_train.add_graph(model, x_train[0][None])
+                    model.set_input_options(sequence_length=None, has_state_input=False)
+                    writer_train.add_graph(model, model.flatten(x_train[0][None], None))
 
                 exported_graph = True
 
             model.train()
 
-            # TODO: Only for recurrent networks!
             x_train, ya_train, yp_train = Variable(x_train), Variable(ya_train), Variable(yp_train)
+
+            if model.is_stateful:
+                # Assumption: We always train stateful models with sequences and training data has the shape
+                #             (batch dim, sequence dim, data)
+                # Important: We do not use the state input in training.
+                model.set_input_options(sequence_length=x_train.shape[1], has_state_input=False)
+            else:
+                model.set_input_options(sequence_length=None, has_state_input=False)
+
             combined_loss, _ = m_train.update(model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
                                            ya_train, yp_train, fit_pol_dist)
 
@@ -383,6 +416,7 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
 
         x, ya_val = Variable(x, requires_grad=False), Variable(ya_val, requires_grad=False)
 
+        model.set_input_options(sequence_length=None, has_state_input=False)
         m_val.update(model, policy_loss, value_loss, value_loss_ratio, x, yv_val, ya_val, yp_val, fit_pol_dist)
 
     return m_val
@@ -417,7 +451,7 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_
 
         if current_episode_id is None or current_episode_id != ids[0]:
             # the first sample from this batch is from a new episode, reset the state
-            model_state = model.get_init_state(1, device)
+            model_state = model.get_init_state_bf_flat(1, device)
 
         if current_episode_id is None:
             current_episode_id = ids[0]
@@ -461,13 +495,14 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_
                 print(f"Prepared data for range {current_idx} until {until_idx}")
 
             # update loss & get next state
+            model.set_input_options(sequence_length=(until_idx - current_idx), has_state_input=True)
             loss, next_state = m_val.update(model, policy_loss, value_loss, value_loss_ratio, obs_part, val_part,
                                             act_part, pol_part, fit_pol_dist, model_state=model_state,
                                             normalize_loss_nb_samples=data_loader.batch_size)
 
             current_idx = until_idx
             if reset_state:
-                model_state = model.get_init_state(1, device)
+                model_state = model.get_init_state_bf_flat(1, device)
                 if verbose:
                     print("Reset state")
             else:
@@ -510,7 +545,7 @@ def fill_default_config(train_config):
         # (of a path) or a list containing a) strings (paths) or b) tuples of the form (path, proportion) where
         # 0 <= proportion <= 1 is the proportion of total samples which will be selected from this data set.
         # Examples: "data_0.zr", [("data_0.zr", 0.25), ("data_1.zr", 0.5), "data_2.zr"]
-        "dataset_path": "data_0.zr",
+        "dataset_path": "data_0.zr",  # "2020/mcts_data_500.zr"
         "dataset_train_transform": default_data_transform,  # None
         "torch_input_dir": None,
         # output
