@@ -43,15 +43,17 @@ vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirec
     #endif
         }
     }
+    netBatches[0]->validate_neural_network();
     return netBatches;
 }
 
-void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet)
+void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize)
 {
     // TODO: Decouple agent creation
     srand(config.seed);
 
     StateConstants::init(false);
+    StateConstantsPommerman::set_auxiliary_outputs(stateSize);
 #ifdef TENSORRT
     TensorrtAPI netSingle(0, 1, modelDir, "float32");
 #elif defined (TORCH)
@@ -85,15 +87,15 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
 
     // this is the state object of agent 0
-    PommermanState pommermanState(0, gameMode);
+    PommermanState pommermanState(0, gameMode, stateSize != 0);
 
     // partial observability
     bboard::ObservationParameters obsParams;
-    obsParams.agentPartialMapView = true;
-    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
+    obsParams.agentPartialMapView = false;
+    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
     obsParams.exposePowerUps = false;
     obsParams.agentViewSize = 4;
-    // pommermanState.set_partial_observability(&obsParams);
+    pommermanState.set_partial_observability(&obsParams);
 
     // other agents used for planning
     std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> planningAgents = {
@@ -158,6 +160,8 @@ int main(int argc, char **argv) {
             // mcts options
             ("model_dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
             ("raw_net_agent", "If set, uses the raw net agent instead of the mcts agent.")
+            // TODO: State size should be detected automatically (?)
+            ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
     ;
 
     po::variables_map configVals;
@@ -209,7 +213,7 @@ int main(int argc, char **argv) {
         bool useRawNetAgent = configVals.count("raw_net_agent") > 0;
         std::string modelDir = configVals["model_dir"].as<std::string>();
 
-        free_for_all_tourney(modelDir, config, useRawNetAgent);
+        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>());
     }
     else {
         std::cerr << "Unknown mode" << std::endl;

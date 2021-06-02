@@ -75,6 +75,10 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
     ```
 
 
+#### Troubleshooting Notes
+* In older versions of tensorrt, you have to manually comment out `using namespace sample;` in `deps/CrazyAra/engine/src/nn/tensorrtapi.cpp`
+* Make sure that you've pulled all submodules recursively (including Stockfish for CrazyAra)
+
 ### Performance Profiling 
 
 Install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html):

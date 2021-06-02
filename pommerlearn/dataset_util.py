@@ -137,16 +137,15 @@ class PommerDataset(Dataset):
 
             # the last element in the sequence is the current sample
             current_id = self.ids[idx]
-            for a in range(0, self.sequence_length):
-                data_idx = idx - a
-                seq_idx = -1 - a
+            for seq_idx in range(0, self.sequence_length):
+                data_idx = idx + seq_idx
 
-                if data_idx < 0 or self.ids[data_idx] != current_id:
+                if data_idx >= len(self.obs) or self.ids[data_idx] != current_id:
                     # we reached a different episode / the beginning of the dataset
                     # TODO: Add masking?
                     break
                 elif self.return_ids:
-                    ids[seq_idx] = self.ids[data_idx]
+                    ids[seq_idx] = current_id
 
                 sample = PommerSample(
                     torch.tensor(self.obs[data_idx], dtype=torch.float),

@@ -8,18 +8,24 @@
 #include "data_representation.h"
 #include "agents.hpp"
 
+uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
-PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode):
+PommermanState::PommermanState(uint agentID, bboard::GameMode gameMode, bool statefulModel):
     agentID(agentID),
     gameMode(gameMode),
     usePartialObservability(false),
     eventHash(0),
+    statefulModel(statefulModel),
     hasPlanningAgents(false),
     hasBufferedActions(false)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
         auxiliaryOutputs.resize(StateConstantsPommerman::NB_AUXILIARY_OUTPUTS());
+    }
+    else if (statefulModel)
+    {
+        throw "You have not set an auxiliary (state) output but you claim that your model is stateful.";
     }
 }
 
@@ -54,20 +60,26 @@ void PommermanState::set_observation(const bboard::Observation* obs)
     }
 }
 
+bool _supportedPlanningAgents(PommermanState* state)
+{
+    // supported: full observability of the board and all agent information is known
+    return !state->usePartialObservability || (state->params.agentInfoVisibility == bboard::AgentInfoVisibility::All && !state->params.agentPartialMapView);
+}
+
 void PommermanState::set_partial_observability(const bboard::ObservationParameters* params)
 {
     this->usePartialObservability = true;
     this->params = *params;
 
-    if (this->hasPlanningAgents) {
-        throw std::runtime_error("The combination of partial observability & planning agents is not implemented yet!");
+    if (this->hasPlanningAgents && !_supportedPlanningAgents(this)) {
+        throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
     }
 }
 
 void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents)
 {
-    if (this->usePartialObservability) {
-        throw std::runtime_error("The combination of partial observability & planning agents is not implemented yet!");
+    if (this->usePartialObservability && !_supportedPlanningAgents(this)) {
+        throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
     }
 
     hasPlanningAgents = false;
@@ -168,6 +180,26 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes) const
 {
     // TODO
     StateToPlanes(&state, 0, inputPlanes);
+    if (this->statefulModel)
+    {
+        // add auxiliary outputs
+        uint observationSize = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
+
+        uint stateBegin = StateConstantsPommerman::AUXILIARY_STATE_BEGIN();
+        float* statePointer = &inputPlanes[observationSize + stateBegin];
+        uint stateSize = StateConstantsPommerman::AUXILIARY_STATE_SIZE();
+
+        if (state.timeStep == 0)
+        {
+            // auxillary outputs are not filled yet => start with empty state
+            std::fill_n(statePointer, stateSize, 0.0f);
+        }
+        else
+        {
+            // use the last auxiliary outputs as an input for the next state
+            std::copy_n(auxiliaryOutputs.begin() + stateBegin, stateSize, statePointer);
+        }
+    }
 }
 
 unsigned int PommermanState::steps_from_null() const
@@ -327,7 +359,7 @@ bool PommermanState::gives_check(Action action) const
 
 PommermanState* PommermanState::clone() const
 {
-    PommermanState* clone = new PommermanState(agentID, gameMode);
+    PommermanState* clone = new PommermanState(agentID, gameMode, statefulModel);
     clone->state = state;
     if (hasPlanningAgents) {
         // clone all agents
@@ -375,3 +407,4 @@ void PommermanState::set_auxiliary_outputs(const float *auxiliaryOutputs)
         std::copy(auxiliaryOutputs, auxiliaryOutputs+StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), this->auxiliaryOutputs.begin());
     }
 }
+
