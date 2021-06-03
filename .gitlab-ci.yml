@@ -29,15 +29,16 @@ build:
     - unzip libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
     - cd ..
-    # CMake and g++
-    - apt -y install cmake g++
+    # CMake
+    - apt -y install cmake
   script:
     - mkdir build
     - cd build
     - export BLAZE_PATH="../lib/blaze-3.8"
     - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
     - export Torch_DIR="../lib/libtorch"
-    - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER=/usr/bin/g++ ..
+    - which g++
+    - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
     - make VERBOSE=1 all
   artifacts:
     paths:
