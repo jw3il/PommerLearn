@@ -24,6 +24,10 @@ endfunction()
 check_env_defined("CONDA_ENV_PATH")
 include_directories("$ENV{CONDA_ENV_PATH}/include")
 
+# xtensor and gcc > 5.1 https://xtensor.readthedocs.io/en/latest/compilers.html
+# add_definitions(-DXTENSOR_GLIBCXX_USE_CXX11_ABI)
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+
 ########################
 #      Libraries       #
 ########################
@@ -187,3 +191,4 @@ if(NOT APPLE)
     # apple has trouble linking to stdc++fs somehow
     target_link_libraries(${test_name} stdc++fs)
 endif()
+

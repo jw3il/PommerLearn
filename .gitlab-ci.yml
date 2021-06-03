@@ -1,0 +1,46 @@
+# use the official gcc image, based on debian
+# can use verions as well, like gcc:5.2
+# see https://hub.docker.com/_/gcc/
+image: gcc
+
+build:
+  stage: build
+  # instead of calling g++ directly you can also use some build toolkit like make
+  # install the necessary build tools when needed
+  before_script:
+    - apt update
+    - wget https://repo.anaconda.com/miniconda/Miniconda3-py37_4.9.2-Linux-aarch64.sh
+    - bash Miniconda3-py37_4.9.2-Linux-aarch64.sh
+    # create and activate environment
+    - conda create -n pommer_build python=3.7
+    - source $HOME/miniconda3/bin/activate pommer_build
+    # install (some) dependencies via conda-forge
+    - conda install -c conda-forge z5py xtensor boost nlohmann_json blosc catch2
+    # get libraries that are not in conda-forge
+    - mkdir lib
+    - cd lib
+    # required for blaze
+    - apt -y install libblas-dev liblapack-dev
+    - wget https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
+    - tar -xf blaze-3.8.tar.gz 
+    # PyTorch
+    - wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip
+    - unzip libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip
+    - bash ../fix_pytorch.sh ./libtorch
+    - cd ..
+  script:
+    - mkdir build
+    - cd build
+    - export BLAZE_PATH="../lib/blaze-3.8"
+    - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
+    - export Torch_DIR="../lib/libtorch"
+    - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER=/usr/bin/g++ ..
+    - make VERBOSE=1 all
+  artifacts:
+    paths:
+      - ./build/PommerLearn
+
+test:
+  stage: test
+  script:
+    - ./PommerLearn
