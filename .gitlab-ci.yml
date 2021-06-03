@@ -1,12 +1,13 @@
 # use the official gcc image, based on debian
 # can use verions as well, like gcc:5.2
 # see https://hub.docker.com/_/gcc/
-image: gcc
+image: gcc:10.3.0
 
 default:
   # install dependencies
   before_script:
     - apt update
+    - gcc --version
     - wget -nv https://repo.anaconda.com/miniconda/Miniconda3-py37_4.9.2-Linux-x86_64.sh -O miniconda3.sh
     - bash miniconda3.sh -b -p ./miniconda3
     - export PATH="$PWD/miniconda3/bin:$PATH"
@@ -20,11 +21,11 @@ default:
     - cd lib
     # required for blaze
     - apt -y install libblas-dev liblapack-dev
-    - wget https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
+    - wget -nv https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
     - tar -xf blaze-3.8.tar.gz 
     # PyTorch (CPU-only)
     - wget -nv https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip -O libtorch.zip
-    - unzip libtorch.zip
+    - unzip -q libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
     - cd ..
     # CMake
