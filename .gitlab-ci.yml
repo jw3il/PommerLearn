@@ -3,16 +3,13 @@
 # see https://hub.docker.com/_/gcc/
 image: gcc
 
-build:
-  stage: build
-  variables:
-    GIT_SUBMODULE_STRATEGY: recursive
+default:
   # install dependencies
   before_script:
     - apt update
     - wget -nv https://repo.anaconda.com/miniconda/Miniconda3-py37_4.9.2-Linux-x86_64.sh -O miniconda3.sh
-    - bash miniconda3.sh -b -p $HOME/miniconda3
-    - export PATH="$HOME/miniconda3/bin:$PATH"
+    - bash miniconda3.sh -b -p ./miniconda3
+    - export PATH="$PWD/miniconda3/bin:$PATH"
     # create and activate environment
     - conda create -n pommer_build python=3.7
     - source $HOME/miniconda3/bin/activate pommer_build
@@ -32,6 +29,11 @@ build:
     - cd ..
     # CMake
     - apt -y install cmake
+
+build:
+  stage: build
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
   script:
     - export BLAZE_PATH="$(pwd)/lib/blaze-3.8"
     - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
@@ -47,10 +49,12 @@ build:
 
 run:
   stage: test
+  needs: ["build"]
   script:
     - ./build/PommerLearn
     
 test:
   stage: test
+  needs: ["build"]
   script:
     - ./build/PommerLearnTest
