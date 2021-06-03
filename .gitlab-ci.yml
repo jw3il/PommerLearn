@@ -42,6 +42,7 @@ build:
     - cd build
     - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
     - make VERBOSE=1 all
+    - ldd ./PommerLearn
   artifacts:
     paths:
       - ./build/PommerLearn
@@ -51,10 +52,6 @@ run:
   stage: test
   needs: ["build"]
   script:
+    - ldd ./build/PommerLearn
     - ./build/PommerLearn
-    
-test:
-  stage: test
-  needs: ["build"]
-  script:
-    - ./build/PommerLearnTest
+
