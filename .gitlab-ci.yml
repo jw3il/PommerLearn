@@ -1,6 +1,3 @@
-# use the official gcc image, based on debian
-# can use verions as well, like gcc:5.2
-# see https://hub.docker.com/_/gcc/
 image: gcc:10.3.0
 
 default:
@@ -8,6 +5,7 @@ default:
   before_script:
     - apt update
     - gcc --version
+    # download and install miniconda
     - wget -nv https://repo.anaconda.com/miniconda/Miniconda3-py37_4.9.2-Linux-x86_64.sh -O miniconda3.sh
     - bash miniconda3.sh -b -p ./miniconda3
     - export PATH="$PWD/miniconda3/bin:$PATH"
@@ -16,41 +14,37 @@ default:
     - source $PWD/miniconda3/bin/activate pommer_build
     # install (some) dependencies via conda-forge
     - conda install -y -c conda-forge z5py xtensor boost nlohmann_json blosc catch2
-    # get libraries that are not in conda-forge
+    # now get libraries that are not in conda-forge
     - mkdir lib
     - cd lib
-    # required for blaze
+    # install blaze (and its dependencies)
     - apt -y install libblas-dev liblapack-dev
     - wget -nv https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
     - tar -xf blaze-3.8.tar.gz 
-    # PyTorch (CPU-only)
+    # install PyTorch (CPU-only)
     - wget -nv https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip -O libtorch.zip
     - unzip -q libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
+    # go back
     - cd ..
-    # CMake
-    - apt -y install cmake
-    # fix for libstdc++ (?)
-    - apt -y install libstdc++6
 
 build:
   stage: build
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
   script:
+    # install additional build requirements
+    - apt -y install cmake
+    # define environment variables
     - export BLAZE_PATH="$PWD/lib/blaze-3.8"
     - export CONDA_ENV_PATH="$PWD/miniconda3/envs/pommer_build"
     - export Torch_DIR="$PWD/lib/libtorch"
-    - strings ./miniconda3/envs/pommer_build/lib/libstdc++.so.6 | grep GLIBCXX
-    - strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX
+    # build
     - mkdir build
     - cd build
     - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
     - make VERBOSE=1 all
     - ldd ./PommerLearn
-    - cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 .
-    - ldd ./PommerLearn
-    - ./PommerLearn
   artifacts:
     paths:
       - ./build/PommerLearn
@@ -62,4 +56,11 @@ run:
   script:
     - ldd ./build/PommerLearn
     - ./build/PommerLearn
+    
+test:
+  stage: test
+  needs: ["build"]
+  script:
+    - ldd ./build/PommerLearnTest
+    - ./build/PommerLearnTest
 
