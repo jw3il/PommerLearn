@@ -25,8 +25,8 @@ build:
     - wget https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
     - tar -xf blaze-3.8.tar.gz 
     # PyTorch
-    - wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip
-    - unzip libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip
+    - wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip -O libtorch.zip
+    - unzip libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
     - cd ..
   script:
