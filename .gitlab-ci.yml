@@ -30,7 +30,7 @@ default:
     # CMake
     - apt -y install cmake
     # fix for libstdc++ (?)
-    apt -y install libstdc++6
+    - apt -y install libstdc++6
 
 build:
   stage: build
