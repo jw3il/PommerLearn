@@ -29,8 +29,8 @@ build:
     - unzip libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
     - cd ..
-    # CMake
-    - apt -y install cmake
+    # CMake and g++
+    - apt -y install cmake g++
   script:
     - mkdir build
     - cd build
