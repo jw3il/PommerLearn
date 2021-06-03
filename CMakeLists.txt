@@ -41,7 +41,6 @@ add_definitions(-DMCTS_SINGLE_PLAYER)
 add_definitions(-DYNAMIC_NN_ARCH)
 
 check_env_defined("BLAZE_PATH")
-include_directories("$ENV{BLAZE_PATH}/include")
 include_directories("$ENV{BLAZE_PATH}")
 
 if (USE_TENSORRT)

@@ -10,7 +10,7 @@ build:
   # install dependencies
   before_script:
     - apt update
-    - wget https://repo.anaconda.com/miniconda/Miniconda3-py37_4.9.2-Linux-x86_64.sh -O miniconda3.sh
+    - wget -nv https://repo.anaconda.com/miniconda/Miniconda3-py37_4.9.2-Linux-x86_64.sh -O miniconda3.sh
     - bash miniconda3.sh -b -p $HOME/miniconda3
     - export PATH="$HOME/miniconda3/bin:$PATH"
     # create and activate environment
@@ -26,19 +26,20 @@ build:
     - wget https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
     - tar -xf blaze-3.8.tar.gz 
     # PyTorch
-    - wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip -O libtorch.zip
+    - wget -nv https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip -O libtorch.zip
     - unzip libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
     - cd ..
     # CMake
     - apt -y install cmake
   script:
+    - ls -la "./lib"
+    - ls -la "./lib/blaze-3.8"
+    - export BLAZE_PATH="$(pwd)/lib/blaze-3.8"
+    - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
+    - export Torch_DIR="$(pwd)/lib/libtorch"
     - mkdir build
     - cd build
-    - export BLAZE_PATH="../lib/blaze-3.8"
-    - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
-    - export Torch_DIR="../lib/libtorch"
-    - which g++
     - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
     - make VERBOSE=1 all
   artifacts:
