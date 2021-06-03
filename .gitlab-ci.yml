@@ -25,7 +25,7 @@ build:
     - apt -y install libblas-dev liblapack-dev
     - wget https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
     - tar -xf blaze-3.8.tar.gz 
-    # PyTorch
+    # PyTorch (CPU-only)
     - wget -nv https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.1%2Bcpu.zip -O libtorch.zip
     - unzip libtorch.zip
     - bash ../fix_pytorch.sh ./libtorch
@@ -33,8 +33,6 @@ build:
     # CMake
     - apt -y install cmake
   script:
-    - ls -la "./lib"
-    - ls -la "./lib/blaze-3.8"
     - export BLAZE_PATH="$(pwd)/lib/blaze-3.8"
     - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
     - export Torch_DIR="$(pwd)/lib/libtorch"
@@ -45,8 +43,14 @@ build:
   artifacts:
     paths:
       - ./build/PommerLearn
+      - ./build/PommerLearnTest
 
+run:
+  stage: test
+  script:
+    - ./build/PommerLearn
+    
 test:
   stage: test
   script:
-    - ./PommerLearn
+    - ./build/PommerLearnTest
