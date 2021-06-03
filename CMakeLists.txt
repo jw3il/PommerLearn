@@ -24,6 +24,10 @@ endfunction()
 check_env_defined("CONDA_ENV_PATH")
 include_directories("$ENV{CONDA_ENV_PATH}/include")
 
+# xtensor and gcc > 5.1 https://xtensor.readthedocs.io/en/latest/compilers.html
+# add_definitions(-DXTENSOR_GLIBCXX_USE_CXX11_ABI)
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+
 ########################
 #      Libraries       #
 ########################
@@ -37,7 +41,6 @@ add_definitions(-DMCTS_SINGLE_PLAYER)
 add_definitions(-DYNAMIC_NN_ARCH)
 
 check_env_defined("BLAZE_PATH")
-include_directories("$ENV{BLAZE_PATH}/include")
 include_directories("$ENV{BLAZE_PATH}")
 
 if (USE_TENSORRT)
@@ -163,11 +166,6 @@ add_executable(${PROJECT_NAME} ${source_files})
 
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
 
-if(NOT APPLE)
-    # apple has trouble linking to stdc++fs somehow
-    target_link_libraries(${PROJECT_NAME} stdc++fs)
-endif()
-
 # Testing
 
 set(test_name ${PROJECT_NAME}Test)
@@ -183,7 +181,3 @@ add_executable(${test_name} ${source_files_nomain} ${test_files})
 
 target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
 
-if(NOT APPLE)
-    # apple has trouble linking to stdc++fs somehow
-    target_link_libraries(${test_name} stdc++fs)
-endif()
