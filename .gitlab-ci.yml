@@ -12,7 +12,7 @@ default:
     - export PATH="$PWD/miniconda3/bin:$PATH"
     # create and activate environment
     - conda create -n pommer_build python=3.7
-    - source $HOME/miniconda3/bin/activate pommer_build
+    - source $PWD/miniconda3/bin/activate pommer_build
     # install (some) dependencies via conda-forge
     - conda install -y -c conda-forge z5py xtensor boost nlohmann_json blosc catch2
     # get libraries that are not in conda-forge
@@ -35,9 +35,9 @@ build:
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
   script:
-    - export BLAZE_PATH="$(pwd)/lib/blaze-3.8"
-    - export CONDA_ENV_PATH="$HOME/miniconda3/envs/pommer_build"
-    - export Torch_DIR="$(pwd)/lib/libtorch"
+    - export BLAZE_PATH="$PWD/lib/blaze-3.8"
+    - export CONDA_ENV_PATH="$PWD/miniconda3/envs/pommer_build"
+    - export Torch_DIR="$PWD/lib/libtorch"
     - mkdir build
     - cd build
     - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
