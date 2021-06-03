@@ -29,6 +29,8 @@ default:
     - cd ..
     # CMake
     - apt -y install cmake
+    # fix for libstdc++ (?)
+    apt -y install libstdc++6
 
 build:
   stage: build
@@ -38,11 +40,16 @@ build:
     - export BLAZE_PATH="$PWD/lib/blaze-3.8"
     - export CONDA_ENV_PATH="$PWD/miniconda3/envs/pommer_build"
     - export Torch_DIR="$PWD/lib/libtorch"
+    - strings ./miniconda3/envs/pommer_build/lib/libstdc++.so.6 | grep GLIBCXX
+    - strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX
     - mkdir build
     - cd build
     - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
     - make VERBOSE=1 all
     - ldd ./PommerLearn
+    - cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 .
+    - ldd ./PommerLearn
+    - ./PommerLearn
   artifacts:
     paths:
       - ./build/PommerLearn

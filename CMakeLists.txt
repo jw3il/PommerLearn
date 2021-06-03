@@ -166,11 +166,6 @@ add_executable(${PROJECT_NAME} ${source_files})
 
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
 
-if(NOT APPLE)
-    # apple has trouble linking to stdc++fs somehow
-    target_link_libraries(${PROJECT_NAME} stdc++fs)
-endif()
-
 # Testing
 
 set(test_name ${PROJECT_NAME}Test)
@@ -185,9 +180,4 @@ file(GLOB test_files
 add_executable(${test_name} ${source_files_nomain} ${test_files})
 
 target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
-
-if(NOT APPLE)
-    # apple has trouble linking to stdc++fs somehow
-    target_link_libraries(${test_name} stdc++fs)
-endif()
 
