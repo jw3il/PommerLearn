@@ -81,10 +81,10 @@ public:
 class PommermanState : public State
 {
 public:
-    PommermanState(uint agentID, bboard::GameMode gameMode, bool statefulModel);
+    PommermanState(bboard::GameMode gameMode, bool statefulModel);
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
-    const uint agentID;
+    uint agentID;
     const bboard::GameMode gameMode;
     bool usePartialObservability;
     bboard::ObservationParameters params;
@@ -110,7 +110,8 @@ public:
 public:
     void set_state(const bboard::State* state);
     void set_observation(const bboard::Observation* obs);
-    void set_partial_observability(const bboard::ObservationParameters* params);
+    void set_partial_observability(const bboard::ObservationParameters params);
+    void set_agent_id(const int id);
 
     // planning agent methods
     void set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents);
