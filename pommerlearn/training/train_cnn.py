@@ -250,10 +250,10 @@ def export_to_onnx(model, batch_size, dummy_input, dir) -> None:
     :return:
     """
     if model.is_stateful:
-        input_names = ["flat_in"]
-        output_names = ["value_out", "policy_out", "next_state"]
+        input_names = ["data"]
+        output_names = ["value_out", "policy_out", "auxiliary_out"]
     else:
-        input_names = ["flat_in"]
+        input_names = ["data"]
         output_names = ["value_out", "policy_out"]
 
     torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{batch_size}.onnx")), input_names=input_names,
