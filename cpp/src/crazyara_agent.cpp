@@ -133,3 +133,32 @@ vector<unique_ptr<NeuralNetAPI>> CrazyAraAgent::load_network_batches(const strin
     netBatches[0]->validate_neural_network();
     return netBatches;
 }
+
+SearchSettings CrazyAraAgent::get_default_search_settings(const bool selfPlay)
+{
+    SearchSettings searchSettings;
+
+    searchSettings.virtualLoss = 1;
+    searchSettings.batchSize = 8;
+    searchSettings.threads = 2;
+    searchSettings.useMCGS = false;
+    searchSettings.multiPV = 1;
+    searchSettings.virtualLoss = 1;
+    searchSettings.nodePolicyTemperature = 1.0f;
+    if (selfPlay)
+    {
+        searchSettings.dirichletEpsilon = 0.25f;
+    }
+    else
+    {
+        searchSettings.dirichletEpsilon = 0;
+    }
+    searchSettings.dirichletAlpha = 0.2f;
+    searchSettings.epsilonGreedyCounter = 0;
+    searchSettings.epsilonChecksCounter = 0;
+    searchSettings.qVetoDelta = 0.4;
+    searchSettings.qValueWeight = 1.0f;
+    searchSettings.reuseTree = false;
+
+    return searchSettings;
+}

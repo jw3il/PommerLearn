@@ -41,6 +41,7 @@ public:
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
     static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
+    static SearchSettings get_default_search_settings(const bool selfPlay);
 
     // bboard::Agent
     bboard::Move act(const bboard::State *state) override;

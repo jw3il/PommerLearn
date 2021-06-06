@@ -31,22 +31,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
         crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir);
     }
     else {
-        SearchSettings searchSettings;
-        searchSettings.virtualLoss = 1;
-        searchSettings.batchSize = 8;
-        searchSettings.threads = 2;
-        searchSettings.useMCGS = false;
-        searchSettings.multiPV = 1;
-        searchSettings.virtualLoss = 1;
-        searchSettings.nodePolicyTemperature = 1.0f;
-        searchSettings.dirichletEpsilon = 0.25f;
-        searchSettings.dirichletAlpha = 0.2f;
-        searchSettings.epsilonGreedyCounter = 0;
-        searchSettings.epsilonChecksCounter = 0;
-        searchSettings.qVetoDelta = 0.4;
-        searchSettings.qValueWeight = 1.0f;
-        searchSettings.reuseTree = false;
-
+        SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(true);
         PlaySettings playSettings;
         SearchLimits searchLimits;
         searchLimits.simulations = 100;
