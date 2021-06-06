@@ -1,4 +1,5 @@
 -e ./deps/playground
+-e ./deps/pomcpp/py
 numpy
 matplotlib
 imageio
