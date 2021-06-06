@@ -175,7 +175,9 @@ target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAr
 set(lib_name ${PROJECT_NAME}Py)
 
 file(GLOB lib_files
-    "deps/pomcpp/src/pyinterface/*.cpp"
+    "deps/pomcpp/src/pyinterface/from_json.cpp"
+    "deps/pomcpp/src/pyinterface/pymethods.cpp"
+    "cpp/src/pyinterface/new_agent.cpp"
 )
 add_library(${lib_name} SHARED ${source_files_nomain} ${lib_files})
 target_link_libraries(${lib_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp)
