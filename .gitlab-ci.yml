@@ -57,11 +57,4 @@ run:
   script:
     - ldd ./build/PommerLearn
     - ./build/PommerLearn
-    
-test:
-  stage: test
-  needs: ["build"]
-  script:
-    - ldd ./build/PommerLearnTest
-    - ./build/PommerLearnTest
 

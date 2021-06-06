@@ -109,7 +109,7 @@ include_directories("deps/CrazyAra/engine/src/agents/")
 
 include_directories("deps/CrazyAra/engine/3rdparty/Stockfish/src")
 
-add_library(CrazyAra ${CrazyAra_source_files})
+add_library(CrazyAra SHARED ${CrazyAra_source_files})
 
 if (USE_TORCH)
     target_link_libraries(CrazyAra "${TORCH_LIBRARIES}")
@@ -141,7 +141,7 @@ file(GLOB pomcpp_source_files
 )
 
 include_directories("deps/pomcpp/include")
-add_library(pomcpp ${pomcpp_source_files})
+add_library(pomcpp SHARED ${pomcpp_source_files})
 
 ########################
 #    Main Target(s)    #
@@ -160,24 +160,34 @@ file(GLOB source_files
     "cpp/src/*.h"
 )
 
+set(source_files_nomain ${source_files})
+list(FILTER source_files_nomain EXCLUDE REGEX "main.cpp$")
+
 include_directories("cpp/src/")
 
-add_executable(${PROJECT_NAME} ${source_files})
+# Main executable
 
+add_executable(${PROJECT_NAME} ${source_files})
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
+
+# Library with Python interface
+
+set(lib_name ${PROJECT_NAME}Py)
+
+file(GLOB lib_files
+    "deps/pomcpp/src/pyinterface/*.cpp"
+)
+add_library(${lib_name} SHARED ${source_files_nomain} ${lib_files})
+target_link_libraries(${lib_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp)
 
 # Testing
 
 set(test_name ${PROJECT_NAME}Test)
-
-set(source_files_nomain ${source_files})
-list(FILTER source_files_nomain EXCLUDE REGEX "main.cpp$")
 
 file(GLOB test_files
     "cpp/test/*.cpp"
 )
 
 add_executable(${test_name} ${source_files_nomain} ${test_files})
-
 target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
 
