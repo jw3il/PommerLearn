@@ -5,11 +5,11 @@
 #include <iostream>
 #include "string.h"
 
-CrazyAraAgent* create_crazyara_agent(SearchLimits searchLimits)
+CrazyAraAgent* create_crazyara_agent(SearchLimits searchLimits, std::string modelDir)
 {
     SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(false);
     PlaySettings playSettings;
-    CrazyAraAgent* crazyAraAgent = new CrazyAraAgent("./model/torch_cpu/", playSettings, searchSettings, searchLimits);
+    CrazyAraAgent* crazyAraAgent = new CrazyAraAgent(modelDir, playSettings, searchSettings, searchLimits);
 
     // partial observability
     bboard::ObservationParameters obsParams;
@@ -32,19 +32,35 @@ bboard::Agent* PyInterface::new_agent(std::string agentName, long seed)
     {
         return new agents::SimpleUnbiasedAgent(seed);
     }
-    else if(agentName == "CrazyAra100")
+    else if(agentName.find("CrazyAra") == 0)
     {
+        if(agentName.find(":") == std::string::npos) 
+        {
+            std::cout << "Missing model directory! Specify it like CrazyAra:dir" << std::endl;
+            return nullptr;
+        }
+
+        int startIndex = agentName.find(":") + 1;
+        std::string modelDir = agentName.substr(startIndex, agentName.length() - startIndex);
+
         SearchLimits searchLimits;
-        searchLimits.simulations = 100;
-        searchLimits.movetime = 100;
-        return create_crazyara_agent(searchLimits);
-    }
-    else if(agentName == "CrazyAra500")
-    {
-        SearchLimits searchLimits;
-        searchLimits.simulations = 500;
-        searchLimits.movetime = 100;
-        return create_crazyara_agent(searchLimits);
+        if(agentName.find("CrazyAra100"))
+        {
+            searchLimits.simulations = 100;
+            searchLimits.movetime = 100;
+        }
+        else if(agentName.find("CrazyAra500"))
+        {
+            searchLimits.simulations = 500;
+            searchLimits.movetime = 100;
+        }
+        else
+        {
+            std::cout << "Unknown CrazyAraAgent" << std::endl;
+            return nullptr;
+        }
+
+        return create_crazyara_agent(searchLimits, modelDir);
     }
 
     return nullptr;
