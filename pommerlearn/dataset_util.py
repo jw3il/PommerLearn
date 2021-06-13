@@ -224,9 +224,9 @@ class PommerDataset(Dataset):
                 sequence = self.transform(sequence)
 
             if self.return_ids:
-                ids = np.empty(self.sequence_length, dtype=np.int).fill(-1)
-                ids[0:seq_end] = current_id
-                return (ids, *sequence)
+                ret_ids = torch.ones(self.sequence_length, dtype=torch.int, requires_grad=False) * -1
+                ret_ids[0:seq_end] = current_id
+                return (ret_ids, *sequence)
             else:
                 return sequence
 
@@ -412,7 +412,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
               f"test size {test_size}")
 
     data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform,
-                                            sequence_length=sequence_length)
+                                            sequence_length=sequence_length, return_ids=(sequence_length is not None))
     data_test = PommerDataset.create_empty(total_test_samples, return_ids=(sequence_length is not None))
 
     # create a container for all samples

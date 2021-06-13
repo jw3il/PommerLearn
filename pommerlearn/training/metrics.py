@@ -29,7 +29,7 @@ class Metrics:
         self.steps = 0
 
     def update(self, model: PommerModel, policy_loss, value_loss, value_loss_ratio, x_train, yv_train, ya_train, yp_train,
-                       fit_pol_dist, normalize_loss_nb_samples: Optional[int] = None, model_state = None):
+                       fit_pol_dist, normalize_loss_nb_samples: Optional[int] = None, model_state=None, ids=None, device=None):
         """
         Updates the metrics and calculates the combined loss
 
@@ -45,6 +45,8 @@ class Metrics:
         :param normalize_loss_nb_samples: Whether to normalize the calculated losses according to some default number
                                           of samples. This is important when you have varying number of samples.
         :param model_state: The current state of the model (optional)
+        :param ids: The episode ids in the data (required for masking)
+        :param device: The device (required for masking)
         :return: A tuple of the combined loss and (optionally) the next state
         """
 
@@ -55,13 +57,19 @@ class Metrics:
         else:
             value_out, policy_out = model(model.flatten(x_train, None))
 
+        mask = None
+        if ids is not None:
+            mask = (ids != -1).to(dtype=torch.float).unsqueeze(-1)
+            if device is not None:
+                mask = mask.to(device=device)
+
         # TODO: Improve code design, this should be handled automatically
         if fit_pol_dist:
-            cur_policy_loss = policy_loss(policy_out, yp_train)
+            cur_policy_loss = policy_loss(policy_out, yp_train, mask=mask)
         else:
-            cur_policy_loss = policy_loss(policy_out, ya_train)
+            cur_policy_loss = policy_loss(policy_out, ya_train, mask=mask)
 
-        cur_value_loss = value_loss(value_out.squeeze(-1), yv_train)
+        cur_value_loss = value_loss(value_out, yv_train.unsqueeze(-1), mask=mask)
         combined_loss = (1 - value_loss_ratio) * cur_policy_loss + value_loss_ratio * cur_value_loss
 
         # update metrics
@@ -89,7 +97,8 @@ class Metrics:
         self.correct_cnt += float((pred_label == ya_train.data).sum())
 
         self.sum_policy_loss += normalization_factor * float(cur_policy_loss.data)
-        kl_value = kl_div(log_softmax(policy_out, dim=1), yp_train, reduction='batchmean')
+        # note: kl value ignores mask
+        kl_value = kl_div(log_softmax(policy_out, dim=-1), yp_train, reduction='batchmean')
         self.sum_policy_kl += normalization_factor * float(kl_value)
         self.sum_value_loss += normalization_factor * float(cur_value_loss.data)
         self.sum_combined_loss += normalization_factor * float(combined_loss.data)

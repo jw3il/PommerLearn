@@ -23,7 +23,8 @@ from pathlib import Path
 from torch.optim.optimizer import Optimizer
 
 from nn.simple_lstm import SimpleLSTM
-from training.loss.cross_entropy_continious import CrossEntropyLossContinious
+from training.loss.masked_continious_cross_entropy import MaskedContiniousCrossEntropyLoss
+from training.loss.masked_mse import MaskedMSELoss
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
 from dataset_util import create_data_loaders, log_dataset_stats, get_last_dataset_path
@@ -87,11 +88,11 @@ def train_cnn(train_config):
 
     fit_pol_dist = train_config["fit_policy_distribution"]
     if fit_pol_dist:
-        policy_loss = CrossEntropyLossContinious()
+        policy_loss = MaskedContiniousCrossEntropyLoss()
     else:
         policy_loss = nn.CrossEntropyLoss()
 
-    value_loss = nn.MSELoss()
+    value_loss = MaskedMSELoss()
 
     total_it = len(train_loader) * train_config["nb_epochs"]
     lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
@@ -312,18 +313,29 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
 
+    device = "cuda:0" if use_cuda else "cpu"
+
     for epoch in range(nb_epochs):
         # training
-        for batch_idx, (x_train, yv_train, ya_train, yp_train) in enumerate(train_loader):
+        for batch_idx, batch in enumerate(train_loader):
             optimizer.zero_grad()
+            if model.is_stateful:
+                ids, x_train, yv_train, ya_train, yp_train = batch
+            else:
+                ids = None
+                x_train, yv_train, ya_train, yp_train = batch
+
             if use_cuda:
-                x_train, yv_train, ya_train, yp_train = x_train.cuda(), yv_train.cuda(), ya_train.cuda(), yp_train.cuda()
+                x_train = x_train.to(device=device)
+                yv_train = yv_train.to(device=device)
+                ya_train = ya_train.to(device=device)
+                yp_train = yp_train.to(device=device)
 
             if not exported_graph:
+                # TODO: move outside training loop
                 if model.is_stateful:
-                    print("")
                     model.set_input_options(sequence_length=x_train[0].shape[0], has_state_input=True)
-                    init_state = model.get_init_state_bf_flat(1, device="cuda:0" if use_cuda else "cpu")
+                    init_state = model.get_init_state_bf_flat(1, device=device)
                     writer_train.add_graph(model, model.flatten(x_train[0][None], init_state))
                 else:
                     model.set_input_options(sequence_length=None, has_state_input=False)
@@ -332,9 +344,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 exported_graph = True
 
             model.train()
-
-            x_train, ya_train, yp_train = Variable(x_train), Variable(ya_train), Variable(yp_train)
-
             if model.is_stateful:
                 # Assumption: We always train stateful models with sequences and training data has the shape
                 #             (batch dim, sequence dim, data)
@@ -344,7 +353,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 model.set_input_options(sequence_length=None, has_state_input=False)
 
             combined_loss, _ = m_train.update(model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
-                                           ya_train, yp_train, fit_pol_dist)
+                                           ya_train, yp_train, fit_pol_dist, ids=ids, device=device)
 
             combined_loss.backward()
             for param_group in optimizer.param_groups:
