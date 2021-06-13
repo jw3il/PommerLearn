@@ -20,7 +20,7 @@ def create_lib_copy():
 
 
 agent_list = [
-    CppAgent(create_lib_copy(), "CrazyAra100:./model/onnx", seed=14, print_json=False),
+    CppAgent(create_lib_copy(), "CrazyAra:./model/onnx:0:100:100", seed=14, print_json=False),
     CppAgent(create_lib_copy(), "SimpleUnbiasedAgent", seed=15),
     CppAgent(create_lib_copy(), "SimpleAgent", seed=16),
     agents.SimpleAgent()
