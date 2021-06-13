@@ -4,8 +4,13 @@ set (CMAKE_CXX_STANDARD 17)
 project(PommerLearn CXX)
 
 option(USE_TENSORRT              "Build with TensorRT support"  ON)
+option(USE_TENSORRT8             "Build with TensorRT support (version 8)"  OFF)
 option(USE_TORCH                 "Build with Torch support"  OFF)
 option(USE_PROFILING             "Build with profiling"   OFF)
+
+if(USE_TENSORRT8)
+    set(USE_TENSORRT=ON)
+endif()
 
 function(check_env_defined name)
     if(DEFINED ENV{${name}})
@@ -122,7 +127,11 @@ if (USE_TENSORRT)
     target_link_libraries(CrazyAra -L"$ENV{CUDA_PATH}/lib/x64")
     target_link_libraries(CrazyAra -L"$ENV{TENSORRT_PATH}/lib")
 
-    target_link_libraries(CrazyAra nvonnxparser nvinfer cudart myelin)
+    if (USE_TENSORRT8)
+        target_link_libraries(CrazyAra nvonnxparser nvinfer cudart)
+    else()
+        target_link_libraries(CrazyAra nvonnxparser nvinfer cudart myelin)
+    endif()
 endif()
 
 # -pg performance profiling flags
