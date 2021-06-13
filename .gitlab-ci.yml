@@ -50,18 +50,15 @@ build:
     paths:
       - ./build/PommerLearn
       - ./build/PommerLearnTest
+      - ./build/libCrazyAra.so
+      - ./build/libpomcpp.so
+      - ./build/libPommerLearnPy.so
 
 run:
   stage: test
   needs: ["build"]
   script:
-    - ldd ./build/PommerLearn
-    - ./build/PommerLearn
-    
-test:
-  stage: test
-  needs: ["build"]
-  script:
-    - ldd ./build/PommerLearnTest
-    - ./build/PommerLearnTest
+    - cd ./build
+    - ldd ./PommerLearn
+    - ./PommerLearn
 

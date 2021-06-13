@@ -169,7 +169,8 @@ def export_initial_model(train_config, base_dir: Path):
     input_shape, model = create_model(train_config)
     optimizer = create_optimizer(model, train_config)
 
-    export_model(model, train_config["model_batch_sizes"], input_shape, base_dir)
+    export_model(model, train_config["model_batch_sizes"], input_shape, base_dir, torch_cpu=True,
+                 torch_cuda=torch.cuda.is_available(), onnx=True)
     save_torch_state(model, optimizer, str(get_torch_state_path(base_dir)))
 
 
@@ -207,6 +208,8 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
     cuda_dir = dir / "torch_cuda"
     if torch_cuda:
         cuda_dir.mkdir(parents=True, exist_ok=False)
+
+    model = model.eval()
 
     for batch_size in batch_sizes:
         dummy_input = torch.ones(batch_size, input_shape[0], input_shape[1], input_shape[2], dtype=torch.float)

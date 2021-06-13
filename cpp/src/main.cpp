@@ -7,8 +7,6 @@
 #include "nn/neuralnetapi.h"
 #include "nn/tensorrtapi.h"
 #include "nn/torchapi.h"
-#include "agents/rawnetagent.h"
-#include "agents/mctsagent.h"
 #include "crazyara_agent.h"
 #include "stateobj.h"
 
@@ -20,74 +18,28 @@
 
 namespace po = boost::program_options;
 
-vector<unique_ptr<NeuralNetAPI>> create_new_net_batches(const string& modelDirectory, const SearchSettings& searchSettings)
-{
-    vector<unique_ptr<NeuralNetAPI>> netBatches;
-#ifdef MXNET
-    #ifdef TENSORRT
-        const bool useTensorRT = bool(Options["Use_TensorRT"]);
-    #else
-        const bool useTensorRT = false;
-    #endif
-#endif
-    int First_Device_ID = 0;
-    int Last_Device_ID = 0;
-    for (int deviceId = First_Device_ID; deviceId <= Last_Device_ID; ++deviceId) {
-        for (size_t i = 0; i < searchSettings.threads; ++i) {
-    #ifdef MXNET
-            netBatches.push_back(make_unique<MXNetAPI>(Options["Context"], deviceId, searchSettings.batchSize, modelDirectory, useTensorRT));
-    #elif defined TENSORRT
-            netBatches.push_back(make_unique<TensorrtAPI>(deviceId, searchSettings.batchSize, modelDirectory, "float16"));
-    #elif defined TORCH
-            netBatches.push_back(make_unique<TorchAPI>("cpu", deviceId, searchSettings.batchSize, modelDirectory));
-    #endif
-        }
-    }
-    netBatches[0]->validate_neural_network();
-    return netBatches;
-}
-
 void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize)
 {
-    // TODO: Decouple agent creation
-    srand(config.seed);
-
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
-#ifdef TENSORRT
-    TensorrtAPI netSingle(0, 1, modelDir, "float32");
-#elif defined (TORCH)
-    TorchAPI netSingle("cpu", 0, 1, modelDir);
-#endif
-    SearchSettings searchSettings;
-    searchSettings.virtualLoss = 1;
-    searchSettings.batchSize = 8;
-    searchSettings.threads = 2;
-    searchSettings.useMCGS = false;
-    searchSettings.multiPV = 1;
-    searchSettings.virtualLoss = 1;
-    searchSettings.nodePolicyTemperature = 1.0f;
-    searchSettings.dirichletEpsilon = 0.25f;
-    searchSettings.dirichletAlpha = 0.2f;
-    searchSettings.epsilonGreedyCounter = 0;
-    searchSettings.epsilonChecksCounter = 0;
-    searchSettings.qVetoDelta = 0.4;
-    searchSettings.qValueWeight = 1.0f;
-    searchSettings.reuseTree = false;
 
-    vector<unique_ptr<NeuralNetAPI>> netBatches = create_new_net_batches(modelDir, searchSettings);
-    PlaySettings playSettings;
-    SearchLimits searchLimits;
-    searchLimits.simulations = 100;
-     searchLimits.movetime = 100;
-    // searchLimits.moveOverhead = 20;
-    EvalInfo evalInfo;
-
-    bboard::Environment env;
     bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
 
-    // this is the state object of agent 0
-    PommermanState pommermanState(0, gameMode, stateSize != 0);
+    std::unique_ptr<CrazyAraAgent> crazyAraAgent;
+    if (useRawNet)
+    {
+        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir);
+    }
+    else {
+        SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(true);
+        PlaySettings playSettings;
+        SearchLimits searchLimits;
+        searchLimits.simulations = 100;
+        searchLimits.movetime = 100;
+        // searchLimits.moveOverhead = 20;
+
+        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
+    }
 
     // partial observability
     bboard::ObservationParameters obsParams;
@@ -95,33 +47,16 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
     obsParams.exposePowerUps = false;
     obsParams.agentViewSize = 4;
-    pommermanState.set_partial_observability(&obsParams);
 
-    // other agents used for planning
-    std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> planningAgents = {
-        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-        new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-    };
-    pommermanState.set_planning_agents(planningAgents);
+    crazyAraAgent->init_state(gameMode, obsParams);
 
+    srand(config.seed);
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
-        nullptr,
+        crazyAraAgent.get(),
         new agents::SimpleUnbiasedAgent(rand()),
         new agents::SimpleUnbiasedAgent(rand()),
         new agents::SimpleUnbiasedAgent(rand()),
     };
-
-    RawNetAgent rawNetAgent(&netSingle, &playSettings, true);
-    MCTSAgent mctsAgent(&netSingle, netBatches, &searchSettings, &playSettings);
-
-    if (useRawNet) {
-        agents[0] = new CrazyAraAgent(&rawNetAgent, &pommermanState, &searchLimits, &evalInfo);
-    }
-    else {
-        agents[0] = new CrazyAraAgent(&mctsAgent, &pommermanState, &searchLimits, &evalInfo);
-    }
 
     Runner::run(agents, gameMode, config);
 }

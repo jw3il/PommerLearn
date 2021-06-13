@@ -126,19 +126,6 @@ def train(data_dir: Path, out_dir: Path, torch_in_dir: Optional[str], train_conf
     return future
 
 
-def create_initial_models(model_dir: Path, batch_sizes):
-    """
-    Create initial models if the given directory is not empty.
-
-    :param model_dir: Directory where the models should be created
-    :param batch_sizes: The batch sizes
-    """
-    if is_empty(model_dir):
-        training.train_cnn.export_initial_model(batch_sizes, model_dir)
-    else:
-        print("Skipping initialization because model dir is not empty!")
-
-
 def subprocess_verbose_wait(sproc):
     while sproc.poll() is None:
         try:
@@ -177,7 +164,7 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
 
     # Before we can create a dataset, we need an initial model
     if is_empty(MODEL_INIT_DIR):
-        create_initial_models(MODEL_IN_DIR, train_config)
+        training.train_cnn.export_initial_model(train_config, MODEL_IN_DIR)
         print("No initial model provided. Using new model.")
     else:
         shutil.copytree(MODEL_INIT_DIR, MODEL_IN_DIR)
