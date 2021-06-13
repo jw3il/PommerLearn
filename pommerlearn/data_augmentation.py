@@ -5,12 +5,7 @@ import numpy as np
 import torch
 from pommerman.constants import Action
 
-
-class PommerSample(NamedTuple):
-    obs: torch.Tensor
-    val: torch.Tensor
-    act: torch.Tensor
-    pol: torch.Tensor
+from dataset_util import PommerDataset, PommerSample
 
 
 class RandomTransform:
@@ -63,7 +58,9 @@ class Rotate90:
         :param k: Rotate the observation k times counter-clockwise by 90 degrees.
         """
         self.k = k
+        assert 0 <= k <= 3, "Only 0 <= k <= 3 is supported"
         self.action_permutation, self.action_permutation_inv = self._get_action_permutation(self.k)
+        self.switch_bomb_movement_planes, self.bomb_movement_plane_factors = self._get_bomb_movement_change(k)
 
     @staticmethod
     def _get_action_permutation(k) -> Tuple[List[int], List[int]]:
@@ -97,9 +94,38 @@ class Rotate90:
 
         return list(act), list(act_inverse)
 
+    @staticmethod
+    def _get_bomb_movement_change(k) -> Tuple[bool, List[int]]:
+        """
+        Returns information on how the bomb movement planes change when rotating k times counter-clockwise.
+
+        The tuple consists of:
+            First element = Whether the planes have to be switched
+            Second element = Factors for both planes BEFORE ROTATING
+
+        How to use:
+            Step 1: Multiply planes by values in second element
+            Step 2: Switch planes if first element says so
+
+        :param k: The number of times to rotate.
+        :returns: How the bomb movement planes should be modified when rotating
+        """
+        switch_planes = k % 2 != 0
+        factor_x = -1 if 2 <= k <= 3 else 1
+        factor_y = -1 if 1 <= k <= 2 else 1
+
+        return switch_planes, [factor_x, factor_y]
+
     def __call__(self, sample: PommerSample):
         # Rotate observation
         obs_new = sample.obs.rot90(self.k, dims=(1, 2))
+        # Update bomb movement values
+        obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT] *= self.bomb_movement_plane_factors[0]
+        obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT] *= self.bomb_movement_plane_factors[1]
+        if self.switch_bomb_movement_planes:
+            tmp = obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT].clone()
+            obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT] = obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT]
+            obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT] = tmp
 
         # Rotate action
         act_new = sample.act.clone()
@@ -125,6 +151,8 @@ class FlipX:
     def __call__(self, sample: PommerSample):
         # Flip observation along x-axis (plane, y, x)
         obs_new = sample.obs.flip(dims=[-1])
+        # flip horizontal bomb movement
+        obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT] *= -1
 
         # Switch left & right actions
         act_left_filter = (sample.act == Action.Left.value)
@@ -155,6 +183,8 @@ class FlipY:
     def __call__(self, sample: PommerSample):
         # Flip observation along y-axis (plane, y, x)
         obs_new = sample.obs.flip(dims=[-2])
+        # flip vertical bomb movement
+        obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT] *= -1
 
         # Switch up & down actions
         act_up_filter = (sample.act == Action.Up.value)

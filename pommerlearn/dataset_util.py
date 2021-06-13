@@ -11,7 +11,17 @@ from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import *
 
 
+class PommerSample(NamedTuple):
+    obs: torch.Tensor
+    val: torch.Tensor
+    act: torch.Tensor
+    pol: torch.Tensor
+
+
 class PommerDataset(Dataset):
+    PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
+    PLANE_VERTICAL_BOMB_MOVEMENT = 8
+
     """
     A pommerman dataset.
     """
