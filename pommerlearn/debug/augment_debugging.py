@@ -1,5 +1,8 @@
+import numpy as np
+import torch
+
 from data_augmentation import FlipX, FlipY, Rotate90
-from dataset_util import PommerDataset
+from dataset_util import PommerDataset, PommerSample
 
 data = PommerDataset.from_zarr('mcts_data_500.zr', 0.9)
 
@@ -29,4 +32,12 @@ print_obs(sample_0, sample_1)
 
 print("After transform")
 transform = Rotate90(3)
-print_obs(transform(sample_0), transform(sample_1))
+transformed_0 = transform(sample_0)
+transformed_1 = transform(sample_1)
+
+# check that batch transform returns the same results
+both_transformed = transform(PommerSample.merge(sample_0, sample_1))
+assert transformed_0.equals(both_transformed.batch_at(0))
+assert transformed_1.equals(both_transformed.batch_at(1))
+
+print_obs(transformed_0, transformed_1)

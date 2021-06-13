@@ -117,15 +117,17 @@ class Rotate90:
         return switch_planes, [factor_x, factor_y]
 
     def __call__(self, sample: PommerSample):
-        # Rotate observation
-        obs_new = sample.obs.rot90(self.k, dims=(1, 2))
-        # Update bomb movement values
-        obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT] *= self.bomb_movement_plane_factors[0]
-        obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT] *= self.bomb_movement_plane_factors[1]
+        # Rotate observation (y, x)
+        obs_new = sample.obs.rot90(self.k, dims=(-2, -1))
+        # Multiply bomb movement values
+        obs_new[..., PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT, :, :] *= self.bomb_movement_plane_factors[0]
+        obs_new[..., PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT, :, :] *= self.bomb_movement_plane_factors[1]
         if self.switch_bomb_movement_planes:
-            tmp = obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT].clone()
-            obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT] = obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT]
-            obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT] = tmp
+            # Switch the bomb movement planes
+            tmp = obs_new[..., PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT, :, :].clone()
+            obs_new[..., PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT, :, :] = \
+                obs_new[..., PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT, :, :]
+            obs_new[..., PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT, :, :] = tmp
 
         # Rotate action
         act_new = sample.act.clone()
@@ -136,7 +138,7 @@ class Rotate90:
             act_new[sample.act == a] = self.action_permutation_inv[a]
 
         # Rotate policy using the (forward) permutation
-        pol_new = sample.pol.clone()[self.action_permutation]
+        pol_new = sample.pol.clone()[..., self.action_permutation]
 
         val_new = sample.val.clone()
 
@@ -152,7 +154,7 @@ class FlipX:
         # Flip observation along x-axis (plane, y, x)
         obs_new = sample.obs.flip(dims=[-1])
         # flip horizontal bomb movement
-        obs_new[PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT] *= -1
+        obs_new[..., PommerDataset.PLANE_HORIZONTAL_BOMB_MOVEMENT, :, :] *= -1
 
         # Switch left & right actions
         act_left_filter = (sample.act == Action.Left.value)
@@ -163,12 +165,12 @@ class FlipX:
         act_new[act_right_filter] = Action.Left.value
 
         # Switch left & right policy
-        pol_left = sample.pol[Action.Left.value]
-        pol_right = sample.pol[Action.Right.value]
+        pol_left = sample.pol[..., Action.Left.value]
+        pol_right = sample.pol[..., Action.Right.value]
 
         pol_new = sample.pol.clone()
-        pol_new[Action.Left.value] = pol_right
-        pol_new[Action.Right.value] = pol_left
+        pol_new[..., Action.Left.value] = pol_right
+        pol_new[..., Action.Right.value] = pol_left
 
         val_new = sample.val.clone()
 
@@ -184,7 +186,7 @@ class FlipY:
         # Flip observation along y-axis (plane, y, x)
         obs_new = sample.obs.flip(dims=[-2])
         # flip vertical bomb movement
-        obs_new[PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT] *= -1
+        obs_new[..., PommerDataset.PLANE_VERTICAL_BOMB_MOVEMENT, :, :] *= -1
 
         # Switch up & down actions
         act_up_filter = (sample.act == Action.Up.value)
@@ -195,12 +197,12 @@ class FlipY:
         act_new[act_down_filter] = Action.Up.value
 
         # Switch up & down policy
-        pol_up = sample.pol[Action.Up.value]
-        pol_down = sample.pol[Action.Down.value]
+        pol_up = sample.pol[..., Action.Up.value]
+        pol_down = sample.pol[..., Action.Down.value]
 
         pol_new = sample.pol.clone()
-        pol_new[Action.Up.value] = pol_down
-        pol_new[Action.Down.value] = pol_up
+        pol_new[..., Action.Up.value] = pol_down
+        pol_new[..., Action.Down.value] = pol_up
 
         val_new = sample.val.clone()
 

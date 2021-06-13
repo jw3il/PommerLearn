@@ -12,19 +12,82 @@ from data_augmentation import *
 
 
 class PommerSample(NamedTuple):
+    """
+    Holds a single sample or a batch of samples.
+    """
     obs: torch.Tensor
     val: torch.Tensor
     act: torch.Tensor
     pol: torch.Tensor
 
+    @staticmethod
+    def merge(a, b):
+        """
+        Merges two samples and adds the batch dimension if necessary.
+
+        :param a: A sample or batch of samples
+        :param b: A sample or batch of samples
+        :returns: a batch of samples containing a and b
+        """
+        if not a.is_batch():
+            a = a.expand_batch_dim()
+        if not b.is_batch():
+            b = b.expand_batch_dim()
+
+        return PommerSample(
+            torch.cat((a.obs, b.obs), dim=0),
+            torch.cat((a.val, b.val), dim=0),
+            torch.cat((a.act, b.act), dim=0),
+            torch.cat((a.pol, b.pol), dim=0)
+        )
+
+    def is_batch(self):
+        return len(self.obs.shape) == 4
+
+    def expand_batch_dim(self):
+        """
+        Creates a new sample with added batch dimension.
+
+        :returns: this sample expanded by the batch dimension.
+        """
+        assert not self.is_batch()
+        return PommerSample(
+            self.obs.unsqueeze(0),
+            self.val.unsqueeze(0),
+            self.act.unsqueeze(0),
+            self.pol.unsqueeze(0)
+        )
+
+    def batch_at(self, index):
+        """
+        Select a single sample from this batch according to the given index.
+
+        :param index: The index of the sample within this batch
+        :returns: a new sample with data from the specified index (no batch dimension)
+        """
+        assert self.is_batch()
+        return PommerSample(
+            self.obs[index],
+            self.val[index],
+            self.act[index],
+            self.pol[index]
+        )
+
+    def equals(self, other):
+        return self.obs.shape == other.obs.shape \
+               and (self.val == other.val).all() \
+               and (self.act == other.act).all() \
+               and (self.pol == other.pol).all() \
+               and (self.obs == other.obs).all()
+
 
 class PommerDataset(Dataset):
-    PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
-    PLANE_VERTICAL_BOMB_MOVEMENT = 8
-
     """
     A pommerman dataset.
     """
+    PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
+    PLANE_VERTICAL_BOMB_MOVEMENT = 8
+
     def __init__(self, obs, val, act, pol, ids, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
@@ -138,43 +201,31 @@ class PommerDataset(Dataset):
                 torch.zeros((self.sequence_length, 6), dtype=torch.float)
             )
 
-            random_state = np.random.get_state()
-
-            if self.return_ids:
-                ids = np.empty(self.sequence_length, dtype=np.int).fill(-1)
-
-            # TODO: Instead of manual padding, use PackedSequence
-
-            # the last element in the sequence is the current sample
+            # check if we have to stop before sequence_length samples
             current_id = self.ids[idx]
-            for seq_idx in range(0, self.sequence_length):
+            end_idx = idx
+            for seq_idx in range(1, self.sequence_length):
                 data_idx = idx + seq_idx
 
                 if data_idx >= len(self.obs) or self.ids[data_idx] != current_id:
                     # we reached a different episode / the beginning of the dataset
-                    # TODO: Add masking?
                     break
-                elif self.return_ids:
-                    ids[seq_idx] = current_id
 
-                sample = PommerSample(
-                    torch.tensor(self.obs[data_idx], dtype=torch.float),
-                    torch.tensor(self.val[data_idx], dtype=torch.float),
-                    torch.tensor(self.act[data_idx], dtype=torch.int),
-                    torch.tensor(self.pol[data_idx], dtype=torch.float),
-                )
+                end_idx = data_idx
 
-                # TODO: It looks like this really slows it down.. instead transform whole sequence at once?
-                if self.transform is not None:
-                    np.random.set_state(random_state)
-                    sample = self.transform(sample)
+            # TODO: Use PackedSequence instead of manual padding?
+            seq_end = end_idx - idx + 1
+            sequence.obs[0:seq_end] = torch.tensor(self.obs[idx:end_idx+1], dtype=torch.float)
+            sequence.val[0:seq_end] = torch.tensor(self.val[idx:end_idx+1], dtype=torch.float)
+            sequence.act[0:seq_end] = torch.tensor(self.act[idx:end_idx+1], dtype=torch.int)
+            sequence.pol[0:seq_end] = torch.tensor(self.pol[idx:end_idx+1], dtype=torch.float)
 
-                sequence.obs[seq_idx] = sample.obs
-                sequence.val[seq_idx] = sample.val
-                sequence.act[seq_idx] = sample.act
-                sequence.pol[seq_idx] = sample.pol
+            if self.transform is not None:
+                sequence = self.transform(sequence)
 
             if self.return_ids:
+                ids = np.empty(self.sequence_length, dtype=np.int).fill(-1)
+                ids[0:seq_end] = current_id
                 return (ids, *sequence)
             else:
                 return sequence
