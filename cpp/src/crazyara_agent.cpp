@@ -83,7 +83,7 @@ bboard::Move CrazyAraAgent::act(const bboard::State *state)
     bboard::Move bestAction = bboard::Move(agent->get_best_action());
 
     if (has_buffer()) {
-        pommermanState->get_state_planes(true, planeBuffer, {});
+        pommermanState->get_state_planes(true, planeBuffer);
         _get_policy(&evalInfo, policyBuffer);
         _get_q(&evalInfo, qBuffer);
 
