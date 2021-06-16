@@ -178,6 +178,8 @@ include_directories("cpp/src/")
 
 add_executable(${PROJECT_NAME} ${source_files})
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
+# we need need to link filesystem library manually.
+target_link_libraries(CrazyAra stdc++fs)
 
 # Library with Python interface
 
