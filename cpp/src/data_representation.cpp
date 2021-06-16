@@ -127,7 +127,7 @@ void ObservationToPlanes(const bboard::Observation* obs, int id, float* planes)
     _infoToPlanes(&obs->agentInfos[obs->agentIDMapping[id]], xtPlanes, planeIndex);
 }
 
-std::string InitialStateToString(bboard::State state) {
+std::string InitialStateToString(const bboard::State& state) {
     std::stringstream stream;
 
     for (int y = 0; y < bboard::BOARD_SIZE; y++) {

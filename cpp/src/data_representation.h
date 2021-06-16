@@ -83,6 +83,6 @@ void ObservationToPlanes(const bboard::Observation* obs, int id, float* planes);
  * @param state An initial state of the board.
  * @return A string which represents the given state.
  */
-std::string InitialStateToString(bboard::State state);
+std::string InitialStateToString(const bboard::State& state);
 
 #endif // DATA_REPRESENTATION_H
