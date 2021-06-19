@@ -233,6 +233,7 @@ void FileBasedIPCManager::createDatasets(z5::filesystem::handle::File file) {
     compressionOptions["codec"] = (std::string)"lz4";
     compressionOptions["level"] = (int)5;
     compressionOptions["shuffle"] = (int)1;
+    compressionOptions["blocksize"] = (int)0;
 
     // create datasets
 
