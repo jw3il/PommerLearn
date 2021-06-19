@@ -44,7 +44,7 @@ build:
     - mkdir build
     - cd build
     - cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
-    - make VERBOSE=1 -j 8 all
+    - make VERBOSE=1 all
     - ./PommerLearn
   artifacts:
     paths:
