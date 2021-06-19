@@ -72,12 +72,12 @@ def create_dataset(arguments):
         f"--file_prefix={str(LOG_DIR / Path('data'))}"
     ])
 
+    print("Args: ", " ".join(local_args))
     proc = subprocess.Popen(
         [f"./{str(EXEC_PATH)}", *local_args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        shell=False
     )
 
     return proc
@@ -283,10 +283,13 @@ def main():
     # Info: All path-related arguments should be set inside the rl loop
 
     train_config = {
-        "nb_epochs": 3,
+        "nb_epochs": 20,
         "test_size": 0.1,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
         "discount_factor": 0.99,
+        "use_flat_core": True,
+        "use_lstm": False,
+        "sequence_length": 8,
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
@@ -298,10 +301,12 @@ def main():
         "--env_gen_seed_eps=10",
         "--max_games=-1",
         "--targeted_samples=50000",
-        f"--model_dir={str(MODEL_IN_DIR / model_type)}"
+        f"--model_dir={str(MODEL_IN_DIR / model_type)}",
+        "--state_size=0",
+        "--planning_agents=SimpleUnbiasedAgent",
     ]
 
-    max_iterations = 5
+    max_iterations = 20
 
     # Start the rl loop
     rl_thread = threading.Thread(target=rl_loop, args=(run_id, max_iterations, dataset_args, train_config))
