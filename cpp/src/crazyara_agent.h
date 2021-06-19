@@ -9,7 +9,16 @@
 #include "neuralnetapi.h"
 
 /**
- * @brief The PommermanCrazyAraAgent class is a wrapper for any kind of crazyara::Agent (e.g. RawNetAgent, MCTSAgent) to be used as a bboard::Agent.
+ * @brief Agent types that can be used during planning.
+ */
+enum PlanningAgentType 
+{
+    SimpleUnbiasedAgent,
+    SimpleAgent
+};
+
+/**
+ * @brief Wrapper for any kind of crazyara::Agent (e.g. RawNetAgent, MCTSAgent) used as a bboard::Agent.
  */
 class CrazyAraAgent : public LogAgent
 {
@@ -36,7 +45,7 @@ public:
     CrazyAraAgent(std::string modelDirectory);
     CrazyAraAgent(std::string modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);

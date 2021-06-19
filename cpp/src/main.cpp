@@ -18,7 +18,7 @@
 
 namespace po = boost::program_options;
 
-void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize)
+void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, PlanningAgentType planningAgentType)
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -48,7 +48,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     obsParams.exposePowerUps = false;
     obsParams.agentViewSize = 4;
 
-    crazyAraAgent->init_state(gameMode, obsParams);
+    crazyAraAgent->init_state(gameMode, obsParams, planningAgentType);
 
     srand(config.seed);
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
@@ -97,6 +97,7 @@ int main(int argc, char **argv) {
             ("raw_net_agent", "If set, uses the raw net agent instead of the mcts agent.")
             // TODO: State size should be detected automatically (?)
             ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
+            ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
     ;
 
     po::variables_map configVals;
@@ -148,10 +149,26 @@ int main(int argc, char **argv) {
         bool useRawNetAgent = configVals.count("raw_net_agent") > 0;
         std::string modelDir = configVals["model_dir"].as<std::string>();
 
-        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>());
+        PlanningAgentType planningAgentType;
+        std::string planningAgentStr = configVals["planning_agents"].as<std::string>();
+        if (planningAgentStr == "SimpleUnbiasedAgent")
+        {
+            planningAgentType = PlanningAgentType::SimpleUnbiasedAgent;
+        }
+        else if (planningAgentStr == "SimpleAgent")
+        {
+            planningAgentType = PlanningAgentType::SimpleAgent;
+        }
+        else
+        {
+            std::cerr << "Unknown planning agent type: " << planningAgentStr << std::endl;
+            return 1;
+        }
+        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), planningAgentType);
     }
     else {
-        std::cerr << "Unknown mode" << std::endl;
+        std::cerr << "Unknown mode: " << mode << std::endl;
+        return 1;
     }
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();

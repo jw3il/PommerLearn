@@ -29,7 +29,7 @@ CrazyAraAgent::CrazyAraAgent(std::string modelDirectory, PlaySettings playSettin
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, PlanningAgentType planningAgentType)
 {
     // assuming that the model is stateful when we have auxiliary outputs
     bool statefulModel = singleNet->has_auxiliary_outputs();
@@ -41,14 +41,31 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
     if(!this->isRawNetAgent)
     {
         // other agents used for planning
-        // TODO: set opponents externally?
-        this->planningAgents = {
-            new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-            new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-            new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-            new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-        };
-        pommermanState->set_planning_agents(planningAgents);
+        switch (planningAgentType)
+        {
+        case SimpleUnbiasedAgent:
+            this->planningAgents = {
+                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
+            };
+            break;
+
+        case SimpleAgent:
+            this->planningAgents = {
+                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+            };
+            break;
+        
+        default:
+            break;
+        }
+
+        pommermanState->set_planning_agents(this->planningAgents);
     }
 }
 
