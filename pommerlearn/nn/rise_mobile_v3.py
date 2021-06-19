@@ -188,9 +188,9 @@ class RiseV3(PommerModel):
                  channels_value_head=1, channels_policy_head=81, value_fc_size=256,
                  select_policy_from_plane=False, kernels=None, n_labels=6, se_ratio=4,
                  se_types=None, use_avg_features=False, use_raw_features=False, value_nb_hidden=7,
-                 value_fc_size_hidden=256, value_dropout=0.15, use_more_features=False, bn_mom=0.9,
+                 value_dropout=0.15, use_more_features=False, bn_mom=0.9,
                  board_height=11, board_width=11, use_downsampling=True, slice_scalars=False, nb_scalar_features=4,
-                 use_flat_core=True, use_lstm=False,
+                 use_flat_core=True, core_hidden=512, value_hidden=128, policy_hidden=128, use_lstm=False, lstm_layers=1
                  ):
         """
         RISEv3 architecture
@@ -199,7 +199,6 @@ class RiseV3(PommerModel):
         :param channel_expansion: Number of channels to add after each residual block
         :param act_type: Activation type to use
         :param channels_value_head: Number of channels for the value head
-        :param value_fc_size: Number of units in the fully connected layer of the value head
         :param channels_policy_head: Number of channels for the policy head
         :param dropout_rate: Droput factor to use. If 0, no dropout will be applied. Value must be in [0,1]
         :param grad_scale_value: Constant scalar which the gradient for the value outputs are being scaled width.
@@ -280,14 +279,14 @@ class RiseV3(PommerModel):
         if self.use_flat_core:
             nb_merged_features = self.nb_body_spatial_out + (channels_operating if self.slice_scalars else 0)
             self.body_merged = TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_merged_features,
-                                        out_features=channels_operating*2), 2)
+                                        out_features=core_hidden), 2)
 
             if self.use_lstm:
-                self.lstm = LSTM(input_size=channels_operating*2, hidden_size=channels_operating*2, batch_first=True,
-                                 num_layers=1)
+                self.lstm = LSTM(input_size=core_hidden, hidden_size=core_hidden, batch_first=True,
+                                 num_layers=lstm_layers)
 
-            self.value_head = TimeDistributed(_ValueHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type), 2)
-            self.policy_head = TimeDistributed(_PolicyHeadFlat(in_features=channels_operating*2, fc0=value_fc_size_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels), 2)
+            self.value_head = TimeDistributed(_ValueHeadFlat(in_features=core_hidden, fc0=value_hidden, bn_mom=bn_mom, act_type=act_type), 2)
+            self.policy_head = TimeDistributed(_PolicyHeadFlat(in_features=core_hidden, fc0=policy_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels), 2)
         else:
             self.value_head = _ValueHead(out_board_height, out_board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
             self.policy_head = _PolicyHead(out_board_height, out_board_width, channels*expansion_factor, channels_policy_head, n_labels,

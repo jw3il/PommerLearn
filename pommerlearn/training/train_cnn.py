@@ -47,8 +47,12 @@ def create_model(train_config):
                        act_type=train_config["act_type"], use_downsampling=train_config["use_downsampling"],
                        channels_policy_head=train_config["channels_policy_head"],
                        slice_scalars=train_config["slice_scalars"],
+                       # flat arguments
                        use_flat_core=train_config["use_flat_core"],
-                       use_lstm=train_config["use_lstm"])
+                       core_hidden=128, value_hidden=64, policy_hidden=64,
+                       # .. with lstm
+                       use_lstm=train_config["use_lstm"], lstm_layers=1
+        )
     else:
         raise Exception(f'Invalid model "{train_config["model"]}" given. Valid models are "{valid_models}".')
     init_weights(model)
@@ -577,7 +581,7 @@ def fill_default_config(train_config):
         "batch_size": 128,  # warning: should be adapted when using sequences
         "batch_size_test": 128,
         "random_state":  42,
-        "nb_epochs":  10,
+        "nb_epochs":  20,
         "model": "risev3",  # "a0", "risev3", "lstm"
         "sequence_length": 8,  # only used when model is stateful
         "fit_policy_distribution": True,
@@ -586,7 +590,7 @@ def fill_default_config(train_config):
         "num_res_blocks": 4,
         "act_type": "relu",
         "channels_policy_head": 16,
-        "use_flat_core": True,
+        "use_flat_core": False,
         "slice_scalars": False,  # only with flat core
         "use_lstm": False,  # only with flat core
         # logging
