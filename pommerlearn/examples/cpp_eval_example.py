@@ -19,10 +19,16 @@ def create_lib_copy():
     return local_lib_path
 
 
+model_path="./stateless_model/onnx"
+state_size=0
+simulations=100
+movetime=100
+
 agent_list = [
-    CppAgent(create_lib_copy(), "CrazyAra:./model/onnx:0:100:100", seed=14, print_json=False),
-    CppAgent(create_lib_copy(), "SimpleUnbiasedAgent", seed=15),
-    CppAgent(create_lib_copy(), "SimpleAgent", seed=16),
+    CppAgent(create_lib_copy(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations}:{movetime}"),
+    CppAgent(create_lib_copy(), f"RawNetAgent:{model_path}:{state_size}"),
+    CppAgent(create_lib_copy(), "SimpleUnbiasedAgent", seed=16),
+    # CppAgent(create_lib_copy(), "SimpleAgent", seed=17),
     agents.SimpleAgent()
 ]
 

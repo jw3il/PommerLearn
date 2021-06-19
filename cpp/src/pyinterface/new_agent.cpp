@@ -5,14 +5,22 @@
 #include <iostream>
 #include "string.h"
 
-CrazyAraAgent* create_crazyara_agent(SearchLimits searchLimits, std::string modelDir, uint stateSize)
+CrazyAraAgent* create_crazyara_agent(std::string modelDir, uint stateSize, bool rawNetAgent, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
     
-    SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(false);
-    PlaySettings playSettings;
-    CrazyAraAgent* crazyAraAgent = new CrazyAraAgent(modelDir, playSettings, searchSettings, searchLimits);
+    CrazyAraAgent* crazyAraAgent;
+    if(rawNetAgent)
+    {
+        crazyAraAgent = new CrazyAraAgent(modelDir);
+    }
+    else
+    {
+        SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(false);
+        PlaySettings playSettings;
+        crazyAraAgent = new CrazyAraAgent(modelDir, playSettings, searchSettings, searchLimits);
+    }
 
     // partial observability
     bboard::ObservationParameters obsParams;
@@ -48,7 +56,25 @@ bboard::Agent* PyInterface::new_agent(std::string agentName, long seed)
     {
         return new agents::SimpleUnbiasedAgent(seed);
     }
-    else if(agentName.find("CrazyAra") == 0)
+    else if(agentName.find("RawNetAgent") == 0)
+    {
+        auto tmp = _extract_arg(agentName);
+        tmp = _extract_arg(tmp.second);
+        std::string modelDir = tmp.first;
+        std::string stateSize = tmp.second;
+        if(modelDir.empty() || stateSize.empty()) 
+        {
+            std::cout << "Could not parse agent identifier. Specify the agent like RawNet:dir:stateSize" << std::endl;
+            return nullptr;
+        }
+
+        std::cout << "Creating RawNetAgent with " << std::endl
+            << "> Model dir: " << modelDir << std::endl
+            << "> State size: " << stateSize << std::endl;
+
+        return create_crazyara_agent(modelDir, std::stoi(stateSize), true);
+    }
+    else if(agentName.find("CrazyAraAgent") == 0)
     {
         auto tmp = _extract_arg(agentName);
         tmp = _extract_arg(tmp.second);
@@ -73,7 +99,7 @@ bboard::Agent* PyInterface::new_agent(std::string agentName, long seed)
         SearchLimits searchLimits;
         searchLimits.simulations = std::stoi(simulations);
         searchLimits.movetime = std::stoi(moveTime);
-        return create_crazyara_agent(searchLimits, modelDir, std::stoi(stateSize));
+        return create_crazyara_agent(modelDir, std::stoi(stateSize), false, searchLimits=searchLimits);
     }
 
     return nullptr;
