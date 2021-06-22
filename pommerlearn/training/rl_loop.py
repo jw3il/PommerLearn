@@ -118,7 +118,8 @@ def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optiona
         local_train_config["dataset_path"] = [str(sorted_dataset_paths[-1])]
     else:
         # use last two datasets
-        local_train_config["dataset_path"] = [str(sorted_dataset_paths[-1]), str(sorted_dataset_paths[-2])]
+        # important: only the last dataset will be logged to tensorboard
+        local_train_config["dataset_path"] = [str(sorted_dataset_paths[-2]), str(sorted_dataset_paths[-1])]
 
     local_train_config["torch_input_dir"] = torch_in_dir
     training.train_cnn.fill_default_config(local_train_config)

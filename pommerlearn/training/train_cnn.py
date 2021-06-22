@@ -315,8 +315,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
         log_dir_val = None if log_dir is None else log_dir + "-val"
         writer_val = SummaryWriter(log_dir=log_dir_val, comment='-val')
 
-    exported_graph = False
-
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
 
@@ -338,7 +336,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 ya_train = ya_train.to(device=device)
                 yp_train = yp_train.to(device=device)
 
-            if not exported_graph:
+            if global_step == 0:
                 # TODO: move outside training loop
                 if model.is_stateful:
                     model.set_input_options(sequence_length=x_train[0].shape[0], has_state_input=True)
@@ -347,8 +345,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 else:
                     model.set_input_options(sequence_length=None, has_state_input=False)
                     writer_train.add_graph(model, model.flatten(x_train[0][None], None))
-
-                exported_graph = True
 
             model.train()
             if model.is_stateful:
@@ -378,7 +374,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'\
                       f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f}'
 
-                # TODO: Log metric in every step
                 m_train.log_to_tensorboard(writer_train, global_step)
                 m_train.reset()
 
