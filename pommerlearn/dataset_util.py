@@ -426,6 +426,9 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         path, proportion = get_elems(info)
         elem_samples = PommerDataset.from_zarr(path, discount_factor, verbose)
 
+        if verbose:
+            print(f"> Loading '{path}' with proportion {proportion}")
+
         assert 0 <= proportion <= 1, f"Invalid proportion {proportion}"
 
         if proportion < 1:

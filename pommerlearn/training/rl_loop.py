@@ -4,7 +4,7 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Iterator, List
 
 import concurrent.futures
 import training.train_cnn
@@ -83,39 +83,42 @@ def create_dataset(arguments):
     return proc
 
 
-def get_datatset(dir: Path) -> Path:
+def get_datatsets_sorted(dir: Path) -> List[Path]:
     """
-    Get the path of the dataset inside a directory.
+    Get all datasets in a given directory, sorted by their name.
 
     :param dir: Some directory which contains a dataset
-    :return: the first subdirectory within dir ending with .zr
+    :return: all subdirectories inside dir ending with ".zr"
     """
     if not dir.exists() or not dir.is_dir():
         raise ValueError(f"{str(dir)} is no directory!")
 
-    for child in dir.iterdir():
-        if child.is_dir() and child.name.endswith(".zr"):
-            return child
-
-    raise ValueError(f"Could not find any dataset in {dir}!")
+    sorted_dirs = sorted(dir.iterdir())
+    return list(filter(lambda child: child.is_dir() and child.name.endswith(".zr"), sorted_dirs))
 
 
-def train(data_dir: Path, out_dir: Path, torch_in_dir: Optional[str], train_config) -> concurrent.futures._base.Future:
+def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optional[str], train_config) -> concurrent.futures._base.Future:
     """
     Start a training pass.
 
-    :param data_dir: The directory which contains the datatset
+    :param sorted_dataset_paths: Dataset paths sorted by age (descending)
+    :param archive_data_dir: Directory with old training data
     :param out_dir: The output directory
     :param torch_in_dir: The torch input dir used to load an existing model
     :param train_config: The training config
     """
 
-    # TODO: Add model input dir!?
-
     # fill the config
     local_train_config = copy.deepcopy(train_config)
     local_train_config["output_dir"] = str(out_dir)
-    local_train_config["dataset_path"] = str(get_datatset(data_dir))
+
+    if len(sorted_dataset_paths) == 1:
+        # use single dataset
+        local_train_config["dataset_path"] = [str(sorted_dataset_paths[-1])]
+    else:
+        # use last two datasets
+        local_train_config["dataset_path"] = [str(sorted_dataset_paths[-1]), str(sorted_dataset_paths[-2])]
+
     local_train_config["torch_input_dir"] = torch_in_dir
     training.train_cnn.fill_default_config(local_train_config)
 
@@ -140,7 +143,7 @@ def subprocess_verbose_wait(sproc):
             print(line.decode("utf-8"), end='')
 
 
-def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, concurrency=False):
+def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -150,7 +153,6 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
     :param max_iterations: Max number of iterations (-1 for endless loop)
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
-    :param concurrency: Whether to generate and train concurrently
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
     """
 
@@ -173,8 +175,9 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
     last_model_dir_name = None
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
-    train_future = None
     train_future_res = None
+    run_archive_dir = ARCHIVE_DIR / run_id
+    run_archive_dir.mkdir(exist_ok=True)
     # The first iteration does not count, as we only generate a dataset
     while max_iterations < 0 or it <= max_iterations:
         with stop_rl_lock:
@@ -183,16 +186,17 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
         if last_iteration:
             print_it("Entering the last iteration")
 
+        datasets = get_datatsets_sorted(run_archive_dir)
         # Start training if training data exists
-        if not is_empty(TRAIN_DIR):
+        if len(datasets) > 0:
             print_it("Start training")
-            train_future = train(TRAIN_DIR, MODEL_OUT_DIR, last_model_dir_name, train_config)
+            train_future = train(datasets, MODEL_OUT_DIR, last_model_dir_name, train_config)
             # wait until the training is done before we start generating samples
-            if not concurrency:
-                train_future_res = train_future.result()
-                print_it("Training done")
-                move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
+            train_future_res = train_future.result()
+            print_it("Training done")
+            move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
 
+        # the model in MODEL_IN_DIR is used to create a new dataset
         if not last_iteration:
             # Create a new dataset
             print_it("Create dataset")
@@ -202,31 +206,20 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, conc
 
             print_it("Dataset done")
 
-        # Archive the model which was used to create the current data set with a smaller id
-        archived_model_dir = ARCHIVE_DIR / run_id / (str(it - 1) + "_model")
-        move_content(MODEL_IN_DIR, archived_model_dir)
+            # rename the dataset according to the iteration and move it into the archive
+            rename_datasets_id(LOG_DIR, str(it))
+            move_content(LOG_DIR, run_archive_dir)
 
-        if concurrency and train_future is not None:
-            train_future_res = train_future.result()
-            print_it("Training done")
-            move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
-            last_model_dir_name = str(MODEL_IN_DIR)
-        else:
+            # Archive the model
+            archived_model_dir = run_archive_dir / (str(it - 1) + "_model")
+            move_content(MODEL_IN_DIR, archived_model_dir)
             last_model_dir_name = str(archived_model_dir)
 
-        # Archive the old training dataset
-        move_content(TRAIN_DIR, ARCHIVE_DIR / run_id)
-
-        # Prepare the training dataset
-        if not last_iteration:
-            move_content(LOG_DIR, TRAIN_DIR)
-            rename_datasets_id(TRAIN_DIR, str(it))
-        else:
-            if concurrency:
-                # just directly archive the new model
-                move_content(MODEL_IN_DIR, ARCHIVE_DIR / run_id / (str(it) + "_model"))
-
         it += 1
+
+        if last_iteration:
+            print("Reached end of last iteration")
+            break
 
         if train_future_res is not None:
             # we executed a training step
@@ -286,7 +279,7 @@ def main():
         "nb_epochs": 20,
         "test_size": 0.1,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
-        "discount_factor": 0.99,
+        "discount_factor": 0.9,
         "use_flat_core": True,
         "use_lstm": False,
         "sequence_length": 8,
@@ -298,7 +291,7 @@ def main():
     # model_type = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
-        "--env_gen_seed_eps=10",
+        "--env_gen_seed_eps=2",
         "--max_games=-1",
         "--targeted_samples=50000",
         f"--model_dir={str(MODEL_IN_DIR / model_type)}",
