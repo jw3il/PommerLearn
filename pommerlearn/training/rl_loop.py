@@ -20,14 +20,12 @@ EXEC_PATH = Path("./PommerLearn")
 BASE_DIR = Path("./")
 
 # The subdirectories for training and data generation
-LOG_DIR = BASE_DIR / "log"
-TRAIN_DIR = BASE_DIR / "train"
 ARCHIVE_DIR = BASE_DIR / "archive"
-MODEL_INIT_DIR = BASE_DIR / "model-init"
-MODEL_OUT_DIR = BASE_DIR / "model-out"
-MODEL_IN_DIR = BASE_DIR / "model"
 
-WORKING_DIRS = [LOG_DIR, TRAIN_DIR, MODEL_OUT_DIR, MODEL_IN_DIR]
+LOG_DIR = BASE_DIR / "log"
+MODEL_INIT_DIR = BASE_DIR / "model-init"
+
+WORKING_DIRS = [LOG_DIR]
 
 TENSORBOARD_DIR = BASE_DIR / "runs"
 
@@ -55,11 +53,13 @@ def rename_datasets_id(dir: Path, id: str):
             dir_count += 1
 
 
-def create_dataset(arguments):
+def create_dataset(arguments, model_dir: Path, model_subdir: str):
     """
     Create a dataset by executing the C++ program.
 
     :param arguments: The program arguments (excluding log and file dirs)
+    :param model_dir: The main directory of the model
+    :param model_subdir: The relevant subdirectory inside model_dir
     """
     # clear the log dir if it already exists
     rm_dir(LOG_DIR, keep_empty_dir=True)
@@ -69,7 +69,8 @@ def create_dataset(arguments):
     local_args = copy.deepcopy(arguments)
     local_args.extend([
         "--log",
-        f"--file_prefix={str(LOG_DIR / Path('data'))}"
+        f"--file_prefix={str(LOG_DIR / Path('data'))}",
+        f"--model_dir={str(model_dir / model_subdir)}",
     ])
 
     print("Args: ", " ".join(local_args))
@@ -143,7 +144,7 @@ def subprocess_verbose_wait(sproc):
             print(line.decode("utf-8"), end='')
 
 
-def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict):
+def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, model_subdir: str):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -153,6 +154,7 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict):
     :param max_iterations: Max number of iterations (-1 for endless loop)
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
+    :param model_subdir: The name of the subdirectory inside the model dir used for sample generation
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
     """
 
@@ -164,22 +166,27 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict):
     def print_it(msg: str):
         print(f"{datetime.now()} > It. {it}: {msg}")
 
+    run_archive_dir = ARCHIVE_DIR / run_id
+    run_archive_dir.mkdir(exist_ok=True)
+
+    last_model_dir = None
+    model_dir = run_archive_dir / (str(it - 1) + "_model")
+    model_dir.mkdir(exist_ok=True)
+
     # Before we can create a dataset, we need an initial model
     if is_empty(MODEL_INIT_DIR):
-        training.train_cnn.export_initial_model(train_config, MODEL_IN_DIR)
+        training.train_cnn.export_initial_model(train_config, model_dir)
         print("No initial model provided. Using new model.")
     else:
-        shutil.copytree(MODEL_INIT_DIR, MODEL_IN_DIR)
+        shutil.copytree(MODEL_INIT_DIR, model_dir)
         print("Using existing model.")
-
-    last_model_dir_name = None
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
     train_future_res = None
-    run_archive_dir = ARCHIVE_DIR / run_id
-    run_archive_dir.mkdir(exist_ok=True)
     # The first iteration does not count, as we only generate a dataset
     while max_iterations < 0 or it <= max_iterations:
+        model_dir = run_archive_dir / (str(it - 1) + "_model")
+
         with stop_rl_lock:
             last_iteration = it == max_iterations or stop_rl
 
@@ -187,21 +194,21 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict):
             print_it("Entering the last iteration")
 
         datasets = get_datatsets_sorted(run_archive_dir)
+
         # Start training if training data exists
         if len(datasets) > 0:
             print_it("Start training")
-            train_future = train(datasets, MODEL_OUT_DIR, last_model_dir_name, train_config)
+            train_future = train(datasets, model_dir, last_model_dir, train_config)
             # wait until the training is done before we start generating samples
             train_future_res = train_future.result()
             print_it("Training done")
-            move_content(MODEL_OUT_DIR, MODEL_IN_DIR)
 
-        # the model in MODEL_IN_DIR is used to create a new dataset
+        # Create a new dataset using the current model
         if not last_iteration:
             # Create a new dataset
             print_it("Create dataset")
 
-            sproc_create_dataset = create_dataset(dataset_args)
+            sproc_create_dataset = create_dataset(dataset_args, model_dir, model_subdir)
             subprocess_verbose_wait(sproc_create_dataset)
 
             print_it("Dataset done")
@@ -210,11 +217,7 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict):
             rename_datasets_id(LOG_DIR, str(it))
             move_content(LOG_DIR, run_archive_dir)
 
-            # Archive the model
-            archived_model_dir = run_archive_dir / (str(it - 1) + "_model")
-            move_content(MODEL_IN_DIR, archived_model_dir)
-            last_model_dir_name = str(archived_model_dir)
-
+        last_model_dir = model_dir
         it += 1
 
         if last_iteration:
@@ -286,15 +289,14 @@ def main():
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
-    model_type = "onnx"
-    # model_type = "torch_cpu"
-    # model_type = "torch_cuda"
+    model_subdir = "onnx"
+    # model_subdir = "torch_cpu"
+    # model_subdir = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
         "--env_gen_seed_eps=2",
         "--max_games=-1",
         "--targeted_samples=50000",
-        f"--model_dir={str(MODEL_IN_DIR / model_type)}",
         "--state_size=0",
         "--planning_agents=SimpleUnbiasedAgent",
     ]
@@ -302,7 +304,8 @@ def main():
     max_iterations = 20
 
     # Start the rl loop
-    rl_thread = threading.Thread(target=rl_loop, args=(run_id, max_iterations, dataset_args, train_config))
+    rl_args = (run_id, max_iterations, dataset_args, train_config, model_subdir)
+    rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 
     # Allow early stopping
