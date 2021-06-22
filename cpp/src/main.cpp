@@ -25,6 +25,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
 
     bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
 
+    std::cout << "Loading agents.." << std::endl;
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if (useRawNet)
     {
@@ -58,6 +59,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
         new agents::SimpleUnbiasedAgent(rand()),
     };
 
+    std::cout << "Agents loaded. Starting the runner.." << std::endl;
     Runner::run(agents, gameMode, config);
 }
 
@@ -139,8 +141,6 @@ int main(int argc, char **argv) {
     config.printFirstLast = configVals.count("print_first_last") > 0;
     config.ipcManager = ipcManager.get();
 
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {
         Runner::run_simple_agents(config);
@@ -170,9 +170,6 @@ int main(int argc, char **argv) {
         std::cerr << "Unknown mode: " << mode << std::endl;
         return 1;
     }
-
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0f << "[s]" << std::endl;
 
     if(ipcManager.get() != nullptr)
     {

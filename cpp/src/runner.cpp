@@ -62,6 +62,25 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
     return info;
 }
 
+void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins)
+{
+    std::cout << "------------------------------" << std::endl;
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    float elapsedSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0f;
+    std::cout << "Total episodes: " << episode <<  std::endl;
+    std::cout << "Average steps: " << totalEpisodeSteps / episode <<  std::endl;
+    std::cout << "Wins: " << std::endl;
+    for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
+        int wins = nbWins[agentIdx];
+        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%)" << std::endl;
+    }
+
+    std::cout << "Draws: " << nbDraws << " (" << (float)nbDraws * 100 / episode << "%)" << std::endl;
+    std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
+    std::cout << "Elapsed time: " << elapsedSeconds << " s (" << elapsedSeconds / episode << " s/episode)" << std::endl;
+    std::cout << "------------------------------" << std::endl;
+}
+
 void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, RunnerConfig config) {
     // create the sample buffers for all agents wanting to collect samples
     std::vector<SampleCollector*> sampleCollectors;
@@ -76,6 +95,8 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
     }
 
     std::cout << "Number of logging agents: " << sampleCollectors.size() << std::endl;
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     int nbNotDone = 0;
     int nbDraws = 0;
@@ -169,22 +190,15 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
         std::cout << ", is draw " << result.isDraw << ", is done " << result.isDone << std::endl;
 
         std::cout << " > Seed: 0x" << std::hex << currentEnvSeed << std::dec << std::endl;
+
+        if ((episode + 1) % 20 == 0)
+        {
+            _print_stats(begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins);
+        }
     }
 
     // display aggregated statistics
-
-    std::cout << "------------------------------" << std::endl;
-
-    std::cout << "Total episodes: " << episode <<  std::endl;
-    std::cout << "Average steps: " << totalEpisodeSteps / episode <<  std::endl;
-    std::cout << "Wins: " << std::endl;
-    for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
-        int wins = nbWins[agentIdx];
-        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%)" << std::endl;
-    }
-
-    std::cout << "Draws: " << nbDraws << " (" << (float)nbDraws * 100 / episode << "%)" << std::endl;
-    std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
+    _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins);
 }
 
 void Runner::run_simple_agents(RunnerConfig config) {
