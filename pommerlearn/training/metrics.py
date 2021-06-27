@@ -74,8 +74,7 @@ class Metrics:
         # get the combined loss
         cur_policy_loss = policy_loss(policy_out, yp_train, mask=mask)
         cur_value_loss = value_loss(value_out, yv_train.unsqueeze(-1), mask=mask)
-        # combined_loss = (1 - value_loss_ratio) * cur_policy_loss + value_loss_ratio * cur_value_loss
-        combined_loss = cur_policy_loss + cur_value_loss * 0
+        combined_loss = (1 - value_loss_ratio) * cur_policy_loss + value_loss_ratio * cur_value_loss
 
         # update metrics
         self.total_cnt += nb_samples
