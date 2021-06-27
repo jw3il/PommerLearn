@@ -8,7 +8,6 @@ from pommerman import constants
 import zarr
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 from torch.utils.tensorboard import SummaryWriter
-from data_augmentation import *
 
 
 class PommerSample(NamedTuple):

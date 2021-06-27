@@ -15,4 +15,4 @@ class MaskedMSELoss(_Loss):
         if mask is None:
             return F.mse_loss(input, target)
         else:
-            return torch.sum(torch.pow(input - target, 2) * mask) / torch.sum(mask)
+            return torch.sum(torch.pow(input - target, 2) * mask) / mask.sum()

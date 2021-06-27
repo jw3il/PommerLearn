@@ -49,7 +49,7 @@ def create_model(train_config):
                        slice_scalars=train_config["slice_scalars"],
                        # flat arguments
                        use_flat_core=train_config["use_flat_core"],
-                       core_hidden=128, value_hidden=64, policy_hidden=64,
+                       core_hidden=256, value_hidden=64, policy_hidden=128,
                        # .. with lstm
                        use_lstm=train_config["use_lstm"], lstm_layers=1
         )
@@ -90,12 +90,7 @@ def train_cnn(train_config):
         print(f"Loading torch state from {str(model_input_dir)}")
         load_torch_state(model, optimizer, str(get_torch_state_path(model_input_dir)))
 
-    fit_pol_dist = train_config["fit_policy_distribution"]
-    if fit_pol_dist:
-        policy_loss = MaskedContiniousCrossEntropyLoss()
-    else:
-        policy_loss = nn.CrossEntropyLoss()
-
+    policy_loss = MaskedContiniousCrossEntropyLoss()
     value_loss = MaskedMSELoss()
 
     total_it = len(train_loader) * train_config["nb_epochs"]
@@ -112,7 +107,7 @@ def train_cnn(train_config):
 
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
-                                   value_loss, policy_loss, fit_pol_dist, train_config["value_loss_ratio"],
+                                   value_loss, policy_loss, train_config["value_loss_ratio"],
                                    train_loader, val_loader, use_cuda, log_dir, global_step=global_step_start)
 
     base_dir = Path(train_config["output_dir"])
@@ -286,7 +281,7 @@ def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
 
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 fit_pol_dist, value_loss_ratio, train_loader, val_loader, use_cuda, log_dir, global_step=0):
+                 value_loss_ratio, train_loader, val_loader, use_cuda, log_dir, global_step=0):
     """
     Trains a given model for a number of epochs
 
@@ -296,7 +291,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param lr_schedule: LR-scheduler
     :param momentum_schedule: Momentum scheduler
     :param policy_loss: Policy loss object
-    :param fit_pol_dist: Whether to use the policy distribution target for the policy loss
     :param value_loss: Value loss object
     :param value_loss_ratio: Value loss ratio
     :param train_loader: Training data loader
@@ -356,7 +350,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 model.set_input_options(sequence_length=None, has_state_input=False)
 
             combined_loss, _ = m_train.update(model, policy_loss, value_loss, value_loss_ratio, x_train, yv_train,
-                                           ya_train, yp_train, fit_pol_dist, ids=ids, device=device)
+                                           ya_train, yp_train, ids=ids, device=device)
 
             combined_loss.backward()
             for param_group in optimizer.param_groups:
@@ -380,10 +374,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 if val_loader is not None:
                     model.eval()
                     if model.is_stateful:
-                        m_val = get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
+                        m_val = get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss,
                                                   use_cuda, val_loader)
                     else:
-                        m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda,
+                        m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda,
                                              val_loader)
 
                     m_val.log_to_tensorboard(writer_val, global_step)
@@ -405,7 +399,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     return global_step
 
 
-def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda, data_loader) -> Metrics:
+def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, data_loader) -> Metrics:
     """
     Returns the validation metrics by evaluating it on the full validation dataset
 
@@ -413,7 +407,6 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
     :param value_loss_ratio: Value loss ratio
     :param value_loss: Value loss object
     :param policy_loss: Policy loss object
-    :param fit_pol_dist: Whether to use the policy distribution for the policy loss target
     :param use_cuda: Boolean whether GPU is used
     :param data_loader: Data loader object (e.g. val_loader)
     :return: Updated metric object
@@ -428,12 +421,12 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist,
         x, ya_val = Variable(x, requires_grad=False), Variable(ya_val, requires_grad=False)
 
         model.set_input_options(sequence_length=None, has_state_input=False)
-        m_val.update(model, policy_loss, value_loss, value_loss_ratio, x, yv_val, ya_val, yp_val, fit_pol_dist)
+        m_val.update(model, policy_loss, value_loss, value_loss_ratio, x, yv_val, ya_val, yp_val)
 
     return m_val
 
 
-def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_pol_dist, use_cuda, data_loader,
+def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, data_loader,
                  verbose = False) -> Metrics:
     """
     Returns the validation metrics by evaluating it on the full validation dataset
@@ -442,7 +435,6 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_
     :param value_loss_ratio: Value loss ratio
     :param value_loss: Value loss object
     :param policy_loss: Policy loss object
-    :param fit_pol_dist: Whether to use the policy distribution for the policy loss target
     :param use_cuda: Boolean whether GPU is used
     :param data_loader: Data loader object (e.g. val_loader)
     :param verbose: Whether to output debugging info
@@ -508,8 +500,7 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, fit_
             # update loss & get next state
             model.set_input_options(sequence_length=(until_idx - current_idx), has_state_input=True)
             loss, next_state = m_val.update(model, policy_loss, value_loss, value_loss_ratio, obs_part, val_part,
-                                            act_part, pol_part, fit_pol_dist, model_state=model_state,
-                                            normalize_loss_nb_samples=data_loader.batch_size)
+                                            act_part, pol_part, model_state=model_state)
 
             current_idx = until_idx
             if reset_state:
@@ -574,12 +565,11 @@ def fill_default_config(train_config):
         "value_loss_ratio": 0.1,
         "test_size": 0.2,
         "batch_size": 128,  # warning: should be adapted when using sequences
-        "batch_size_test": 128,
+        "batch_size_test": 1024,
         "random_state":  42,
         "nb_epochs":  20,
         "model": "risev3",  # "a0", "risev3", "lstm"
         "sequence_length": 8,  # only used when model is stateful
-        "fit_policy_distribution": True,
         "use_downsampling": True,
         "se_type": None,
         "num_res_blocks": 4,
