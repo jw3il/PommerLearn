@@ -13,13 +13,10 @@ TORCH_LIB=$1
 
 echo "Fixing PyTorch in Path $TORCH_LIB"
 
-sed -i 's: optional<DimnameList>: c10\:\:optional<DimnameList>:g' "$TORCH_LIB/include/ATen/core/NamedTensor.h"
-sed -i 's: optional<DimnameList>: c10\:\:optional<DimnameList>:g' "$TORCH_LIB/include/ATen/core/TensorBody.h"
-
-sed -i 's: optional<Dimname>: c10\:\:optional<Dimname>:g' "$TORCH_LIB/include/ATen/core/Dimname.h"
-
-sed -i 's: optional<Device>: c10\:\:optional<Device>:g' "$TORCH_LIB/include/ATen/DeviceGuard.h"
-sed -i 's: make_optional: c10\:\:make_optional:g' "$TORCH_LIB/include/ATen/DeviceGuard.h"
+sed -i 's: optional<: c10\:\:optional<:g' "$TORCH_LIB/include/ATen/DeviceGuard.h"
 sed -i 's: nullopt: c10\:\:nullopt:g' "$TORCH_LIB/include/ATen/DeviceGuard.h"
+
+sed -i 's:(optional<:(c10\:\:optional<:g' "$TORCH_LIB/include/ATen/Functions.h"
+sed -i 's: optional<: c10\:\:optional<:g' "$TORCH_LIB/include/ATen/Functions.h"
 
 echo "Done."

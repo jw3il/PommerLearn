@@ -3,7 +3,7 @@
 numpy
 matplotlib
 imageio
-torch
+torch=1.9.0
 zarr
 numcodecs
 tqdm
