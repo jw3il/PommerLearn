@@ -9,7 +9,7 @@ option(USE_TORCH                 "Build with Torch support"  OFF)
 option(USE_PROFILING             "Build with profiling"   OFF)
 
 if(USE_TENSORRT8)
-    set(USE_TENSORRT=ON)
+    set(USE_TENSORRT ON)
 endif()
 
 function(check_env_defined name)
