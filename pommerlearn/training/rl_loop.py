@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import threading
 from multiprocessing import Process, Queue
 from pathlib import Path
@@ -132,17 +133,28 @@ def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optiona
 
 
 def subprocess_verbose_wait(sproc):
-    while sproc.poll() is None:
+    def print_stream(stream, file):
+        while True:
+            line = stream.readline()
+            if not line:
+                break
+            print(line.decode("utf-8"), end='', file=file)
+
+    return_code = sproc.poll()
+    while return_code is None:
         try:
             sproc.wait(1)
         except subprocess.TimeoutExpired:
             pass
 
-        while True:
-            line = sproc.stdout.readline()
-            if not line:
-                break
-            print(line.decode("utf-8"), end='')
+        print_stream(sproc.stdout, sys.stdout)
+        print_stream(sproc.stderr, sys.stderr)
+
+        return_code = sproc.poll()
+
+    # TODO: include when random cuda errors at driver shutdown are fixed..
+    # if return_code != 0:
+    #     raise RuntimeError(f"Subprocess returned {return_code}!")
 
 
 def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, model_subdir: str):
@@ -284,7 +296,7 @@ def main():
         "test_size": 0.1,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
         "discount_factor": 0.9,
-        "use_flat_core": True,
+        "use_flat_core": False,
         "use_lstm": False,
         "sequence_length": 8,
     }
@@ -295,7 +307,7 @@ def main():
     # model_subdir = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
-        "--env_gen_seed_eps=2",
+        "--env_gen_seed_eps=10",
         "--max_games=-1",
         "--targeted_samples=50000",
         "--state_size=0",
