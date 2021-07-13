@@ -396,6 +396,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     if val_loader is not None:
         writer_val.close()
 
+    # make sure to empty cache
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return global_step
 
 
