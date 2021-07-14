@@ -8,7 +8,7 @@ from abc import ABCMeta
 
 
 class PommerModel(nn.Module, metaclass=ABCMeta):
-    def __init__(self, is_stateful, state_batch_dim):
+    def __init__(self, nb_input_channels, board_width, board_height, is_stateful, state_batch_dim):
         """
         Create a PommerModel.
 
@@ -21,6 +21,9 @@ class PommerModel(nn.Module, metaclass=ABCMeta):
 
         self.sequence_length = None
         self.has_state_input = None
+        self.nb_input_channels = nb_input_channels
+        self.board_width = board_width
+        self.board_height = board_height
 
     def get_init_state_bf_flat(self, batch_size: int, device):
         """
@@ -43,6 +46,35 @@ class PommerModel(nn.Module, metaclass=ABCMeta):
         :returns: The shape of a state, as required by the used stateful module
         """
         ...
+
+    def unflatten(self, flat_batches):
+        assert self.has_state_input is not None, \
+            "You first have to set the input dimensions before you can unflatten the input."
+
+        batch_size = flat_batches.shape[0]
+
+        nb_x_elem_in_sequence = 1 if self.sequence_length is None else self.sequence_length
+        nb_single_x_elem = self.nb_input_channels * self.board_width * self.board_height
+        nb_all_x_elem = nb_single_x_elem * nb_x_elem_in_sequence
+
+        if self.has_state_input:
+            x, state_bf = torch.split(flat_batches, nb_all_x_elem, dim=-1)
+        else:
+            x = flat_batches
+            state_bf = None
+
+        if self.sequence_length is None:
+            # no sequence dimension
+            x = x.view(batch_size, self.nb_input_channels, self.board_height, self.board_width)
+        else:
+            # with sequence dimension (for training)
+            x = x.view(batch_size, self.sequence_length, self.nb_input_channels, self.board_height,
+                       self.board_width)
+
+        if state_bf is not None:
+            state_bf = state_bf.view(*self.transpose_state_shape(self.get_state_shape(batch_size)))
+
+        return x, state_bf
 
     def set_input_options(self, sequence_length: Optional[int], has_state_input: bool):
         self.sequence_length = sequence_length
