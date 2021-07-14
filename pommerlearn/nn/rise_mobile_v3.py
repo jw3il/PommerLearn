@@ -226,17 +226,14 @@ class RiseV3(PommerModel):
         Later the spatial and scalar embeddings will be merged again.
         :return: symbol
         """
-        super(RiseV3, self).__init__(is_stateful=use_lstm, state_batch_dim=2)
+        super(RiseV3, self).__init__(nb_input_channels=nb_input_channels, board_height=board_height, board_width=board_height,
+                                     is_stateful=use_lstm, state_batch_dim=2)
 
         self.use_raw_features = use_raw_features
-        self.nb_input_channels = nb_input_channels
         self.nb_scalar_features = nb_scalar_features
         self.slice_scalars = slice_scalars
         self.use_flat_core = use_flat_core
         self.use_lstm = use_lstm
-
-        self.board_width = board_width
-        self.board_height = board_height
 
         if len(kernels) != len(se_types):
             raise Exception(f'The length of "kernels": {len(kernels)} must be the same as'
@@ -295,35 +292,6 @@ class RiseV3(PommerModel):
     def get_state_shape(self, batch_size: int):
         # expected size by LSTM: 2 x (num_layers * num_directions, batch, hidden_size)
         return 2, self.lstm.num_layers, batch_size, self.lstm.hidden_size
-
-    def unflatten(self, flat_batches):
-        assert self.has_state_input is not None, \
-            "You first have to set the input dimensions before you can unflatten the input."
-
-        batch_size = flat_batches.shape[0]
-
-        nb_x_elem_in_sequence = 1 if self.sequence_length is None else self.sequence_length
-        nb_single_x_elem = self.nb_input_channels * self.board_width * self.board_height
-        nb_all_x_elem = nb_single_x_elem * nb_x_elem_in_sequence
-
-        if self.has_state_input:
-            x, state_bf = torch.split(flat_batches, nb_all_x_elem, dim=-1)
-        else:
-            x = flat_batches
-            state_bf = None
-
-        if self.sequence_length is None:
-            # no sequence dimension
-            x = x.view(batch_size, self.nb_input_channels, self.board_height, self.board_width)
-        else:
-            # with sequence dimension (for training)
-            x = x.view(batch_size, self.sequence_length, self.nb_input_channels, self.board_height,
-                       self.board_width)
-
-        if state_bf is not None:
-            state_bf = state_bf.view(*self.transpose_state_shape(self.get_state_shape(batch_size)))
-
-        return x, state_bf
 
     def forward(self, flat_input):
         """

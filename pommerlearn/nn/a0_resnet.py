@@ -99,7 +99,7 @@ class ResidualBlock(torch.nn.Module):
         :return: Sum of the shortcut and the computed residual block computation
         """
         return x + self.body(x)
-    
+
 
 class AlphaZeroResnet(PommerModel):
     """ Creates the alpha zero net description based on the given parameters."""
@@ -130,7 +130,8 @@ class AlphaZeroResnet(PommerModel):
         :return: net description
         """
 
-        super(AlphaZeroResnet, self).__init__(is_stateful=False)
+        super(AlphaZeroResnet, self).__init__(nb_input_channels=nb_input_channels, board_height=board_height, board_width=board_height,
+                                              is_stateful=False, state_batch_dim=None)
 
         res_blocks = []
         for i in range(num_res_blocks):
@@ -145,16 +146,22 @@ class AlphaZeroResnet(PommerModel):
         self.policy_head = _PolicyHead(board_height, board_width, channels, channels_policy_head, n_labels,
                                        bn_mom, act_type, select_policy_from_plane)
 
-    def forward(self, x):
+    def forward(self, flat_input):
         """
         Implementation of the forward pass of the full network
         Uses a broadcast add operation for the shortcut and the output of the residual block
         :param x: Input to the ResidualBlock
         :return: Value & Policy Output
         """
+        # input shape processing
+        x, state_bf = self.unflatten(flat_input)
+
         out = self.body(x)
 
         value = self.value_head(out)
         policy = self.policy_head(out)
 
         return value, policy
+
+    def get_state_shape(self, batch_size: int):
+        raise NotImplementedError
