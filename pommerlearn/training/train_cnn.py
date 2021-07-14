@@ -38,12 +38,12 @@ def create_model(train_config):
     if train_config["model"] == "a0":
         model = AlphaZeroResnet(num_res_blocks=train_config["num_res_blocks"], nb_input_channels=input_shape[0], board_width=input_shape[2],
                                 board_height=input_shape[1], act_type=train_config["act_type"],
-                                channels_policy_head=["channels_policy_head"])
+                                channels_policy_head=train_config["channels_policy_head"], channels=train_config["channels"])
     elif train_config["model"] == "risev3":
         kernels = [3] * train_config["num_res_blocks"]
         se_types = [train_config["se_type"]] * train_config["num_res_blocks"]
         model = RiseV3(nb_input_channels=input_shape[0], board_width=input_shape[2], board_height=input_shape[1],
-                       channels=64, channels_operating=256, kernels=kernels, se_types=se_types, use_raw_features=False,
+                       channels=train_config["channels"], channels_operating=train_config["channels_operating"], kernels=kernels, se_types=se_types, use_raw_features=False,
                        act_type=train_config["act_type"], use_downsampling=train_config["use_downsampling"],
                        channels_policy_head=train_config["channels_policy_head"],
                        slice_scalars=train_config["slice_scalars"],
@@ -575,10 +575,12 @@ def fill_default_config(train_config):
         "model": "risev3",  # "a0", "risev3", "lstm"
         "sequence_length": 8,  # only used when model is stateful
         "use_downsampling": True,
-        "se_type": None,
+        "se_type": None,  # None, "se", "cbam", "eca_se", "ca_se", "cm_se", "sa_se", "sm_se"
         "num_res_blocks": 4,
         "act_type": "relu",
         "channels_policy_head": 16,
+        "channels": 64,
+        "channels_operating": 256,
         "use_flat_core": False,
         "slice_scalars": False,  # only with flat core
         "use_lstm": False,  # only with flat core
