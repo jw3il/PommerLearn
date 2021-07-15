@@ -3,7 +3,7 @@
 	url = https://github.com/MultiAgentLearning/playground
 [submodule "pomcpp"]
 	path = deps/pomcpp
-	url = https://github.com/tomatenbrei/pomcpp
+	url = https://github.com/jw3il/pomcpp
 [submodule "CrazyAra"]
 	path = deps/CrazyAra
 	url = https://github.com/QueensGambit/CrazyAra.git
