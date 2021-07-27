@@ -12,11 +12,12 @@ import torch
 from nn.PommerModel import PommerModel
 
 
-def plot_value_prediction(dataset_path, model_path, agent_episode, figure_comment, save_figure, show_figure):
+def plot_value_prediction(dataset_path, model_path, agent_episode, discount_factor, value_version, figure_prefix,
+                          save_figure, show_figure):
     z = zarr.open(str(dataset_path), 'r')
     print("Total number of episodes in dataset", len(z.attrs.get('AgentSteps')))
 
-    data = PommerDataset.from_zarr(z, discount_factor=1)
+    data = PommerDataset.from_zarr(z, value_version, discount_factor)
     episode_slice = get_agent_episode_slice(z, agent_episode)
     num_steps = episode_slice.stop - episode_slice.start
 
@@ -88,7 +89,7 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, figure_commen
     plt.legend(loc='lower left')
 
     if save_figure:
-        fig.savefig(f"values_{figure_comment}_{agent_episode}.svg", bbox_inches='tight')
+        fig.savefig(f"{figure_prefix}_ep{agent_episode}_g{discount_factor:.2f}_v{value_version}.svg", bbox_inches='tight')
 
     if show_figure:
         plt.show()
@@ -104,7 +105,9 @@ plot_value_prediction(
     dataset_path="mcts_data_500.zr",
     model_path="mcts_500_new_value_g1-model",
     agent_episode=532,
-    figure_comment="new_value_g1",
+    discount_factor=1,
+    value_version=2,
+    figure_prefix="values",
     save_figure=True,
     show_figure=True
 )

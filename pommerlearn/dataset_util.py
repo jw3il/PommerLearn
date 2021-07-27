@@ -86,7 +86,6 @@ class PommerDataset(Dataset):
     """
     PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
     PLANE_VERTICAL_BOMB_MOVEMENT = 8
-    DEFAULT_VALUE_VERSION = 2
 
     def __init__(self, obs, val, act, pol, ids, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
@@ -114,21 +113,21 @@ class PommerDataset(Dataset):
         self.transform = transform
 
     @staticmethod
-    def from_zarr_path(path: Path, discount_factor: float, transform=None, return_ids=False,
-                       value_version: int = DEFAULT_VALUE_VERSION, verbose: bool = False):
+    def from_zarr_path(path: Path, value_version: int, discount_factor: float, transform=None,
+                       return_ids=False, verbose: bool = False):
         z = zarr.open(str(path), 'r')
-        return PommerDataset.from_zarr(z, discount_factor, transform, return_ids, value_version, verbose)
+        return PommerDataset.from_zarr(z, value_version, discount_factor, transform, return_ids, verbose)
 
     @staticmethod
-    def from_zarr(z: zarr.Group, discount_factor: float, transform=None, return_ids=False,
-                  value_version: int = DEFAULT_VALUE_VERSION, verbose: bool = False):
+    def from_zarr(z: zarr.Group, value_version: int, discount_factor: float, transform=None, return_ids=False,
+                  verbose: bool = False):
         if verbose:
             print(
                 f"Opening dataset {str(z.path)} with {z.attrs['Steps']} samples "
                 f"from {len(z.attrs['EpisodeSteps'])} episodes"
             )
 
-        value_target = get_value_target(z, discount_factor, value_version)
+        value_target = get_value_target(z, value_version, discount_factor)
 
         z_steps = z.attrs['Steps']
         obs = z['obs'][:z_steps]
@@ -283,13 +282,13 @@ def get_unique_agent_episode_id(z) -> np.ndarray:
     return ids
 
 
-def get_value_target(z, discount_factor: float, value_version: int) -> np.ndarray:
+def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarray:
     """
     Creates the value target for a zarr dataset z.
 
     :param z: The zarr dataset
-    :param discount_factor: The discount factor
     :param value_version: Specifies how the value is defined. 1 = considers only win/loss, 2 = considers defeated agents
+    :param discount_factor: The discount factor
     :return: The value target for z
     """
     total_steps = z.attrs.get('Steps')
@@ -370,9 +369,10 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
         return last_info
 
 
-def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], discount_factor: float,
-                        test_size: float, batch_size: int, batch_size_test: int, train_transform = None,
-                        verbose: bool = True, sequence_length=None, num_workers=2, only_test_last=False
+def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], value_version: int,
+                        discount_factor: float, test_size: float, batch_size: int, batch_size_test: int,
+                        train_transform = None,verbose: bool = True, sequence_length=None, num_workers=2,
+                        only_test_last=False
                         ) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
@@ -380,7 +380,8 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     :param path_infos: The path information of the zarr datasets which should be used. Expects a single path or a list
                       containing strings (paths) or a tuple of the form (path, proportion) where 0 <= proportion <= 1
                       is the number of samples which will be selected randomly from this data set.
-    :param discount_factor: The discount factor which should be used
+    :param value_version: The value version that should be used
+    :param discount_factor: The discount factor that should be used
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
     :param batch_size_test: Batch size to use for testing
@@ -448,7 +449,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     buffer_test_idx = 0
     for i, info in enumerate(path_infos):
         path, proportion = get_elems(info)
-        elem_samples = PommerDataset.from_zarr_path(path, discount_factor, verbose)
+        elem_samples = PommerDataset.from_zarr_path(path, value_version, discount_factor, verbose)
 
         if verbose:
             print(f"> Loading '{path}' with proportion {proportion}")
