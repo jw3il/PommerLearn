@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 import numpy as np
 import zarr
@@ -9,6 +10,7 @@ from tqdm import tqdm
 from dataset_util import PommerDataset, get_agent_episode_slice
 import torch
 
+from env.replay_env import PommeReplay
 from nn.PommerModel import PommerModel
 
 
@@ -95,19 +97,38 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, discount_fact
         plt.show()
 
 
+def print_episodes_with_value(dataset_path, value_version, target_value):
+    episodes = []
+
+    z = zarr.open(str(dataset_path), 'r')
+    data = PommerDataset.from_zarr(z, value_version, 1)
+    for agent_episode in range(0, len(z.attrs.get('AgentSteps'))):
+        episode_slice = get_agent_episode_slice(z, agent_episode)
+        if np.abs(data[episode_slice.start].val - target_value) < 0.01:
+            episodes.append(agent_episode)
+
+    print(episodes)
+    return episodes
+
 # nice test episodes in mcts_data_500:
 # 484: loss (second place)
 # 530: win stable
 # 531: win unstable
 # 532: tie between 0 and 1
 
+dataset_path="mcts_data_500.zr"
+
+# print_episodes_with_value(dataset_path, value_version=2, target_value=-1/3)
+# PommeReplay.play(zarr.open(str(dataset_path), 'r'), 484, render=True, render_pause=None)
+# sys.exit()
+
 plot_value_prediction(
-    dataset_path="mcts_data_500.zr",
-    model_path="mcts_500_new_value_g1-model",
-    agent_episode=532,
-    discount_factor=1,
+    dataset_path=dataset_path,
+    model_path="model__v2_g0.97",
+    agent_episode=484,
+    discount_factor=0.97,
     value_version=2,
-    figure_prefix="values",
+    figure_prefix="values_g0.97",
     save_figure=True,
     show_figure=True
 )
