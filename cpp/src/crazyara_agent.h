@@ -45,7 +45,7 @@ public:
     CrazyAraAgent(std::string modelDirectory);
     CrazyAraAgent(std::string modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);

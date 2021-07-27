@@ -10,14 +10,16 @@
 
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
-PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel):
+PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
     agentID(-1),
     gameMode(gameMode),
     usePartialObservability(false),
     eventHash(0),
     statefulModel(statefulModel),
     hasPlanningAgents(false),
-    hasBufferedActions(false)
+    hasBufferedActions(false),
+    maxTimeStep(maxTimeStep),
+    valueVersion(valueVersion)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
@@ -25,7 +27,7 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel):
     }
     else if (statefulModel)
     {
-        throw "You have not set an auxiliary (state) output but you claim that your model is stateful.";
+        throw std::runtime_error("You have not set an auxiliary (state) output but you claim that your model is stateful.");
     }
 }
 
@@ -317,11 +319,13 @@ std::string PommermanState::action_to_san(Action action, const std::vector<Actio
     }
 }
 
-TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customTerminalValue) const
+inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
 {
+    const bboard::State& state = pommerState->state;
+
     if(state.finished)
     {
-        if(state.agents[agentID].won)
+        if(state.agents[pommerState->agentID].won)
         {
             customTerminalValue = 2.0f;
             return TERMINAL_CUSTOM;
@@ -342,9 +346,9 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
     }
 
     // state is not finished
-    if(state.agents[agentID].dead)
+    if(state.agents[pommerState->agentID].dead)
     {
-        if (gameMode == bboard::GameMode::FreeForAll) {
+        if (pommerState->gameMode == bboard::GameMode::FreeForAll) {
             customTerminalValue = -2.0f;
             return TERMINAL_CUSTOM;
         }
@@ -357,6 +361,77 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
     return TERMINAL_NONE;
 }
 
+inline TerminalType is_terminal_v2(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
+{
+    const bboard::State& state = pommerState->state;
+    const bboard::AgentInfo& ownInfo = state.agents[pommerState->agentID];
+
+    // new return values
+    if(state.finished || ownInfo.dead || state.timeStep >= pommerState->maxTimeStep)
+    {
+        customTerminalValue = 0;
+        for(uint i = 0; i < bboard::AGENT_COUNT; i++)
+        {
+            const bboard::AgentInfo& info = state.agents[i];
+
+            // only add rewards for dead agents
+            if(!info.dead)
+            {
+                continue;
+            }
+
+            switch (pommerState->gameMode)
+            {
+            case bboard::GameMode::FreeForAll:
+                if(i == pommerState->agentID)
+                {
+                    customTerminalValue += -1;
+                }
+                else
+                {
+                    // we have three opponents => 1/3 reward
+                    customTerminalValue += 1.0 / 3;
+                }
+                break;
+            
+            case bboard::GameMode::TwoTeams:
+                if(info.team == ownInfo.team)
+                {
+                    // two agents in our team
+                    customTerminalValue += -1.0 / 2;
+                }
+                else
+                {
+                    // we have two opponents
+                    customTerminalValue += 1.0 / 2;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+        return TERMINAL_CUSTOM;
+    }
+    
+    return TERMINAL_NONE;
+}
+
+
+TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customTerminalValue) const
+{
+    switch (valueVersion)
+    {
+    case 1:
+        return is_terminal_v1(this, numberLegalMoves, customTerminalValue);
+    
+    case 2:
+        return is_terminal_v2(this, numberLegalMoves, customTerminalValue);
+
+    default:
+        throw std::runtime_error("Unknown value version " + std::to_string(valueVersion));
+    }    
+}
+
 bool PommermanState::gives_check(Action action) const
 {
     return false;
@@ -364,7 +439,7 @@ bool PommermanState::gives_check(Action action) const
 
 PommermanState* PommermanState::clone() const
 {
-    PommermanState* clone = new PommermanState(gameMode, statefulModel);
+    PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep, valueVersion);
     clone->state = state;
     clone->agentID = agentID;
     if (hasPlanningAgents) {

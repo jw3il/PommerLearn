@@ -18,7 +18,7 @@
 
 namespace po = boost::program_options;
 
-void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, PlanningAgentType planningAgentType)
+void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType)
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -49,7 +49,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     obsParams.exposePowerUps = false;
     obsParams.agentViewSize = 4;
 
-    crazyAraAgent->init_state(gameMode, obsParams, planningAgentType);
+    crazyAraAgent->init_state(gameMode, obsParams, valueVersion, planningAgentType);
 
     srand(config.seed);
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
@@ -100,6 +100,7 @@ int main(int argc, char **argv) {
             // TODO: State size should be detected automatically (?)
             ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
+            ("value_version", po::value<uint>()->default_value(2), "1 = considers only win/loss, 2 = considers defeated agents")
     ;
 
     po::variables_map configVals;
@@ -164,7 +165,7 @@ int main(int argc, char **argv) {
             std::cerr << "Unknown planning agent type: " << planningAgentStr << std::endl;
             return 1;
         }
-        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), planningAgentType);
+        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;

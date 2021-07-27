@@ -78,7 +78,8 @@ def train_cnn(train_config):
                                                    train_config["batch_size_test"],
                                                    train_transform=train_config["dataset_train_transform"],
                                                    sequence_length=train_sequence_length,
-                                                   num_workers=train_config["num_workers"])
+                                                   num_workers=train_config["num_workers"],
+                                                   only_test_last=train_config["only_test_last"])
 
     if use_cuda:
         model = model.cuda()
@@ -568,6 +569,7 @@ def fill_default_config(train_config):
         "weight_decay": 1e-03,
         "value_loss_ratio": 0.1,
         "test_size": 0.2,
+        "only_test_last": False,
         "batch_size": 128,  # warning: should be adapted when using sequences
         "batch_size_test": 1024,
         "random_state":  42,

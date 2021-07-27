@@ -86,6 +86,7 @@ class PommerDataset(Dataset):
     """
     PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
     PLANE_VERTICAL_BOMB_MOVEMENT = 8
+    DEFAULT_VALUE_VERSION = 2
 
     def __init__(self, obs, val, act, pol, ids, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
@@ -113,16 +114,21 @@ class PommerDataset(Dataset):
         self.transform = transform
 
     @staticmethod
-    def from_zarr(path: Path, discount_factor: float, transform=None, return_ids=False, verbose: bool = False):
+    def from_zarr_path(path: Path, discount_factor: float, transform=None, return_ids=False,
+                       value_version: int = DEFAULT_VALUE_VERSION, verbose: bool = False):
         z = zarr.open(str(path), 'r')
+        return PommerDataset.from_zarr(z, discount_factor, transform, return_ids, value_version, verbose)
 
+    @staticmethod
+    def from_zarr(z: zarr.Group, discount_factor: float, transform=None, return_ids=False,
+                  value_version: int = DEFAULT_VALUE_VERSION, verbose: bool = False):
         if verbose:
             print(
-                f"Opening dataset {str(path)} with {z.attrs['Steps']} samples "
+                f"Opening dataset {str(z.path)} with {z.attrs['Steps']} samples "
                 f"from {len(z.attrs['EpisodeSteps'])} episodes"
             )
 
-        value_target = get_value_target(z, discount_factor)
+        value_target = get_value_target(z, discount_factor, value_version)
 
         z_steps = z.attrs['Steps']
         obs = z['obs'][:z_steps]
@@ -277,12 +283,13 @@ def get_unique_agent_episode_id(z) -> np.ndarray:
     return ids
 
 
-def get_value_target(z, discount_factor: float) -> np.ndarray:
+def get_value_target(z, discount_factor: float, value_version: int) -> np.ndarray:
     """
     Creates the value target for a zarr dataset z.
 
     :param z: The zarr dataset
     :param discount_factor: The discount factor
+    :param value_version: Specifies how the value is defined. 1 = considers only win/loss, 2 = considers defeated agents
     :return: The value target for z
     """
     total_steps = z.attrs.get('Steps')
@@ -304,13 +311,20 @@ def get_value_target(z, discount_factor: float) -> np.ndarray:
         dead = episode_dead[ep][agent_id]
 
         # TODO: Adapt for team mode
-        if winner == agent_id:
-            episode_reward = 1
-        elif dead:
-            episode_reward = -1
+        if value_version == 1:
+            # only distribute rewards when the (agent) episode is done
+            if winner == agent_id:
+                episode_reward = 1
+            elif dead:
+                episode_reward = -1
+            else:
+                # episode not done
+                episode_reward = 0
+        elif value_version == 2:
+            # we are agent 0, so we can just sum up the defeated opponents
+            episode_reward = episode_dead[ep][1:].sum() * 1.0 / 3 - dead
         else:
-            # episode not done
-            episode_reward = 0
+            raise ValueError(f"Unknown value version {value_version}")
 
         # min to handle cut datasets
         next_step = min(current_step + steps, total_steps)
@@ -358,7 +372,8 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
 
 def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], discount_factor: float,
                         test_size: float, batch_size: int, batch_size_test: int, train_transform = None,
-                        verbose: bool = True, sequence_length=None, num_workers=2) -> [DataLoader, DataLoader]:
+                        verbose: bool = True, sequence_length=None, num_workers=2, only_test_last=False
+                        ) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
 
@@ -373,6 +388,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     :param verbose: Log debug information
     :param sequence_length: Sequence length used in the train loader
     :param num_workers: The number of workers used for loading
+    :param only_test_last: Whether only the last dataset is used for testing
     :return: Training loader, validation loader
     """
 
@@ -387,16 +403,25 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         else:
             return info, 1
 
+    def get_test_size(path_index):
+        if only_test_last:
+            if path_index == len(path_infos) - 1:
+                return test_size
+            else:
+                return 0
+        else:
+            return test_size
+
     def get_total_sample_count():
         all_train_samples = 0
         all_test_samples = 0
 
-        for info in path_infos:
+        for i, info in enumerate(path_infos):
             path, proportion = get_elems(info)
             z = zarr.open(str(path), 'r')
             num_samples = int(z.attrs['Steps'] * proportion)
 
-            test_samples = int(num_samples * test_size)
+            test_samples = int(num_samples * get_test_size(i))
             train_samples = num_samples - test_samples
 
             all_train_samples += train_samples
@@ -408,7 +433,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
     if verbose:
         print(f"Loading {total_train_samples + total_test_samples} samples from {len(path_infos)} dataset(s) with "
-              f"test size {test_size}")
+              f"test size {test_size}{' only last' if only_test_last else ''} ({total_test_samples} samples)")
 
     data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform,
                                             sequence_length=sequence_length, return_ids=(sequence_length is not None))
@@ -421,9 +446,9 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
     buffer_train_idx = 0
     buffer_test_idx = 0
-    for info in path_infos:
+    for i, info in enumerate(path_infos):
         path, proportion = get_elems(info)
-        elem_samples = PommerDataset.from_zarr(path, discount_factor, verbose)
+        elem_samples = PommerDataset.from_zarr_path(path, discount_factor, verbose)
 
         if verbose:
             print(f"> Loading '{path}' with proportion {proportion}")
@@ -442,7 +467,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
             elem_samples_nb = len(elem_samples)
             elem_samples_from = 0
 
-        test_nb = int(elem_samples_nb * test_size)
+        test_nb = int(elem_samples_nb * get_test_size(i))
         train_nb = elem_samples_nb - test_nb
 
         data_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb)

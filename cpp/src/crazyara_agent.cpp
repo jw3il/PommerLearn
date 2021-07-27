@@ -29,13 +29,13 @@ CrazyAraAgent::CrazyAraAgent(std::string modelDirectory, PlaySettings playSettin
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, PlanningAgentType planningAgentType)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType)
 {
     // assuming that the model is stateful when we have auxiliary outputs
     bool statefulModel = singleNet->has_auxiliary_outputs();
 
     // this is the state object of agent 0
-    pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel);
+    pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel, 800, valueVersion);
     pommermanState->set_partial_observability(observationParameters);
 
     if(!this->isRawNetAgent)

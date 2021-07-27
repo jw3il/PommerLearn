@@ -95,7 +95,8 @@ class PommerModel(nn.Module, metaclass=ABCMeta):
 
         return transposed_shape
 
-    def flatten(self, x: torch.Tensor, state_bf_flat: Optional[torch.Tensor]) -> torch.Tensor:
+    @staticmethod
+    def flatten(x: torch.Tensor, state_bf_flat: Optional[torch.Tensor]) -> torch.Tensor:
         """
         Flattens and concatenates model input and state tensors.
 
