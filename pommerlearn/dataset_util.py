@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from pommerman import constants
 import zarr
-from torch.utils.data import DataLoader, TensorDataset, Dataset
+from torch.utils.data import DataLoader, TensorDataset, Dataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -87,7 +87,7 @@ class PommerDataset(Dataset):
     PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
     PLANE_VERTICAL_BOMB_MOVEMENT = 8
 
-    def __init__(self, obs, val, act, pol, ids, transform=None, sequence_length=None, return_ids=False):
+    def __init__(self, obs, val, act, pol, ids, steps_to_end, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
 
@@ -108,8 +108,9 @@ class PommerDataset(Dataset):
         self.act = act
         self.pol = pol
         self.ids = ids
-        self.return_ids = return_ids
+        self.steps_to_end = steps_to_end
 
+        self.return_ids = return_ids
         self.transform = transform
 
     @staticmethod
@@ -127,15 +128,18 @@ class PommerDataset(Dataset):
                 f"from {len(z.attrs['EpisodeSteps'])} episodes"
             )
 
-        value_target = get_value_target(z, value_version, discount_factor)
-
         z_steps = z.attrs['Steps']
-        obs = z['obs'][:z_steps]
-        act = z['act'][:z_steps]
-        pol = z['pol'][:z_steps]
-        ids = get_unique_agent_episode_id(z)
 
-        return PommerDataset(obs, value_target, act, pol, ids, transform=transform, return_ids=return_ids)
+        return PommerDataset(
+            obs=z['obs'][:z_steps],
+            val=get_value_target(z, value_version, discount_factor),
+            act=z['act'][:z_steps],
+            pol=z['pol'][:z_steps],
+            ids=get_unique_agent_episode_id(z),
+            transform=transform,
+            return_ids=return_ids,
+            steps_to_end=get_steps_until_end(z)
+        )
 
     @staticmethod
     def create_empty(count, transform=None, sequence_length=None, return_ids=False):
@@ -144,14 +148,18 @@ class PommerDataset(Dataset):
 
         :param count: The number of samples
         """
-        obs = np.empty((count, 18, 11, 11), dtype=float)
-        val = np.empty(count, dtype=float)
-        act = np.empty(count, dtype=int)
-        pol = np.empty((count, 6), dtype=float)
-        ids = np.empty(count, dtype=int)
 
-        return PommerDataset(obs, val, act, pol, ids, transform=transform, sequence_length=sequence_length,
-                             return_ids=return_ids)
+        return PommerDataset(
+            obs=np.empty((count, 18, 11, 11), dtype=float),
+            val=np.empty(count, dtype=float),
+            act=np.empty(count, dtype=int),
+            pol=np.empty((count, 6), dtype=float),
+            ids=np.empty(count, dtype=int),
+            steps_to_end=np.empty(count, dtype=int),
+            transform=transform,
+            sequence_length=sequence_length,
+            return_ids=return_ids
+        )
 
     def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None):
         """
@@ -168,9 +176,8 @@ class PommerDataset(Dataset):
         self.val[to_index:to_index + count] = other_samples.val[from_index:from_index + count]
         self.act[to_index:to_index + count] = other_samples.act[from_index:from_index + count]
         self.pol[to_index:to_index + count] = other_samples.pol[from_index:from_index + count]
-
-        if self.ids is not None:
-            self.ids[to_index:to_index + count] = other_samples.ids[from_index:from_index + count]
+        self.ids[to_index:to_index + count] = other_samples.ids[from_index:from_index + count]
+        self.steps_to_end[to_index:to_index + count] = other_samples.steps_to_end[from_index:from_index + count]
 
     def __len__(self):
         return len(self.obs)
@@ -282,6 +289,28 @@ def get_unique_agent_episode_id(z) -> np.ndarray:
     return ids
 
 
+def get_steps_until_end(z) -> np.ndarray:
+    """
+    Creates an array that contains the number of steps until the last step for each agent episode.
+
+    :param z: The zarr dataset
+    :return: The number of steps until the episode of this sample ends
+    """
+    total_steps = z.attrs.get('Steps')
+    agent_steps = np.array(z.attrs.get('AgentSteps'))
+
+    ids = np.empty(total_steps, dtype=np.int)
+    current_step = 0
+
+    for steps in agent_steps:
+        end = min(current_step + steps, total_steps)
+        # we always end at step 1 as the final state is not in the datasets
+        ids[current_step:end] = np.arange(end - current_step, 0, -1)
+        current_step += steps
+
+    return ids
+
+
 def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarray:
     """
     Creates the value target for a zarr dataset z.
@@ -372,7 +401,7 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
 def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], value_version: int,
                         discount_factor: float, test_size: float, batch_size: int, batch_size_test: int,
                         train_transform = None,verbose: bool = True, sequence_length=None, num_workers=2,
-                        only_test_last=False
+                        only_test_last=False, train_sampling_mode: str = 'complete'
                         ) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
@@ -390,6 +419,13 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     :param sequence_length: Sequence length used in the train loader
     :param num_workers: The number of workers used for loading
     :param only_test_last: Whether only the last dataset is used for testing
+    :param train_sampling_mode: Defines how the samples are chosen. Possible values: <br>
+        <list>
+        <li>'complete' to load all samples in random order.</li>
+        <li>'weighted_steps_to_end' to assign exponentially decreasing weights to each sample based on the
+        number of steps until the individual episode ends. Samples are chosen with replacement using the
+        the normalized weights as probabilities.
+        </list>
     :return: Training loader, validation loader
     """
 
@@ -490,7 +526,15 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     if verbose:
         print("Creating DataLoaders..", end='')
 
-    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    if train_sampling_mode == 'complete':
+        train_loader = DataLoader(data_train, shuffle=True, batch_size=batch_size, num_workers=num_workers)
+    elif train_sampling_mode == 'weighted_steps_to_end':
+        train_weights = np.clip(np.power(0.97, data_train.steps_to_end - 1), 0.05, 1)
+        sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
+        train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
+    else:
+        raise ValueError(f"Unknown train_sampling_mode {train_sampling_mode}")
+
     test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=num_workers) if total_test_samples > 0 else None
 
     if verbose:
