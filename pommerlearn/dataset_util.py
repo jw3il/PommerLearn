@@ -524,12 +524,35 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         f"{(buffer_train_idx, total_train_samples, buffer_test_idx, total_test_samples)}"
 
     if verbose:
-        print("Creating DataLoaders..", end='')
+        print(f"Creating DataLoaders with train sampling mode {train_sampling_mode}..")
 
     if train_sampling_mode == 'complete':
         train_loader = DataLoader(data_train, shuffle=True, batch_size=batch_size, num_workers=num_workers)
     elif train_sampling_mode == 'weighted_steps_to_end':
         train_weights = np.clip(np.power(0.97, data_train.steps_to_end - 1), 0.05, 1)
+        sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
+        train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
+    elif train_sampling_mode == 'weighted_value_class':
+        unique_values = list(np.unique(data_train.val))
+        value_class_counts = {}
+        value_class_weights = {}
+        for value in unique_values:
+            num_samples = (data_train.val == value).sum()
+            value_class_counts[value] = num_samples
+            value_class_weights[value] = (1.0 / len(unique_values)) * (1.0 / num_samples)
+
+        if verbose:
+            print(f"Value weighting with {len(unique_values)} classes")
+            print(value_class_counts)
+            print(value_class_weights)
+
+        if discount_factor != 1:
+            print("Warning: Value class weighting was created for discount factor 1.")
+
+        train_weights = np.empty(len(data_train))
+        for a in range(0, len(data_train)):
+            train_weights[a] = value_class_weights[data_train.val[a]]
+
         sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
         train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
     else:
