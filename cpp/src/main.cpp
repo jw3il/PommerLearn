@@ -18,7 +18,7 @@
 
 namespace po = boost::program_options;
 
-void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType)
+void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -34,11 +34,6 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     else {
         SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(true);
         PlaySettings playSettings;
-        SearchLimits searchLimits;
-        searchLimits.simulations = 100;
-        searchLimits.movetime = 100;
-        // searchLimits.moveOverhead = 20;
-
         crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
@@ -99,6 +94,8 @@ int main(int argc, char **argv) {
             ("raw_net_agent", "If set, uses the raw net agent instead of the mcts agent.")
             // TODO: State size should be detected automatically (?)
             ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
+            ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
+            ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
             ("value_version", po::value<uint>()->default_value(2), "1 = considers only win/loss, 2 = considers defeated agents")
     ;
@@ -165,7 +162,12 @@ int main(int argc, char **argv) {
             std::cerr << "Unknown planning agent type: " << planningAgentStr << std::endl;
             return 1;
         }
-        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType);
+
+        SearchLimits searchLimits;
+        searchLimits.simulations = configVals["simulations"].as<int>();
+        searchLimits.movetime = configVals["movetime"].as<int>();
+
+        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
