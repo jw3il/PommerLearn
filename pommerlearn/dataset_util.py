@@ -86,6 +86,10 @@ class PommerDataset(Dataset):
     """
     PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
     PLANE_VERTICAL_BOMB_MOVEMENT = 8
+    PLANE_AGENT0 = 10
+    PLANE_AGENT1 = 11
+    PLANE_AGENT2 = 12
+    PLANE_AGENT3 = 13
 
     def __init__(self, obs, val, act, pol, ids, steps_to_end, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
@@ -316,7 +320,12 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
     Creates the value target for a zarr dataset z.
 
     :param z: The zarr dataset
-    :param value_version: Specifies how the value is defined. 1 = considers only win/loss, 2 = considers defeated agents
+    :param value_version: Specifies how the value is defined.
+    <list>
+    <li>1 = considers only win/loss</li>
+    <li>2 = considers defeated agents</li>
+    <li>3 = similar to 2 but with intermediate rewards</li>
+    </list>
     :param discount_factor: The discount factor
     :return: The value target for z
     """
@@ -338,30 +347,51 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
         winner = episode_winner[ep]
         dead = episode_dead[ep][agent_id]
 
-        # TODO: Adapt for team mode
-        if value_version == 1:
-            # only distribute rewards when the (agent) episode is done
-            if winner == agent_id:
-                episode_reward = 1
-            elif dead:
-                episode_reward = -1
-            else:
-                # episode not done
-                episode_reward = 0
-        elif value_version == 2:
-            # we are agent 0, so we can just sum up the defeated opponents
-            episode_reward = episode_dead[ep][1:].sum() * 1.0 / 3 - dead
-        else:
-            raise ValueError(f"Unknown value version {value_version}")
-
         # min to handle cut datasets
         next_step = min(current_step + steps, total_steps)
         num_steps = next_step - current_step
 
-        # calculate discount factors backwards
-        discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
-        val_target[current_step:next_step] = discounting * episode_reward
+        episode_discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
 
+        # TODO: Adapt for team mode
+        if value_version == 1:
+            # only distribute rewards when the (agent) episode is done
+            if winner == agent_id:
+                episode_value = 1
+            elif dead:
+                episode_value = -1
+            else:
+                # episode not done
+                episode_value = 0
+
+            episode_target = episode_value * episode_discounting
+        elif value_version == 2:
+            # we are agent 0, so we can just sum up the defeated opponents
+            episode_value = episode_dead[ep][1:].sum() * 1.0 / 3 - dead
+            episode_target = episode_value * episode_discounting
+        elif value_version == 3:
+            alive_opponents = np.sum(
+                z["obs"][current_step:next_step, PommerDataset.PLANE_AGENT1:PommerDataset.PLANE_AGENT3 + 1],
+                axis=(-1, -2, -3)
+            )
+            # shift 1 to the left to find the steps where opponents died
+            shifted_alive_opponents = np.roll(alive_opponents, -1)
+            shifted_alive_opponents[-1] = alive_opponents[-1]
+            opponents_died = alive_opponents - shifted_alive_opponents
+            opponents_died_steps = np.argwhere(opponents_died).squeeze(1)
+
+            # As the done step is not visible in the observations, we have to add opponents that died in the last step
+            final_reward = (episode_dead[ep][1:].sum() - opponents_died.sum()) * 1.0 / 3 - dead
+            episode_target = final_reward * episode_discounting
+
+            # add the intermediate rewards
+            for step in opponents_died_steps:
+                episode_target[0:step+1] += opponents_died[step] * 1.0 / 3 * episode_discounting[-(step + 1):]
+        else:
+            raise ValueError(f"Unknown value version {value_version}")
+
+        # calculate discount factors backwards
+        val_target[current_step:next_step] = episode_target
         current_step = next_step
 
     return val_target
