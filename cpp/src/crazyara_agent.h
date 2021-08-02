@@ -14,7 +14,8 @@
 enum PlanningAgentType 
 {
     SimpleUnbiasedAgent,
-    SimpleAgent
+    SimpleAgent,
+    LazyAgent
 };
 
 /**

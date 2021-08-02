@@ -157,6 +157,10 @@ int main(int argc, char **argv) {
         {
             planningAgentType = PlanningAgentType::SimpleAgent;
         }
+        else if (planningAgentStr == "LazyAgent")
+        {
+            planningAgentType = PlanningAgentType::LazyAgent;
+        }
         else
         {
             std::cerr << "Unknown planning agent type: " << planningAgentStr << std::endl;

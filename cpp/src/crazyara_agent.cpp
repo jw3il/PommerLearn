@@ -60,6 +60,15 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
                 new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
             };
             break;
+
+        case LazyAgent:
+            this->planningAgents = {
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+            };
+            break;
         
         default:
             break;
