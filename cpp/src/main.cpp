@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
-            ("value_version", po::value<uint>()->default_value(2), "1 = considers only win/loss, 2 = considers defeated agents")
+            ("value_version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
     ;
 
     po::variables_map configVals;

@@ -292,17 +292,19 @@ def main():
     # Info: All path-related arguments should be set inside the rl loop
 
     num_datasets = 3
+    value_version = 1
     train_config = {
         "nb_epochs": 8,
         "only_test_last": True,
         "test_size": 0.5,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
         "discount_factor": 1.0,
+        "value_version": value_version,
+        # "train_sampling_mode": "weighted_value_class",
+        # for lstm
         "use_flat_core": False,
         "use_lstm": False,
         "sequence_length": 8,
-        "value_version": 2,
-        #"train_sampling_mode": "weighted_value_class"
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
@@ -317,7 +319,8 @@ def main():
         "--state_size=0",
         "--planning_agents=SimpleUnbiasedAgent",  # LazyAgent
         "--simulations=100",
-        "--movetime=100"
+        "--movetime=100",
+        f"--value_version={value_version}",
     ]
 
     max_iterations = 20

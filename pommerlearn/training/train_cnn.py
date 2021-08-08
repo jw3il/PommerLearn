@@ -559,7 +559,7 @@ def fill_default_config(train_config):
         "output_dir": "./model",
         "model_batch_sizes": [1, 8],
         # hyperparameters
-        "value_version": 2,
+        "value_version": 1,
         "discount_factor": 0.9,
         "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end"
         "min_lr": 0.0001,
