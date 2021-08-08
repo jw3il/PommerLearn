@@ -327,7 +327,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     {
         if(state.agents[pommerState->agentID].won)
         {
-            customTerminalValue = 2.0f;
+            customTerminalValue = 1.0f;
             return TERMINAL_CUSTOM;
         }
         else
@@ -339,7 +339,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
             }
             else
             {
-                customTerminalValue = -2.0f;
+                customTerminalValue = -1.0f;
                 return TERMINAL_CUSTOM;
             }
         }
@@ -349,7 +349,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     if(state.agents[pommerState->agentID].dead)
     {
         if (pommerState->gameMode == bboard::GameMode::FreeForAll) {
-            customTerminalValue = -2.0f;
+            customTerminalValue = -1.0f;
             return TERMINAL_CUSTOM;
         }
         // Partner is still alive
