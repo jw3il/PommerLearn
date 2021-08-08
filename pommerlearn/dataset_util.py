@@ -315,6 +315,21 @@ def get_steps_until_end(z) -> np.ndarray:
     return ids
 
 
+def get_agent_died_in_step(single_episode_actions, single_episode_dead):
+    """
+    For each agent, get the step in which it died. 0 if it is still alive.
+
+    :param single_episode_actions: The actions of all agents in this episode.
+    :param single_episode_dead: The final result of the episode.
+    :return: array of steps in which the agents died
+    """
+    died_in_step = np.empty(4, dtype=int)
+    for id, actions in enumerate(single_episode_actions):
+        died_in_step[id] = len(actions) if single_episode_dead[id] else 0
+
+    return died_in_step
+
+
 def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarray:
     """
     Creates the value target for a zarr dataset z.
@@ -335,6 +350,7 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
     agent_episode = np.array(z.attrs.get('AgentEpisode'))
     episode_winner = np.array(z.attrs.get('EpisodeWinner'))
     episode_dead = np.array(z.attrs.get('EpisodeDead'))
+    episode_actions = z.attrs.get('EpisodeActions')
     # episode_draw = np.array(z.attrs.get('EpisodeDraw'))
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
 
@@ -346,6 +362,8 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
         steps = agent_steps[agent_ep_idx]
         winner = episode_winner[ep]
         dead = episode_dead[ep][agent_id]
+
+        died_in_step = get_agent_died_in_step(episode_actions[ep], episode_dead[ep])
 
         # min to handle cut datasets
         next_step = min(current_step + steps, total_steps)
@@ -366,27 +384,23 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
 
             episode_target = episode_value * episode_discounting
         elif value_version == 2:
-            # we are agent 0, so we can just sum up the defeated opponents
-            episode_value = episode_dead[ep][1:].sum() * 1.0 / 3 - dead
+            # get number of opponents that died before our agent
+            if dead:
+                num_dead_opponents = (died_in_step[died_in_step != 0] <= died_in_step[agent_id]).sum() - 1
+            else:
+                num_dead_opponents = (died_in_step != 0).sum()
+
+            episode_value = num_dead_opponents * 1.0 / 3 - dead
             episode_target = episode_value * episode_discounting
         elif value_version == 3:
-            alive_opponents = np.sum(
-                z["obs"][current_step:next_step, PommerDataset.PLANE_AGENT1:PommerDataset.PLANE_AGENT3 + 1],
-                axis=(-1, -2, -3)
-            )
-            # shift 1 to the left to find the steps where opponents died
-            shifted_alive_opponents = np.roll(alive_opponents, -1)
-            shifted_alive_opponents[-1] = alive_opponents[-1]
-            opponents_died = alive_opponents - shifted_alive_opponents
-            opponents_died_steps = np.argwhere(opponents_died).squeeze(1)
+            episode_target = np.zeros(num_steps)
 
-            # As the done step is not visible in the observations, we have to add opponents that died in the last step
-            final_reward = (episode_dead[ep][1:].sum() - opponents_died.sum()) * 1.0 / 3 - dead
-            episode_target = final_reward * episode_discounting
-
-            # add the intermediate rewards
-            for step in opponents_died_steps:
-                episode_target[0:step+1] += opponents_died[step] * 1.0 / 3 * episode_discounting[-(step + 1):]
+            for id, step in enumerate(died_in_step):
+                if step != 0:
+                    if id == agent_id:
+                        episode_target[0:step+1] = -1 * episode_discounting[-(step + 1):]
+                    else:
+                        episode_target[0:step+1] = 1.0 / 3.0 * episode_discounting[-(step + 1):]
         else:
             raise ValueError(f"Unknown value version {value_version}")
 

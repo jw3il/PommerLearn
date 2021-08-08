@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from torch.distributions.categorical import Categorical
 from tqdm import tqdm
 
-from dataset_util import PommerDataset, get_agent_episode_slice
+from dataset_util import PommerDataset, get_agent_episode_slice, get_agent_died_in_step
 import torch
 
 from env.replay_env import PommeReplay
@@ -26,27 +26,10 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, discount_fact
     print(f"Episode {agent_episode}: Steps {num_steps} from {episode_slice.start} to {episode_slice.stop}, "
           f"val[0] {data[episode_slice.start].val.item()}")
 
-    def get_alive_agents(simple_obs):
-        agent_relative_0_alive = simple_obs[10].sum()
-        agent_relative_1_alive = simple_obs[11].sum()
-        agent_relative_2_alive = simple_obs[12].sum()
-        agent_relative_3_alive = simple_obs[13].sum()
-
-        return np.array([agent_relative_0_alive, agent_relative_1_alive, agent_relative_2_alive, agent_relative_3_alive])
-
-    def add_alive_changes_to_dict(step, changes, changes_dict):
-        if changes.sum() > 0:
-            changes_dict[step] = []
-            for a in range(0, 4):
-                if changes[a] > 0:
-                    changes_dict[step].append(a)
-
-    agents_died_steps = {}
     predicted_values = np.empty(num_steps)
 
     model = torch.jit.load(f"{model_path}/torch_{'cuda' if torch.cuda.is_available() else 'cpu'}/model-bsize-1.pt")
     device_name = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    alive_agents = None
 
     for i in tqdm(range(0, num_steps)):
         obs_tensor = torch.as_tensor(data[episode_slice.start + i].obs)
@@ -54,19 +37,6 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, discount_fact
         value_out, policy_out = model(PommerModel.flatten(obs_tensor.unsqueeze(0).to(device=device_name), None))
         predicted_values[i] = value_out
         # print(f"Step {i - episode_slice.start}: {value_out, policy_out}")
-
-        if alive_agents is None:
-            alive_agents = get_alive_agents(obs_tensor)
-        else:
-            new_alive_agents = get_alive_agents(obs_tensor)
-            changes = alive_agents - new_alive_agents
-            add_alive_changes_to_dict(i, changes, agents_died_steps)
-            alive_agents = new_alive_agents
-
-    episode_end_dead = np.array(z.attrs.get('EpisodeDead')[agent_episode], dtype=int)
-    episode_end_alive = 1 - episode_end_dead
-    changes = alive_agents - episode_end_alive
-    add_alive_changes_to_dict(num_steps + 1, changes, agents_died_steps)
 
     steps = np.arange(0, num_steps)
 
@@ -81,11 +51,24 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, discount_fact
 
     minv = min(predicted_values.min(), real_value.min())
     maxv = max(predicted_values.max(), real_value.max())
-    for s in agents_died_steps:
-        relative_agent_ids = agents_died_steps[s]
-        plt.vlines(s, minv, maxv, colors="black")
-        text = f"{' and '.join([str(id) for id in relative_agent_ids])} died "
-        plt.annotate(text, (s, (maxv + minv) / 2), ha='right', fontsize=14)
+
+    died_in_step = get_agent_died_in_step(
+        z.attrs.get('EpisodeActions')[agent_episode], z.attrs.get('EpisodeDead')[agent_episode]
+    )
+    # aggregate agents according to the steps they died in
+    died_in_step_aggregated = {}
+    for id, step in enumerate(died_in_step):
+        if step != 0:
+            if not step in died_in_step_aggregated:
+                died_in_step_aggregated[step] = []
+
+            died_in_step_aggregated[step].append(id)
+
+    for step in died_in_step_aggregated:
+        agent_ids = died_in_step_aggregated[step]
+        plt.vlines(step, minv, maxv, colors="black")
+        text = f"{' and '.join([str(id) for id in agent_ids])} died "
+        plt.annotate(text, (step, (maxv + minv) / 2), ha='right', fontsize=14)
 
     fig.tight_layout()
     plt.legend(loc='lower left')
