@@ -401,6 +401,15 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
                         episode_target[0:step+1] = -1 * episode_discounting[-(step + 1):]
                     else:
                         episode_target[0:step+1] = 1.0 / 3.0 * episode_discounting[-(step + 1):]
+        elif value_version == 4:
+            # get number of opponents that died before our agent
+            if dead:
+                num_dead_opponents = (died_in_step[died_in_step != 0] <= died_in_step[agent_id]).sum() - 1
+            else:
+                num_dead_opponents = (died_in_step != 0).sum()
+
+            episode_value = -1 + 4.0 / 7 * num_dead_opponents + (0 if dead else 2.0 / 7)
+            episode_target = episode_value * episode_discounting
         else:
             raise ValueError(f"Unknown value version {value_version}")
 

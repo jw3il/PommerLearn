@@ -383,6 +383,24 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     return TERMINAL_NONE;
 }
 
+inline int _get_num_of_dead_opponents(const bboard::State& state, const int ownId)
+{
+    const bboard::AgentInfo& ownInfo = state.agents[ownId];
+    int deadOpponents = 0;
+    for (uint i = 0; i < bboard::AGENT_COUNT; i++) {
+        if (i == ownId) {
+            continue;
+        }
+
+        const bboard::AgentInfo& info = state.agents[i];
+        if (info.dead && (ownInfo.team == 0 || info.team == 0 || ownInfo.team != info.team)) {
+            deadOpponents++;
+        }
+    }
+
+    return deadOpponents;
+}
+
 inline TerminalType is_terminal_v2(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
 {
     const bboard::State& state = pommerState->state;
@@ -391,46 +409,43 @@ inline TerminalType is_terminal_v2(const PommermanState* pommerState, size_t num
     // new return values
     if(state.finished || ownInfo.dead || state.timeStep >= pommerState->maxTimeStep)
     {
-        customTerminalValue = 0;
-        for(uint i = 0; i < bboard::AGENT_COUNT; i++)
+        int numDeadOpponents = _get_num_of_dead_opponents(state, pommerState->agentID);
+        switch (pommerState->gameMode)
         {
-            const bboard::AgentInfo& info = state.agents[i];
+        case bboard::GameMode::FreeForAll:
+            customTerminalValue = numDeadOpponents * 1.0 / 3 + (ownInfo.dead ? -1.0 : 0.0);
+            break;
+        
+        case bboard::GameMode::TwoTeams:
+            customTerminalValue = numDeadOpponents * 1.0 / 2 + (ownInfo.dead ? -1.0 / 2 : 0.0);
+            break;
 
-            // only add rewards for dead agents
-            if(!info.dead)
-            {
-                continue;
-            }
+        default:
+            throw std::runtime_error("GameMode not supported.");
+        }
+        return TERMINAL_CUSTOM;
+    }
+    
+    return TERMINAL_NONE;
+}
 
-            switch (pommerState->gameMode)
-            {
-            case bboard::GameMode::FreeForAll:
-                if(i == pommerState->agentID)
-                {
-                    customTerminalValue += -1;
-                }
-                else
-                {
-                    // we have three opponents => 1/3 reward
-                    customTerminalValue += 1.0 / 3;
-                }
-                break;
-            
-            case bboard::GameMode::TwoTeams:
-                if(info.team == ownInfo.team)
-                {
-                    // two agents in our team
-                    customTerminalValue += -1.0 / 2;
-                }
-                else
-                {
-                    // we have two opponents
-                    customTerminalValue += 1.0 / 2;
-                }
-                break;
-            default:
-                break;
-            }
+inline TerminalType is_terminal_v4(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
+{
+    const bboard::State& state = pommerState->state;
+    const bboard::AgentInfo& ownInfo = state.agents[pommerState->agentID];
+
+    // new return values
+    if(state.finished || ownInfo.dead || state.timeStep >= pommerState->maxTimeStep)
+    {
+        int numDeadOpponents = _get_num_of_dead_opponents(state, pommerState->agentID);
+        switch (pommerState->gameMode)
+        {
+        case bboard::GameMode::FreeForAll:
+            customTerminalValue = -1 + 4.0 / 7 * numDeadOpponents + (ownInfo.dead ? 0 : 2.0 / 7);
+            break;
+        
+        default:
+            throw std::runtime_error("GameMode not supported.");
         }
         return TERMINAL_CUSTOM;
     }
@@ -448,6 +463,9 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
     
     case 2:
         return is_terminal_v2(this, numberLegalMoves, customTerminalValue);
+
+    case 4:
+        return is_terminal_v4(this, numberLegalMoves, customTerminalValue);
 
     default:
         throw std::runtime_error("Unknown value version " + std::to_string(valueVersion));
