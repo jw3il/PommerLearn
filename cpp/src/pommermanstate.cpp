@@ -173,6 +173,28 @@ std::vector<Action> PommermanState::legal_actions() const
                 || (destItem == bboard::Item::BOMB && self.canKick)) {
             legalActions.push_back(Action(dir));
         }
+        else if (bboard::IS_FLAME(destItem)) {
+            int cumulativeTimeLeft = 0;
+
+            // check if this flame disappears in the next step
+            for (int i = 0; i < state.flames.count; i++) {
+                const bboard::Flame& flame = state.flames[i];
+                cumulativeTimeLeft += flame.timeLeft;
+
+                // flame does not disappear in the next step as
+                // cumulative time left is too high and we did not
+                // find it in the previous flames
+                if (cumulativeTimeLeft > 1) {
+                    break;
+                }
+
+                // check if this is the flame we are looking for
+                if (flame.position.x == dest.x && flame.position.y == dest.y) {
+                    legalActions.push_back(Action(dir));
+                    break;
+                }
+            }
+        }
     }
 
     return legalActions;
