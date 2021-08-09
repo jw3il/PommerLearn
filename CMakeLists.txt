@@ -40,6 +40,7 @@ add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
 # CrazyAra
 
 add_definitions(-DMODE_POMMERMAN)
+# add_definitions(-DCRAZYARA_AGENT_PV)
 # add_definitions(-DDISABLE_UCI_INFO)  # optional
 add_definitions(-DMCTS_STORE_STATES)
 add_definitions(-DMCTS_SINGLE_PLAYER)

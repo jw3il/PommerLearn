@@ -100,11 +100,54 @@ void _get_q(EvalInfo* info, float* q) {
     }
 }
 
+void _print_arr(float* arr, int count) {
+    if (count <= 0) {
+        return;
+    }
+    for (size_t i = 0; i < count - 1; i++) {
+        std::cout << arr[i] << ", ";
+    }
+    std::cout << arr[count - 1] << std::endl;
+}
+
+void _print_q(EvalInfo* info) {
+    std::cout << "Q values: ";
+    for (size_t i = 0; i < info->legalMoves.size(); i++) {
+        Action a = info->legalMoves.at(i);
+        float qVal = info->qValues.at(i);
+
+        std::cout << StateConstantsPommerman::action_to_uci(a, false) << ": " << qVal;
+        if (i < info->legalMoves.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << std::endl;
+}
+
 bboard::Move CrazyAraAgent::act(const bboard::State *state)
 {
     pommermanState->set_state(state);
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
     agent->perform_action();
+
+#ifndef DISABLE_UCI_INFO
+    _print_q(&evalInfo);
+#endif
+
+#ifdef CRAZYARA_AGENT_PV
+    if (evalInfo.pv.size() > 0) {
+        std::cout << "BEGIN ========== Principal Variation" << std::endl;
+        pommermanState->set_state(state);
+        std::cout << "(" << pommermanState->state.timeStep << "): Initial state" << std::endl;
+        bboard::PrintState(&pommermanState->state, false);
+        for (Action a : evalInfo.pv[0]) {
+            pommermanState->do_action(a);
+            std::cout << "(" << pommermanState->state.timeStep << "): after " << StateConstantsPommerman::action_to_uci(a, false) << std::endl;
+            bboard::PrintState(&pommermanState->state, false);
+        }
+        std::cout << "END ========== " << std::endl;
+    }
+#endif
 
     bboard::Move bestAction = bboard::Move(agent->get_best_action());
 
