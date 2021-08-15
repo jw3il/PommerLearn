@@ -429,15 +429,28 @@ def get_value_target(z, value_version: int, discount_factor: float, mcts_val_wei
             episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
         elif value_version == 3:
             episode_target = np.zeros(num_steps)
+            discounting_sum = np.zeros(num_steps)
 
+            # add intermediate "rewards" with discounting
             for id, step in enumerate(died_in_step):
                 if step != 0:
-                    mcts_val = episode_mcts_val[0:step +1]
                     discounting = episode_discounting[-(step + 1):]
+                    discounting_sum[0:step+1] += discounting
                     if id == agent_id:
-                        episode_target[0:step+1] = get_combined_target(mcts_val, -1, discounting)
+                        episode_target[0:step+1] += -1 * discounting
                     else:
-                        episode_target[0:step+1] = get_combined_target(mcts_val, 1.0 / 3, discounting)
+                        episode_target[0:step+1] += 1.0 / 3 * discounting
+
+            # add mcts values
+            if mcts_val_weight is not None:
+                episode_target = (
+                    mcts_val_weight * episode_mcts_val
+                    + (1 - mcts_val_weight) * (
+                        episode_target
+                        + (1 - np.clip(discounting_sum, 0, 1)) * episode_mcts_val
+                    )
+                )
+
         elif value_version == 4:
             # get number of opponents that died before our agent
             if dead:
