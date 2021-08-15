@@ -14,12 +14,12 @@ from env.replay_env import PommeReplay
 from nn.PommerModel import PommerModel
 
 
-def plot_value_prediction(dataset_path, model_path, agent_episode, discount_factor, value_version, figure_prefix,
-                          save_figure, show_figure):
+def plot_value_prediction(dataset_path, model_path, agent_episode, discount_factor, mcts_val_weight, value_version,
+                          figure_prefix, save_figure, show_figure):
     z = zarr.open(str(dataset_path), 'r')
     print("Total number of episodes in dataset", len(z.attrs.get('AgentSteps')))
 
-    data = PommerDataset.from_zarr(z, value_version, discount_factor)
+    data = PommerDataset.from_zarr(z, value_version, discount_factor, mcts_val_weight)
     episode_slice = get_agent_episode_slice(z, agent_episode)
     num_steps = episode_slice.stop - episode_slice.start
 
@@ -51,6 +51,8 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, discount_fact
 
     minv = min(predicted_values.min(), real_value.min())
     maxv = max(predicted_values.max(), real_value.max())
+
+    print(f"Predicted Vals: {predicted_values.mean()} +/- {predicted_values.std()}")
 
     died_in_step = get_agent_died_in_step(
         z.attrs.get('EpisodeActions')[agent_episode], z.attrs.get('EpisodeDead')[agent_episode]
@@ -107,10 +109,11 @@ dataset_path="mcts_data_500.zr"
 
 plot_value_prediction(
     dataset_path=dataset_path,
-    model_path="model__v2_g0.97",
+    model_path="random-model",
     agent_episode=484,
-    discount_factor=0.97,
-    value_version=2,
+    discount_factor=0.99,
+    mcts_val_weight=0.5,
+    value_version=4,
     figure_prefix="values_g0.97",
     save_figure=True,
     show_figure=True

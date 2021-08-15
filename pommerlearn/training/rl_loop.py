@@ -292,13 +292,14 @@ def main():
     # Info: All path-related arguments should be set inside the rl loop
 
     num_datasets = 3
-    value_version = 1
+    value_version = 4
     train_config = {
         "nb_epochs": 8,
         "only_test_last": True,
         "test_size": 0.5,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
-        "discount_factor": 1.0,
+        "discount_factor": 0.97,
+        "mcts_val_weight": 0.5,
         "value_version": value_version,
         # "train_sampling_mode": "weighted_value_class",
         # for lstm

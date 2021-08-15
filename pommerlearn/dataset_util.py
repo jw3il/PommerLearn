@@ -118,14 +118,15 @@ class PommerDataset(Dataset):
         self.transform = transform
 
     @staticmethod
-    def from_zarr_path(path: Path, value_version: int, discount_factor: float, transform=None,
-                       return_ids=False, verbose: bool = False):
+    def from_zarr_path(path: Path, value_version: int, discount_factor: float, mcts_val_weight: Optional[float],
+                       transform=None, return_ids=False, verbose: bool = False):
         z = zarr.open(str(path), 'r')
-        return PommerDataset.from_zarr(z, value_version, discount_factor, transform, return_ids, verbose)
+        return PommerDataset.from_zarr(z, value_version, discount_factor, mcts_val_weight, transform, return_ids,
+                                       verbose)
 
     @staticmethod
-    def from_zarr(z: zarr.Group, value_version: int, discount_factor: float, transform=None, return_ids=False,
-                  verbose: bool = False):
+    def from_zarr(z: zarr.Group, value_version: int, discount_factor: float, mcts_val_weight: Optional[float],
+                  transform=None, return_ids=False, verbose: bool = False):
         if verbose:
             print(
                 f"Opening dataset {str(z.path)} with {z.attrs['Steps']} samples "
@@ -136,7 +137,7 @@ class PommerDataset(Dataset):
 
         return PommerDataset(
             obs=z['obs'][:z_steps],
-            val=get_value_target(z, value_version, discount_factor),
+            val=get_value_target(z, value_version, discount_factor, mcts_val_weight),
             act=z['act'][:z_steps],
             pol=z['pol'][:z_steps],
             ids=get_unique_agent_episode_id(z),
@@ -330,9 +331,10 @@ def get_agent_died_in_step(single_episode_actions, single_episode_dead):
     return died_in_step
 
 
-def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarray:
+def get_value_target(z, value_version: int, discount_factor: float, mcts_val_weight: Optional[float]) -> np.ndarray:
     """
-    Creates the value target for a zarr dataset z.
+    Creates the value target for a zarr dataset z by combining episode values (according to the given value_version)
+    with value predictions from the dataset.
 
     :param z: The zarr dataset
     :param value_version: Specifies how the value is defined.
@@ -340,10 +342,17 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
     <li>1 = considers only win/loss</li>
     <li>2 = considers defeated agents</li>
     <li>3 = similar to 2 but with intermediate rewards</li>
+    <li>4 = similar to 2 but with less punishment for dying. Focuses on number of dead opponents.</li>
     </list>
-    :param discount_factor: The discount factor
+    :param discount_factor: The discount factor for the episode values (not mcts values)
+    :param mcts_val_weight: Static weight of mcts values (completely ignored when None)
+        val_target = mcts_val_weight * mcts values + (1 - mcts_val_weight) * episode values
+        Note that episode values can contain discounting towards the mcts values (or 0 if mcts_val_weight is None)
     :return: The value target for z
     """
+    assert 0 <= discount_factor <= 1, f"Invalid value for discount factor {discount_factor}"
+    assert mcts_val_weight is None or 0 <= mcts_val_weight <= 1, f"Invalid value for mcts value weight {mcts_val_weight}"
+
     total_steps = z.attrs.get('Steps')
     agent_steps = np.array(z.attrs.get('AgentSteps'))
     agent_ids = np.array(z.attrs.get('AgentIds'))
@@ -353,6 +362,31 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
     episode_actions = z.attrs.get('EpisodeActions')
     # episode_draw = np.array(z.attrs.get('EpisodeDraw'))
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
+
+    all_mcts_q = np.array(z["q"])
+    # replace nans of invalid actions
+    all_mcts_q[all_mcts_q != all_mcts_q] = float('-inf')
+    # get mcts values (= max q)
+    all_mcts_val = np.max(all_mcts_q, axis=-1)
+
+    if mcts_val_weight == 1:
+        return all_mcts_val
+
+    def get_combined_target(mcts_val, target_val, discounting_factors):
+        if mcts_val_weight is None:
+            return discounting_factors * target_val
+
+        return (
+            # static weight for the values from mcts
+            mcts_val_weight * mcts_val
+            # combine with target values
+            + (1 - mcts_val_weight) * (
+                # target values are discounted
+                discounting_factors * target_val
+                # for discounting = 0, the target is mcts_val and not 0
+                + (1 - discounting_factors) * mcts_val
+            )
+        )
 
     val_target = np.empty(total_steps)
     current_step = 0
@@ -370,6 +404,7 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
         num_steps = next_step - current_step
 
         episode_discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
+        episode_mcts_val = all_mcts_val[current_step:next_step]
 
         # TODO: Adapt for team mode
         if value_version == 1:
@@ -382,7 +417,7 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
                 # episode not done
                 episode_value = 0
 
-            episode_target = episode_value * episode_discounting
+            episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
         elif value_version == 2:
             # get number of opponents that died before our agent
             if dead:
@@ -391,16 +426,18 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
                 num_dead_opponents = (died_in_step != 0).sum()
 
             episode_value = num_dead_opponents * 1.0 / 3 - dead
-            episode_target = episode_value * episode_discounting
+            episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
         elif value_version == 3:
             episode_target = np.zeros(num_steps)
 
             for id, step in enumerate(died_in_step):
                 if step != 0:
+                    mcts_val = episode_mcts_val[0:step +1]
+                    discounting = episode_discounting[-(step + 1):]
                     if id == agent_id:
-                        episode_target[0:step+1] = -1 * episode_discounting[-(step + 1):]
+                        episode_target[0:step+1] = get_combined_target(mcts_val, -1, discounting)
                     else:
-                        episode_target[0:step+1] = 1.0 / 3.0 * episode_discounting[-(step + 1):]
+                        episode_target[0:step+1] = get_combined_target(mcts_val, 1.0 / 3, discounting)
         elif value_version == 4:
             # get number of opponents that died before our agent
             if dead:
@@ -409,7 +446,7 @@ def get_value_target(z, value_version: int, discount_factor: float) -> np.ndarra
                 num_dead_opponents = (died_in_step != 0).sum()
 
             episode_value = -1 + 4.0 / 7 * num_dead_opponents + (0 if dead else 2.0 / 7)
-            episode_target = episode_value * episode_discounting
+            episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
         else:
             raise ValueError(f"Unknown value version {value_version}")
 
@@ -452,9 +489,9 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
 
 
 def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], value_version: int,
-                        discount_factor: float, test_size: float, batch_size: int, batch_size_test: int,
-                        train_transform = None,verbose: bool = True, sequence_length=None, num_workers=2,
-                        only_test_last=False, train_sampling_mode: str = 'complete'
+                        discount_factor: float, mcts_val_weight: Optional[float], test_size: float, batch_size: int,
+                        batch_size_test: int, train_transform = None,verbose: bool = True, sequence_length=None,
+                        num_workers=2, only_test_last=False, train_sampling_mode: str = 'complete'
                         ) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
@@ -464,6 +501,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
                       is the number of samples which will be selected randomly from this data set.
     :param value_version: The value version that should be used
     :param discount_factor: The discount factor that should be used
+    :param mcts_val_weight: Weight for mcts values (None if only episode values should be used)
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
     :param batch_size_test: Batch size to use for testing
@@ -538,7 +576,8 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     buffer_test_idx = 0
     for i, info in enumerate(path_infos):
         path, proportion = get_elems(info)
-        elem_samples = PommerDataset.from_zarr_path(path, value_version, discount_factor, verbose)
+        elem_samples = PommerDataset.from_zarr_path(path, value_version, discount_factor, mcts_val_weight,
+                                                    verbose=verbose)
 
         if verbose:
             print(f"> Loading '{path}' with proportion {proportion}")
