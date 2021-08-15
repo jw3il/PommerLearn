@@ -131,21 +131,27 @@ bboard::Move CrazyAraAgent::act(const bboard::State *state)
     agent->perform_action();
 
 #ifndef DISABLE_UCI_INFO
-    _print_q(&evalInfo);
+    MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent.get());
+    if (mctsAgent != nullptr) {
+        mctsAgent->print_root_node();
+    }
 #endif
 
 #ifdef CRAZYARA_AGENT_PV
-    if (evalInfo.pv.size() > 0) {
-        std::cout << "BEGIN ========== Principal Variation" << std::endl;
-        pommermanState->set_state(state);
-        std::cout << "(" << pommermanState->state.timeStep << "): Initial state" << std::endl;
-        bboard::PrintState(&pommermanState->state, false);
-        for (Action a : evalInfo.pv[0]) {
-            pommermanState->do_action(a);
-            std::cout << "(" << pommermanState->state.timeStep << "): after " << StateConstantsPommerman::action_to_uci(a, false) << std::endl;
+    MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent.get());
+    if (mctsAgent != nullptr) {
+        if (evalInfo.pv.size() > 0) {
+            std::cout << "BEGIN ========== Principal Variation" << std::endl;
+            pommermanState->set_state(state);
+            std::cout << "(" << pommermanState->state.timeStep << "): Initial state" << std::endl;
             bboard::PrintState(&pommermanState->state, false);
+            for (Action a : evalInfo.pv[0]) {
+                pommermanState->do_action(a);
+                std::cout << "(" << pommermanState->state.timeStep << "): after " << StateConstantsPommerman::action_to_uci(a, false) << std::endl;
+                bboard::PrintState(&pommermanState->state, false);
+            }
+            std::cout << "END ========== " << std::endl;
         }
-        std::cout << "END ========== " << std::endl;
     }
 #endif
 
@@ -165,6 +171,11 @@ bboard::Move CrazyAraAgent::act(const bboard::State *state)
 void CrazyAraAgent::reset() {
     // update ID of the agent of MCTS states
     pommermanState->set_agent_id(id);
+}
+
+crazyara::Agent* CrazyAraAgent::get_agent()
+{
+    return agent.get();
 }
 
 std::unique_ptr<NeuralNetAPI> CrazyAraAgent::load_network(const std::string& modelDirectory)
@@ -212,7 +223,6 @@ SearchSettings CrazyAraAgent::get_default_search_settings(const bool selfPlay)
     searchSettings.threads = 2;
     searchSettings.useMCGS = false;
     searchSettings.multiPV = 1;
-    searchSettings.virtualLoss = 1;
     searchSettings.nodePolicyTemperature = 1.0f;
     if (selfPlay)
     {
@@ -228,6 +238,7 @@ SearchSettings CrazyAraAgent::get_default_search_settings(const bool selfPlay)
     searchSettings.qVetoDelta = 0.4;
     searchSettings.qValueWeight = 1.0f;
     searchSettings.reuseTree = false;
+    searchSettings.mctsSolver = false;
 
     return searchSettings;
 }

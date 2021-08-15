@@ -53,6 +53,8 @@ public:
     static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
     static SearchSettings get_default_search_settings(const bool selfPlay);
 
+    crazyara::Agent* get_agent();
+
     // bboard::Agent
     bboard::Move act(const bboard::State *state) override;
     void reset() override;

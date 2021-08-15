@@ -16,6 +16,9 @@
 
 #include "clonable.h"
 
+// normally not required
+#include "agents/mctsagent.h"
+
 namespace po = boost::program_options;
 
 void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
@@ -56,6 +59,13 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
 
     std::cout << "Agents loaded. Starting the runner.." << std::endl;
     Runner::run(agents, gameMode, config);
+
+    /*
+    MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(crazyAraAgent->get_agent());
+    if (mctsAgent != nullptr) {
+        mctsAgent->export_search_tree(3, "lastSearchTee.gv");
+    }
+    */
 }
 
 int main(int argc, char **argv) {
