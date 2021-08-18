@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -58,3 +59,23 @@ def is_empty(dir: Path):
         return False
 
     return True
+
+
+# idea from https://stackoverflow.com/questions/5967500/how-to-correctly-sort-a-string-with-a-number-inside
+def natural_keys(text: str):
+    """
+    Split the given string into keys that allow for human/natural sorting.
+    This means that all numbers are sorted based on their value, not on their textual representation.
+
+    Example:
+        the strings "hello_20_2", "hello_3_2", "hello_0_0" are mapped to the following keys
+        ["hello", "_", 20, "_", 2], ["hello", "_", 3, "_", 2], ["hello", "_", 0, "_", 0]
+        that allow for correct sorting: hello_20_2 > hello_3_2 > hello_0_0
+
+    :param text: The string that should be converted
+    :returns: The keys for text
+    """
+    def try_convert_int(t: str):
+        return int(t) if t.isdigit() else t
+
+    return [try_convert_int(t) for t in re.split(r'(\d+)', text)]

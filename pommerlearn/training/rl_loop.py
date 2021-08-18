@@ -12,7 +12,7 @@ import training.train_cnn
 import copy
 import shutil
 
-from training.train_util import is_empty, rm_dir, move_content
+from training.train_util import is_empty, rm_dir, move_content, natural_keys
 
 # The path of the main executable for data generation
 EXEC_PATH = Path("./PommerLearn")
@@ -90,13 +90,13 @@ def get_datatsets_sorted(dir: Path) -> List[Path]:
     Get all datasets in a given directory, sorted by their name.
 
     :param dir: Some directory which contains a dataset
-    :return: all subdirectories inside dir ending with ".zr"
+    :return: all subdirectories inside dir ending with ".zr" (sorted)
     """
     if not dir.exists() or not dir.is_dir():
         raise ValueError(f"{str(dir)} is no directory!")
 
-    sorted_dirs = sorted(dir.iterdir())
-    return list(filter(lambda child: child.is_dir() and child.name.endswith(".zr"), sorted_dirs))
+    datasets = filter(lambda p: p.is_dir and p.name.endswith(".zr"), [p for p in dir.iterdir()])
+    return sorted(datasets, key=lambda x: natural_keys(str(x)))
 
 
 def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optional[str], train_config, num_datasets
@@ -292,14 +292,14 @@ def main():
     # Info: All path-related arguments should be set inside the rl loop
 
     num_datasets = 3
-    value_version = 4
+    value_version = 1
     train_config = {
-        "nb_epochs": 8,
+        "nb_epochs": 4,
         "only_test_last": True,
         "test_size": 0.5,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
         "discount_factor": 0.97,
-        "mcts_val_weight": 0.5,
+        "mcts_val_weight": 0.3,
         "value_version": value_version,
         # "train_sampling_mode": "weighted_value_class",
         # for lstm
@@ -324,7 +324,7 @@ def main():
         f"--value_version={value_version}",
     ]
 
-    max_iterations = 20
+    max_iterations = 100
 
     # Start the rl loop
     rl_args = (run_id, max_iterations, dataset_args, train_config, model_subdir, num_datasets)
