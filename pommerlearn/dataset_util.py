@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from pommerman import constants
 import zarr
-from torch.utils.data import DataLoader, TensorDataset, Dataset
+from torch.utils.data import DataLoader, TensorDataset, Dataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -86,8 +86,12 @@ class PommerDataset(Dataset):
     """
     PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
     PLANE_VERTICAL_BOMB_MOVEMENT = 8
+    PLANE_AGENT0 = 10
+    PLANE_AGENT1 = 11
+    PLANE_AGENT2 = 12
+    PLANE_AGENT3 = 13
 
-    def __init__(self, obs, val, act, pol, ids, transform=None, sequence_length=None, return_ids=False):
+    def __init__(self, obs, val, act, pol, ids, steps_to_end, transform=None, sequence_length=None, return_ids=False):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
 
@@ -108,29 +112,39 @@ class PommerDataset(Dataset):
         self.act = act
         self.pol = pol
         self.ids = ids
-        self.return_ids = return_ids
+        self.steps_to_end = steps_to_end
 
+        self.return_ids = return_ids
         self.transform = transform
 
     @staticmethod
-    def from_zarr(path: Path, discount_factor: float, transform=None, return_ids=False, verbose: bool = False):
+    def from_zarr_path(path: Path, value_version: int, discount_factor: float, mcts_val_weight: Optional[float],
+                       transform=None, return_ids=False, verbose: bool = False):
         z = zarr.open(str(path), 'r')
+        return PommerDataset.from_zarr(z, value_version, discount_factor, mcts_val_weight, transform, return_ids,
+                                       verbose)
 
+    @staticmethod
+    def from_zarr(z: zarr.Group, value_version: int, discount_factor: float, mcts_val_weight: Optional[float],
+                  transform=None, return_ids=False, verbose: bool = False):
         if verbose:
             print(
-                f"Opening dataset {str(path)} with {z.attrs['Steps']} samples "
+                f"Opening dataset {str(z.path)} with {z.attrs['Steps']} samples "
                 f"from {len(z.attrs['EpisodeSteps'])} episodes"
             )
 
-        value_target = get_value_target(z, discount_factor)
-
         z_steps = z.attrs['Steps']
-        obs = z['obs'][:z_steps]
-        act = z['act'][:z_steps]
-        pol = z['pol'][:z_steps]
-        ids = get_unique_agent_episode_id(z)
 
-        return PommerDataset(obs, value_target, act, pol, ids, transform=transform, return_ids=return_ids)
+        return PommerDataset(
+            obs=z['obs'][:z_steps],
+            val=get_value_target(z, value_version, discount_factor, mcts_val_weight),
+            act=z['act'][:z_steps],
+            pol=z['pol'][:z_steps],
+            ids=get_unique_agent_episode_id(z),
+            transform=transform,
+            return_ids=return_ids,
+            steps_to_end=get_steps_until_end(z)
+        )
 
     @staticmethod
     def create_empty(count, transform=None, sequence_length=None, return_ids=False):
@@ -139,14 +153,18 @@ class PommerDataset(Dataset):
 
         :param count: The number of samples
         """
-        obs = np.empty((count, 18, 11, 11), dtype=float)
-        val = np.empty(count, dtype=float)
-        act = np.empty(count, dtype=int)
-        pol = np.empty((count, 6), dtype=float)
-        ids = np.empty(count, dtype=int)
 
-        return PommerDataset(obs, val, act, pol, ids, transform=transform, sequence_length=sequence_length,
-                             return_ids=return_ids)
+        return PommerDataset(
+            obs=np.empty((count, 18, 11, 11), dtype=float),
+            val=np.empty(count, dtype=float),
+            act=np.empty(count, dtype=int),
+            pol=np.empty((count, 6), dtype=float),
+            ids=np.empty(count, dtype=int),
+            steps_to_end=np.empty(count, dtype=int),
+            transform=transform,
+            sequence_length=sequence_length,
+            return_ids=return_ids
+        )
 
     def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None):
         """
@@ -163,9 +181,8 @@ class PommerDataset(Dataset):
         self.val[to_index:to_index + count] = other_samples.val[from_index:from_index + count]
         self.act[to_index:to_index + count] = other_samples.act[from_index:from_index + count]
         self.pol[to_index:to_index + count] = other_samples.pol[from_index:from_index + count]
-
-        if self.ids is not None:
-            self.ids[to_index:to_index + count] = other_samples.ids[from_index:from_index + count]
+        self.ids[to_index:to_index + count] = other_samples.ids[from_index:from_index + count]
+        self.steps_to_end[to_index:to_index + count] = other_samples.steps_to_end[from_index:from_index + count]
 
     def __len__(self):
         return len(self.obs)
@@ -277,22 +294,99 @@ def get_unique_agent_episode_id(z) -> np.ndarray:
     return ids
 
 
-def get_value_target(z, discount_factor: float) -> np.ndarray:
+def get_steps_until_end(z) -> np.ndarray:
     """
-    Creates the value target for a zarr dataset z.
+    Creates an array that contains the number of steps until the last step for each agent episode.
 
     :param z: The zarr dataset
-    :param discount_factor: The discount factor
+    :return: The number of steps until the episode of this sample ends
+    """
+    total_steps = z.attrs.get('Steps')
+    agent_steps = np.array(z.attrs.get('AgentSteps'))
+
+    ids = np.empty(total_steps, dtype=np.int)
+    current_step = 0
+
+    for steps in agent_steps:
+        end = min(current_step + steps, total_steps)
+        # we always end at step 1 as the final state is not in the datasets
+        ids[current_step:end] = np.arange(end - current_step, 0, -1)
+        current_step += steps
+
+    return ids
+
+
+def get_agent_died_in_step(single_episode_actions, single_episode_dead):
+    """
+    For each agent, get the step in which it died. 0 if it is still alive.
+
+    :param single_episode_actions: The actions of all agents in this episode.
+    :param single_episode_dead: The final result of the episode.
+    :return: array of steps in which the agents died
+    """
+    died_in_step = np.empty(4, dtype=int)
+    for id, actions in enumerate(single_episode_actions):
+        died_in_step[id] = len(actions) if single_episode_dead[id] else 0
+
+    return died_in_step
+
+
+def get_value_target(z, value_version: int, discount_factor: float, mcts_val_weight: Optional[float]) -> np.ndarray:
+    """
+    Creates the value target for a zarr dataset z by combining episode values (according to the given value_version)
+    with value predictions from the dataset.
+
+    :param z: The zarr dataset
+    :param value_version: Specifies how the value is defined.
+    <list>
+    <li>1 = considers only win/loss</li>
+    <li>2 = considers defeated agents</li>
+    <li>3 = similar to 2 but with intermediate rewards</li>
+    <li>4 = similar to 2 but with less punishment for dying. Focuses on number of dead opponents.</li>
+    </list>
+    :param discount_factor: The discount factor for the episode values (not mcts values)
+    :param mcts_val_weight: Static weight of mcts values (completely ignored when None)
+        val_target = mcts_val_weight * mcts values + (1 - mcts_val_weight) * episode values
+        Note that episode values can contain discounting towards the mcts values (or 0 if mcts_val_weight is None)
     :return: The value target for z
     """
+    assert 0 <= discount_factor <= 1, f"Invalid value for discount factor {discount_factor}"
+    assert mcts_val_weight is None or 0 <= mcts_val_weight <= 1, f"Invalid value for mcts value weight {mcts_val_weight}"
+
     total_steps = z.attrs.get('Steps')
     agent_steps = np.array(z.attrs.get('AgentSteps'))
     agent_ids = np.array(z.attrs.get('AgentIds'))
     agent_episode = np.array(z.attrs.get('AgentEpisode'))
     episode_winner = np.array(z.attrs.get('EpisodeWinner'))
     episode_dead = np.array(z.attrs.get('EpisodeDead'))
+    episode_actions = z.attrs.get('EpisodeActions')
     # episode_draw = np.array(z.attrs.get('EpisodeDraw'))
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
+
+    all_mcts_q = np.array(z["q"])
+    # replace nans of invalid actions
+    all_mcts_q[all_mcts_q != all_mcts_q] = float('-inf')
+    # get mcts values (= max q)
+    all_mcts_val = np.max(all_mcts_q, axis=-1)
+
+    if mcts_val_weight == 1:
+        return all_mcts_val
+
+    def get_combined_target(mcts_val, target_val, discounting_factors):
+        if mcts_val_weight is None:
+            return discounting_factors * target_val
+
+        return (
+            # static weight for the values from mcts
+            mcts_val_weight * mcts_val
+            # combine with target values
+            + (1 - mcts_val_weight) * (
+                # target values are discounted
+                discounting_factors * target_val
+                # for discounting = 0, the target is mcts_val and not 0
+                + (1 - discounting_factors) * mcts_val
+            )
+        )
 
     val_target = np.empty(total_steps)
     current_step = 0
@@ -303,23 +397,74 @@ def get_value_target(z, discount_factor: float) -> np.ndarray:
         winner = episode_winner[ep]
         dead = episode_dead[ep][agent_id]
 
-        # TODO: Adapt for team mode
-        if winner == agent_id:
-            episode_reward = 1
-        elif dead:
-            episode_reward = -1
-        else:
-            # episode not done
-            episode_reward = 0
+        died_in_step = get_agent_died_in_step(episode_actions[ep], episode_dead[ep])
 
         # min to handle cut datasets
         next_step = min(current_step + steps, total_steps)
         num_steps = next_step - current_step
 
-        # calculate discount factors backwards
-        discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
-        val_target[current_step:next_step] = discounting * episode_reward
+        episode_discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
+        episode_mcts_val = all_mcts_val[current_step:next_step]
 
+        # TODO: Adapt for team mode
+        if value_version == 1:
+            # only distribute rewards when the (agent) episode is done
+            if winner == agent_id:
+                episode_value = 1
+            elif dead:
+                episode_value = -1
+            else:
+                # episode not done
+                episode_value = 0
+
+            episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
+        elif value_version == 2:
+            # get number of opponents that died before our agent
+            if dead:
+                num_dead_opponents = (died_in_step[died_in_step != 0] <= died_in_step[agent_id]).sum() - 1
+            else:
+                num_dead_opponents = (died_in_step != 0).sum()
+
+            episode_value = num_dead_opponents * 1.0 / 3 - dead
+            episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
+        elif value_version == 3:
+            episode_target = np.zeros(num_steps)
+            discounting_sum = np.zeros(num_steps)
+
+            # add intermediate "rewards" with discounting
+            for id, step in enumerate(died_in_step):
+                if step != 0:
+                    discounting = episode_discounting[-(step + 1):]
+                    discounting_sum[0:step+1] += discounting
+                    if id == agent_id:
+                        episode_target[0:step+1] += -1 * discounting
+                    else:
+                        episode_target[0:step+1] += 1.0 / 3 * discounting
+
+            # add mcts values
+            if mcts_val_weight is not None:
+                episode_target = (
+                    mcts_val_weight * episode_mcts_val
+                    + (1 - mcts_val_weight) * (
+                        episode_target
+                        + (1 - np.clip(discounting_sum, 0, 1)) * episode_mcts_val
+                    )
+                )
+
+        elif value_version == 4:
+            # get number of opponents that died before our agent
+            if dead:
+                num_dead_opponents = (died_in_step[died_in_step != 0] <= died_in_step[agent_id]).sum() - 1
+            else:
+                num_dead_opponents = (died_in_step != 0).sum()
+
+            episode_value = -1 + 4.0 / 7 * num_dead_opponents + (0 if dead else 2.0 / 7)
+            episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
+        else:
+            raise ValueError(f"Unknown value version {value_version}")
+
+        # calculate discount factors backwards
+        val_target[current_step:next_step] = episode_target
         current_step = next_step
 
     return val_target
@@ -356,16 +501,20 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
         return last_info
 
 
-def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], discount_factor: float,
-                        test_size: float, batch_size: int, batch_size_test: int, train_transform = None,
-                        verbose: bool = True, sequence_length=None, num_workers=2) -> [DataLoader, DataLoader]:
+def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], value_version: int,
+                        discount_factor: float, mcts_val_weight: Optional[float], test_size: float, batch_size: int,
+                        batch_size_test: int, train_transform = None,verbose: bool = True, sequence_length=None,
+                        num_workers=2, only_test_last=False, train_sampling_mode: str = 'complete'
+                        ) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
 
     :param path_infos: The path information of the zarr datasets which should be used. Expects a single path or a list
                       containing strings (paths) or a tuple of the form (path, proportion) where 0 <= proportion <= 1
                       is the number of samples which will be selected randomly from this data set.
-    :param discount_factor: The discount factor which should be used
+    :param value_version: The value version that should be used
+    :param discount_factor: The discount factor that should be used
+    :param mcts_val_weight: Weight for mcts values (None if only episode values should be used)
     :param test_size: Percentage of data to use for testing
     :param batch_size: Batch size to use for training
     :param batch_size_test: Batch size to use for testing
@@ -373,6 +522,14 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     :param verbose: Log debug information
     :param sequence_length: Sequence length used in the train loader
     :param num_workers: The number of workers used for loading
+    :param only_test_last: Whether only the last dataset is used for testing
+    :param train_sampling_mode: Defines how the samples are chosen. Possible values: <br>
+        <list>
+        <li>'complete' to load all samples in random order.</li>
+        <li>'weighted_steps_to_end' to assign exponentially decreasing weights to each sample based on the
+        number of steps until the individual episode ends. Samples are chosen with replacement using the
+        the normalized weights as probabilities.
+        </list>
     :return: Training loader, validation loader
     """
 
@@ -387,16 +544,25 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         else:
             return info, 1
 
+    def get_test_size(path_index):
+        if only_test_last:
+            if path_index == len(path_infos) - 1:
+                return test_size
+            else:
+                return 0
+        else:
+            return test_size
+
     def get_total_sample_count():
         all_train_samples = 0
         all_test_samples = 0
 
-        for info in path_infos:
+        for i, info in enumerate(path_infos):
             path, proportion = get_elems(info)
             z = zarr.open(str(path), 'r')
             num_samples = int(z.attrs['Steps'] * proportion)
 
-            test_samples = int(num_samples * test_size)
+            test_samples = int(num_samples * get_test_size(i))
             train_samples = num_samples - test_samples
 
             all_train_samples += train_samples
@@ -408,7 +574,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
     if verbose:
         print(f"Loading {total_train_samples + total_test_samples} samples from {len(path_infos)} dataset(s) with "
-              f"test size {test_size}")
+              f"test size {test_size}{' only last' if only_test_last else ''} ({total_test_samples} samples)")
 
     data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform,
                                             sequence_length=sequence_length, return_ids=(sequence_length is not None))
@@ -421,9 +587,10 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
     buffer_train_idx = 0
     buffer_test_idx = 0
-    for info in path_infos:
+    for i, info in enumerate(path_infos):
         path, proportion = get_elems(info)
-        elem_samples = PommerDataset.from_zarr(path, discount_factor, verbose)
+        elem_samples = PommerDataset.from_zarr_path(path, value_version, discount_factor, mcts_val_weight,
+                                                    verbose=verbose)
 
         if verbose:
             print(f"> Loading '{path}' with proportion {proportion}")
@@ -442,7 +609,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
             elem_samples_nb = len(elem_samples)
             elem_samples_from = 0
 
-        test_nb = int(elem_samples_nb * test_size)
+        test_nb = int(elem_samples_nb * get_test_size(i))
         train_nb = elem_samples_nb - test_nb
 
         data_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb)
@@ -462,9 +629,40 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         f"{(buffer_train_idx, total_train_samples, buffer_test_idx, total_test_samples)}"
 
     if verbose:
-        print("Creating DataLoaders..", end='')
+        print(f"Creating DataLoaders with train sampling mode {train_sampling_mode}..")
 
-    train_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    if train_sampling_mode == 'complete':
+        train_loader = DataLoader(data_train, shuffle=True, batch_size=batch_size, num_workers=num_workers)
+    elif train_sampling_mode == 'weighted_steps_to_end':
+        train_weights = np.clip(np.power(0.97, data_train.steps_to_end - 1), 0.05, 1)
+        sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
+        train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
+    elif train_sampling_mode == 'weighted_value_class':
+        unique_values = list(np.unique(data_train.val))
+        value_class_counts = {}
+        value_class_weights = {}
+        for value in unique_values:
+            num_samples = (data_train.val == value).sum()
+            value_class_counts[value] = num_samples
+            value_class_weights[value] = (1.0 / len(unique_values)) * (1.0 / num_samples)
+
+        if verbose:
+            print(f"Value weighting with {len(unique_values)} classes")
+            print(value_class_counts)
+            print(value_class_weights)
+
+        if discount_factor != 1:
+            print("Warning: Value class weighting was created for discount factor 1.")
+
+        train_weights = np.empty(len(data_train))
+        for a in range(0, len(data_train)):
+            train_weights[a] = value_class_weights[data_train.val[a]]
+
+        sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
+        train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
+    else:
+        raise ValueError(f"Unknown train_sampling_mode {train_sampling_mode}")
+
     test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=num_workers) if total_test_samples > 0 else None
 
     if verbose:

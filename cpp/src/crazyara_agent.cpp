@@ -29,13 +29,13 @@ CrazyAraAgent::CrazyAraAgent(std::string modelDirectory, PlaySettings playSettin
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, PlanningAgentType planningAgentType)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType)
 {
     // assuming that the model is stateful when we have auxiliary outputs
     bool statefulModel = singleNet->has_auxiliary_outputs();
 
     // this is the state object of agent 0
-    pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel);
+    pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel, 800, valueVersion);
     pommermanState->set_partial_observability(observationParameters);
 
     if(!this->isRawNetAgent)
@@ -58,6 +58,15 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
                 new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
                 new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
                 new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
+            };
+            break;
+
+        case LazyAgent:
+            this->planningAgents = {
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
+                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
             };
             break;
         
@@ -91,11 +100,60 @@ void _get_q(EvalInfo* info, float* q) {
     }
 }
 
+void _print_arr(float* arr, int count) {
+    if (count <= 0) {
+        return;
+    }
+    for (size_t i = 0; i < count - 1; i++) {
+        std::cout << arr[i] << ", ";
+    }
+    std::cout << arr[count - 1] << std::endl;
+}
+
+void _print_q(EvalInfo* info) {
+    std::cout << "Q values: ";
+    for (size_t i = 0; i < info->legalMoves.size(); i++) {
+        Action a = info->legalMoves.at(i);
+        float qVal = info->qValues.at(i);
+
+        std::cout << StateConstantsPommerman::action_to_uci(a, false) << ": " << qVal;
+        if (i < info->legalMoves.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << std::endl;
+}
+
 bboard::Move CrazyAraAgent::act(const bboard::State *state)
 {
     pommermanState->set_state(state);
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
     agent->perform_action();
+
+#ifndef DISABLE_UCI_INFO
+    MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent.get());
+    if (mctsAgent != nullptr) {
+        mctsAgent->print_root_node();
+    }
+#endif
+
+#ifdef CRAZYARA_AGENT_PV
+    MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent.get());
+    if (mctsAgent != nullptr) {
+        if (evalInfo.pv.size() > 0) {
+            std::cout << "BEGIN ========== Principal Variation" << std::endl;
+            pommermanState->set_state(state);
+            std::cout << "(" << pommermanState->state.timeStep << "): Initial state" << std::endl;
+            bboard::PrintState(&pommermanState->state, false);
+            for (Action a : evalInfo.pv[0]) {
+                pommermanState->do_action(a);
+                std::cout << "(" << pommermanState->state.timeStep << "): after " << StateConstantsPommerman::action_to_uci(a, false) << std::endl;
+                bboard::PrintState(&pommermanState->state, false);
+            }
+            std::cout << "END ========== " << std::endl;
+        }
+    }
+#endif
 
     bboard::Move bestAction = bboard::Move(agent->get_best_action());
 
@@ -113,6 +171,11 @@ bboard::Move CrazyAraAgent::act(const bboard::State *state)
 void CrazyAraAgent::reset() {
     // update ID of the agent of MCTS states
     pommermanState->set_agent_id(id);
+}
+
+crazyara::Agent* CrazyAraAgent::get_agent()
+{
+    return agent.get();
 }
 
 std::unique_ptr<NeuralNetAPI> CrazyAraAgent::load_network(const std::string& modelDirectory)
@@ -160,7 +223,6 @@ SearchSettings CrazyAraAgent::get_default_search_settings(const bool selfPlay)
     searchSettings.threads = 2;
     searchSettings.useMCGS = false;
     searchSettings.multiPV = 1;
-    searchSettings.virtualLoss = 1;
     searchSettings.nodePolicyTemperature = 1.0f;
     if (selfPlay)
     {
@@ -176,6 +238,7 @@ SearchSettings CrazyAraAgent::get_default_search_settings(const bool selfPlay)
     searchSettings.qVetoDelta = 0.4;
     searchSettings.qValueWeight = 1.0f;
     searchSettings.reuseTree = false;
+    searchSettings.mctsSolver = false;
 
     return searchSettings;
 }

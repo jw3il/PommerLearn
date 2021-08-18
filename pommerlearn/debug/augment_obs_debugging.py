@@ -4,7 +4,7 @@ import torch
 from data_augmentation import FlipX, FlipY, Rotate90
 from dataset_util import PommerDataset, PommerSample
 
-data = PommerDataset.from_zarr('mcts_data_500.zr', 0.9)
+data = PommerDataset.from_zarr_path('mcts_data_500.zr', 0.9)
 
 # search for bomb movement in observations (planes 7 & 8)
 horizontal_bomb_movement = data.obs[:, 7].nonzero()

@@ -14,7 +14,8 @@
 enum PlanningAgentType 
 {
     SimpleUnbiasedAgent,
-    SimpleAgent
+    SimpleAgent,
+    LazyAgent
 };
 
 /**
@@ -45,12 +46,14 @@ public:
     CrazyAraAgent(std::string modelDirectory);
     CrazyAraAgent(std::string modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
     static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
     static SearchSettings get_default_search_settings(const bool selfPlay);
+
+    crazyara::Agent* get_agent();
 
     // bboard::Agent
     bboard::Move act(const bboard::State *state) override;

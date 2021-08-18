@@ -12,7 +12,7 @@ import training.train_cnn
 import copy
 import shutil
 
-from training.train_util import is_empty, rm_dir, move_content
+from training.train_util import is_empty, rm_dir, move_content, natural_keys
 
 # The path of the main executable for data generation
 EXEC_PATH = Path("./PommerLearn")
@@ -90,16 +90,17 @@ def get_datatsets_sorted(dir: Path) -> List[Path]:
     Get all datasets in a given directory, sorted by their name.
 
     :param dir: Some directory which contains a dataset
-    :return: all subdirectories inside dir ending with ".zr"
+    :return: all subdirectories inside dir ending with ".zr" (sorted)
     """
     if not dir.exists() or not dir.is_dir():
         raise ValueError(f"{str(dir)} is no directory!")
 
-    sorted_dirs = sorted(dir.iterdir())
-    return list(filter(lambda child: child.is_dir() and child.name.endswith(".zr"), sorted_dirs))
+    datasets = filter(lambda p: p.is_dir and p.name.endswith(".zr"), [p for p in dir.iterdir()])
+    return sorted(datasets, key=lambda x: natural_keys(str(x)))
 
 
-def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optional[str], train_config) -> concurrent.futures._base.Future:
+def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optional[str], train_config, num_datasets
+          ) -> concurrent.futures._base.Future:
     """
     Start a training pass.
 
@@ -108,19 +109,16 @@ def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optiona
     :param out_dir: The output directory
     :param torch_in_dir: The torch input dir used to load an existing model
     :param train_config: The training config
+    :param num_datasets: The number of last datasets that should be used
     """
 
     # fill the config
     local_train_config = copy.deepcopy(train_config)
     local_train_config["output_dir"] = str(out_dir)
 
-    if len(sorted_dataset_paths) == 1:
-        # use single dataset
-        local_train_config["dataset_path"] = [str(sorted_dataset_paths[-1])]
-    else:
-        # use last two datasets
-        # important: only the last dataset will be logged to tensorboard
-        local_train_config["dataset_path"] = [str(sorted_dataset_paths[-2]), str(sorted_dataset_paths[-1])]
+    # use last x datasets
+    # important: only the last dataset will be logged to tensorboard
+    local_train_config["dataset_path"] = [str(path) for path in sorted_dataset_paths[-num_datasets:]]
 
     local_train_config["torch_input_dir"] = torch_in_dir
     training.train_cnn.fill_default_config(local_train_config)
@@ -157,7 +155,8 @@ def subprocess_verbose_wait(sproc):
     #     raise RuntimeError(f"Subprocess returned {return_code}!")
 
 
-def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, model_subdir: str):
+def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, model_subdir: str,
+            num_datasets:int):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -168,6 +167,7 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
     :param model_subdir: The name of the subdirectory inside the model dir used for sample generation
+    :param num_datasets: The number of last datasets that are used for training in each iteration
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
     """
 
@@ -184,10 +184,10 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
 
     last_model_dir = None
     model_dir = run_archive_dir / (str(it - 1) + "_model")
-    model_dir.mkdir(exist_ok=True)
 
     # Before we can create a dataset, we need an initial model
     if is_empty(MODEL_INIT_DIR):
+        model_dir.mkdir(exist_ok=True)
         training.train_cnn.export_initial_model(train_config, model_dir)
         print("No initial model provided. Using new model.")
     else:
@@ -211,7 +211,7 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
         # Start training if training data exists
         if len(datasets) > 0:
             print_it("Start training")
-            train_future = train(datasets, model_dir, last_model_dir, train_config)
+            train_future = train(datasets, model_dir, last_model_dir, train_config, num_datasets)
             # wait until the training is done before we start generating samples
             train_future_res = train_future.result()
             print_it("Training done")
@@ -291,11 +291,18 @@ def main():
 
     # Info: All path-related arguments should be set inside the rl loop
 
+    num_datasets = 3
+    value_version = 1
     train_config = {
-        "nb_epochs": 20,
-        "test_size": 0.1,
+        "nb_epochs": 4,
+        "only_test_last": True,
+        "test_size": 0.5,
         "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
-        "discount_factor": 0.9,
+        "discount_factor": 0.97,
+        "mcts_val_weight": 0.3,
+        "value_version": value_version,
+        # "train_sampling_mode": "weighted_value_class",
+        # for lstm
         "use_flat_core": False,
         "use_lstm": False,
         "sequence_length": 8,
@@ -307,17 +314,20 @@ def main():
     # model_subdir = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
-        "--env_gen_seed_eps=10",
+        "--env_gen_seed_eps=2",
         "--max_games=-1",
         "--targeted_samples=50000",
         "--state_size=0",
-        "--planning_agents=SimpleUnbiasedAgent",
+        "--planning_agents=SimpleUnbiasedAgent",  # LazyAgent
+        "--simulations=100",
+        "--movetime=100",
+        f"--value_version={value_version}",
     ]
 
-    max_iterations = 20
+    max_iterations = 100
 
     # Start the rl loop
-    rl_args = (run_id, max_iterations, dataset_args, train_config, model_subdir)
+    rl_args = (run_id, max_iterations, dataset_args, train_config, model_subdir, num_datasets)
     rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 

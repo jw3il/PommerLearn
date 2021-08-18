@@ -81,7 +81,15 @@ public:
 class PommermanState : public State
 {
 public:
-    PommermanState(bboard::GameMode gameMode, bool statefulModel);
+    /**
+     * @brief Pommerman planning state for a single agent with optional planning agents (heuristic behaviour) as opponents.
+     * 
+     * @param gameMode The game mode
+     * @param statefulModel Whether the used model is stateful
+     * @param maxTimeStep The max number of time steps of an episode (= max depth)
+     * @param valueVersion Specifies how the value of terminal states is defined. 1 = considers only win/loss, 2 = considers defeated agents
+     */
+    PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion);
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
     uint agentID;
@@ -90,7 +98,9 @@ public:
     bboard::ObservationParameters params;
     int eventHash;
     std::vector<float> auxiliaryOutputs;
-    bool statefulModel;
+    const bool statefulModel;
+    const uint maxTimeStep;
+    const uint valueVersion;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.

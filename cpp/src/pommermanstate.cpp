@@ -10,14 +10,16 @@
 
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
-PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel):
+PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
     agentID(-1),
     gameMode(gameMode),
     usePartialObservability(false),
     eventHash(0),
     statefulModel(statefulModel),
     hasPlanningAgents(false),
-    hasBufferedActions(false)
+    hasBufferedActions(false),
+    maxTimeStep(maxTimeStep),
+    valueVersion(valueVersion)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
@@ -25,7 +27,7 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel):
     }
     else if (statefulModel)
     {
-        throw "You have not set an auxiliary (state) output but you claim that your model is stateful.";
+        throw std::runtime_error("You have not set an auxiliary (state) output but you claim that your model is stateful.");
     }
 }
 
@@ -170,6 +172,28 @@ std::vector<Action> PommermanState::legal_actions() const
         if (destItem == bboard::Item::PASSAGE || bboard::IS_POWERUP(destItem)
                 || (destItem == bboard::Item::BOMB && self.canKick)) {
             legalActions.push_back(Action(dir));
+        }
+        else if (bboard::IS_FLAME(destItem)) {
+            int cumulativeTimeLeft = 0;
+
+            // check if this flame disappears in the next step
+            for (int i = 0; i < state.flames.count; i++) {
+                const bboard::Flame& flame = state.flames[i];
+                cumulativeTimeLeft += flame.timeLeft;
+
+                // flame does not disappear in the next step as
+                // cumulative time left is too high and we did not
+                // find it in the previous flames
+                if (cumulativeTimeLeft > 1) {
+                    break;
+                }
+
+                // check if this is the flame we are looking for
+                if (flame.position.x == dest.x && flame.position.y == dest.y) {
+                    legalActions.push_back(Action(dir));
+                    break;
+                }
+            }
         }
     }
 
@@ -317,13 +341,15 @@ std::string PommermanState::action_to_san(Action action, const std::vector<Actio
     }
 }
 
-TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customTerminalValue) const
+inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
 {
+    const bboard::State& state = pommerState->state;
+
     if(state.finished)
     {
-        if(state.agents[agentID].won)
+        if(state.agents[pommerState->agentID].won)
         {
-            customTerminalValue = 2.0f;
+            customTerminalValue = 1.0f;
             return TERMINAL_CUSTOM;
         }
         else
@@ -335,17 +361,17 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
             }
             else
             {
-                customTerminalValue = -2.0f;
+                customTerminalValue = -1.0f;
                 return TERMINAL_CUSTOM;
             }
         }
     }
 
     // state is not finished
-    if(state.agents[agentID].dead)
+    if(state.agents[pommerState->agentID].dead)
     {
-        if (gameMode == bboard::GameMode::FreeForAll) {
-            customTerminalValue = -2.0f;
+        if (pommerState->gameMode == bboard::GameMode::FreeForAll) {
+            customTerminalValue = -1.0f;
             return TERMINAL_CUSTOM;
         }
         // Partner is still alive
@@ -357,6 +383,95 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
     return TERMINAL_NONE;
 }
 
+inline int _get_num_of_dead_opponents(const bboard::State& state, const int ownId)
+{
+    const bboard::AgentInfo& ownInfo = state.agents[ownId];
+    int deadOpponents = 0;
+    for (uint i = 0; i < bboard::AGENT_COUNT; i++) {
+        if (i == ownId) {
+            continue;
+        }
+
+        const bboard::AgentInfo& info = state.agents[i];
+        if (info.dead && (ownInfo.team == 0 || info.team == 0 || ownInfo.team != info.team)) {
+            deadOpponents++;
+        }
+    }
+
+    return deadOpponents;
+}
+
+inline TerminalType is_terminal_v2(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
+{
+    const bboard::State& state = pommerState->state;
+    const bboard::AgentInfo& ownInfo = state.agents[pommerState->agentID];
+
+    // new return values
+    if(state.finished || ownInfo.dead || state.timeStep >= pommerState->maxTimeStep)
+    {
+        int numDeadOpponents = _get_num_of_dead_opponents(state, pommerState->agentID);
+        switch (pommerState->gameMode)
+        {
+        case bboard::GameMode::FreeForAll:
+            customTerminalValue = numDeadOpponents * 1.0 / 3 + (ownInfo.dead ? -1.0 : 0.0);
+            break;
+        
+        case bboard::GameMode::TwoTeams:
+            customTerminalValue = numDeadOpponents * 1.0 / 2 + (ownInfo.dead ? -1.0 / 2 : 0.0);
+            break;
+
+        default:
+            throw std::runtime_error("GameMode not supported.");
+        }
+        return TERMINAL_CUSTOM;
+    }
+    
+    return TERMINAL_NONE;
+}
+
+inline TerminalType is_terminal_v4(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
+{
+    const bboard::State& state = pommerState->state;
+    const bboard::AgentInfo& ownInfo = state.agents[pommerState->agentID];
+
+    // new return values
+    if(state.finished || ownInfo.dead || state.timeStep >= pommerState->maxTimeStep)
+    {
+        int numDeadOpponents = _get_num_of_dead_opponents(state, pommerState->agentID);
+        switch (pommerState->gameMode)
+        {
+        case bboard::GameMode::FreeForAll:
+            customTerminalValue = -1 + 4.0 / 7 * numDeadOpponents + (ownInfo.dead ? 0 : 2.0 / 7);
+            break;
+        
+        default:
+            throw std::runtime_error("GameMode not supported.");
+        }
+        return TERMINAL_CUSTOM;
+    }
+    
+    return TERMINAL_NONE;
+}
+
+
+TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customTerminalValue) const
+{
+    switch (valueVersion)
+    {
+    case 1:
+        return is_terminal_v1(this, numberLegalMoves, customTerminalValue);
+    
+    case 2:
+        return is_terminal_v2(this, numberLegalMoves, customTerminalValue);
+
+    case 4:
+        return is_terminal_v4(this, numberLegalMoves, customTerminalValue);
+
+    default:
+        throw std::runtime_error("Unknown value version " + std::to_string(valueVersion));
+    }    
+}
+
 bool PommermanState::gives_check(Action action) const
 {
     return false;
@@ -364,7 +479,7 @@ bool PommermanState::gives_check(Action action) const
 
 PommermanState* PommermanState::clone() const
 {
-    PommermanState* clone = new PommermanState(gameMode, statefulModel);
+    PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep, valueVersion);
     clone->state = state;
     clone->agentID = agentID;
     if (hasPlanningAgents) {

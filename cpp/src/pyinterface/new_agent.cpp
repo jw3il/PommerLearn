@@ -28,7 +28,8 @@ CrazyAraAgent* create_crazyara_agent(std::string modelDir, uint stateSize, bool 
     obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
     obsParams.exposePowerUps = false;
 
-    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams);
+    uint valueVersion = 2;
+    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, valueVersion);
 
     return crazyAraAgent;
 }
