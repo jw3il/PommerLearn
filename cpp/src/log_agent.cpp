@@ -35,12 +35,12 @@ WrappedLogAgent::~WrappedLogAgent()
     delete[] this->planeBuffer;
 }
 
-bboard::Move WrappedLogAgent::act(const bboard::State* state) {
-    bboard::Move move = this->agent == nullptr ? bboard::Move::IDLE : this->agent->act(state);
+bboard::Move WrappedLogAgent::act(const bboard::Observation* obs) {
+    bboard::Move move = this->agent == nullptr ? bboard::Move::IDLE : this->agent->act(obs);
 
     // log the (state, action) pair
     if (this->has_buffer()) {
-        StateToPlanes(state, id, this->planeBuffer);
+        BoardToPlanes(obs, id, this->planeBuffer);
         this->sampleBuffer->addSample(this->planeBuffer, move);
     }
 

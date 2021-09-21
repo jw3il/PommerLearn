@@ -12,10 +12,10 @@ class Clonable
 {
 public:
     /**
-     * @brief get_obj_ptr Get the pointer to the instance of the underlying object.
+     * @brief Get the pointer to the instance of the underlying object.
      * @return The object pointer
      */
-    virtual T* get_obj_ptr() = 0;
+    virtual T* get() = 0;
 
     /**
      * @brief clone Create a clonable clone of the underlying object.
@@ -33,14 +33,14 @@ class CopyClonable : public Clonable<BaseType>, public ObjectType
 public:
     CopyClonable(ObjectType obj) {
         static_assert(std::is_base_of<BaseType, ObjectType>::value, "ObjectType not derived from BaseType");
-        *get_obj_ptr() = obj;
+        *get() = obj;
     }
 
     CopyClonable(ObjectType* obj) {
-        *get_obj_ptr() = *obj;
+        *get() = *obj;
     }
 
-    ObjectType* get_obj_ptr() override {
+    ObjectType* get() override {
         return this;
     }
 

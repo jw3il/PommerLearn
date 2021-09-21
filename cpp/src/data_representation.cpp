@@ -105,26 +105,15 @@ inline void _infoToPlanes(const bboard::AgentInfo* info, xtPlanesType xtPlanes, 
     xt::view(xtPlanes, planeIndex++) = info->canKick ? 1 : 0;
 }
 
-void StateToPlanes(const bboard::State* state, int id, float* planes)
+void BoardToPlanes(const bboard::Board* board, int id, float* planes)
 {
     // shape of all planes of a state
     std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
     auto xtPlanes = xt::adapt(planes, PLANE_COUNT * PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), stateShape);
 
     int planeIndex = 0;
-    _boardToPlanes(state, id, xtPlanes, planeIndex);
-    _infoToPlanes(&state->agents[id], xtPlanes, planeIndex);
-}
-
-void ObservationToPlanes(const bboard::Observation* obs, int id, float* planes)
-{
-    // shape of all planes of a state
-    std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
-    auto xtPlanes = xt::adapt(planes, PLANE_COUNT * PLANE_SIZE * PLANE_SIZE, xt::no_ownership(), stateShape);
-
-    int planeIndex = 0;
-    _boardToPlanes(obs, id, xtPlanes, planeIndex);
-    _infoToPlanes(&obs->agentInfos[obs->agentIDMapping[id]], xtPlanes, planeIndex);
+    _boardToPlanes(board, id, xtPlanes, planeIndex);
+    _infoToPlanes(&board->agents[id], xtPlanes, planeIndex);
 }
 
 std::string InitialStateToString(const bboard::State& state) {

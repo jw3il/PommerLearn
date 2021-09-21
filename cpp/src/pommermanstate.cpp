@@ -60,7 +60,7 @@ void PommermanState::set_state(const bboard::State* state)
 void PommermanState::set_observation(const bboard::Observation* obs)
 {
     // TODO: Merge observations
-    obs->ToState(this->state, gameMode);
+    obs->ToState(this->state);
 
     if (hasPlanningAgents) {
         planning_agents_reset();
@@ -100,7 +100,7 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
         if (agent != nullptr) {
             // create new clonable agent from this one and set its id
             planningAgents[i] = agent->clone();
-            planningAgents[i]->get_obj_ptr()->id = i;
+            planningAgents[i]->get()->id = i;
             // we have at least one agent
             hasPlanningAgents = true;
         }
@@ -116,7 +116,7 @@ void PommermanState::planning_agents_reset()
 
         Clonable<bboard::Agent>* agent = planningAgents[i].get();
         if (agent != nullptr) {
-            agent->get_obj_ptr()->reset();
+            agent->get()->reset();
         }
     }
 
@@ -129,6 +129,7 @@ void PommermanState::planning_agents_act()
     if (hasBufferedActions)
         return;
 
+    bboard::Observation obs;
     for (size_t i = 0; i < planningAgents.size(); i++) {
         if (i == agentID) {
             continue;
@@ -136,7 +137,8 @@ void PommermanState::planning_agents_act()
 
         Clonable<bboard::Agent>* agent = planningAgents[i].get();
         if (agent != nullptr) {
-            moves[i] = agent->get_obj_ptr()->act(&state);
+            bboard::Observation::Get(state, i, this->params, obs);
+            moves[i] = agent->get()->act(&obs);
         }
     }
 
@@ -208,7 +210,7 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
 void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
 {
     // TODO
-    StateToPlanes(&state, 0, inputPlanes);
+    BoardToPlanes(&state, 0, inputPlanes);
     if (this->statefulModel)
     {
         // add auxiliary outputs
@@ -269,7 +271,7 @@ void PommermanState::do_action(Action action)
     }
 
     // std::cout << "Moves: " << (int)moves[0] << " " << (int)moves[1] << " " << (int)moves[2] << " " << (int)moves[3] << std::endl;
-    bboard::Step(&state, moves);
+    state.Step(moves);
 
     if (_attribute_changed(info, state.agents[agentID])
             || bombCount != state.bombs.count || flameCount != state.flames.count) {
@@ -347,7 +349,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
 
     if(state.finished)
     {
-        if(state.agents[pommerState->agentID].won)
+        if(state.IsWinner(pommerState->agentID))
         {
             customTerminalValue = 1.0f;
             return TERMINAL_CUSTOM;

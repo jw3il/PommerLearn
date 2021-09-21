@@ -168,7 +168,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
         else {
             // add winning agents, this also works for teams
             for (int i = 0; i < bboard::AGENT_COUNT; i++) {
-                if (env.GetState().agents[i].won) {
+                if (env.GetState().IsWinner(i)) {
                     nbWins[i] += 1;
                 }
             }

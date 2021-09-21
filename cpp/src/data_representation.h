@@ -63,20 +63,13 @@ Scalar Feature Planes:
 */
 
 /**
- * @brief StateToPlanes Converts the given state to input planes from the perspective of the given player id. Directly saves these planes in the given float array.
- * @param state The state.
+ * @brief Converts the given board to input planes from the perspective of the given player id. Directly saves these planes in the given float array.
+ * 
+ * @param board The board.
  * @param id The id of the player.
  * @param planes A float pointer to a buffer of size PLANE_COUNT * PLANE_SIZE * PLANE_SIZE.
  */
-void StateToPlanes(const bboard::State* state, int id, float* planes);
-
-/**
- * @brief ObservationToPlanes Converts the given observation to input planes from the perspective of the given player id. Directly saves these planes in the given float array.
- * @param obs The observation of the agent.
- * @param id The id of the player.
- * @param planes A float pointer to a buffer of size PLANE_COUNT * PLANE_SIZE * PLANE_SIZE.
- */
-void ObservationToPlanes(const bboard::Observation* obs, int id, float* planes);
+void BoardToPlanes(const bboard::Board* board, int id, float* planes);
 
 /**
  * @brief InitialStateString Converts an initial state to a string representation. Warning: Has to be the initial state, does not handle bombs or flames.

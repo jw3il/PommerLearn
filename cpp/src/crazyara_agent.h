@@ -56,7 +56,7 @@ public:
     crazyara::Agent* get_agent();
 
     // bboard::Agent
-    bboard::Move act(const bboard::State *state) override;
+    bboard::Move act(const bboard::Observation* obs) override;
     void reset() override;
 };
 

@@ -124,9 +124,9 @@ void _print_q(EvalInfo* info) {
     std::cout << std::endl;
 }
 
-bboard::Move CrazyAraAgent::act(const bboard::State *state)
+bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
 {
-    pommermanState->set_state(state);
+    pommermanState->set_observation(obs);
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
     agent->perform_action();
 
