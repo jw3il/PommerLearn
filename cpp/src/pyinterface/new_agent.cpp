@@ -5,21 +5,21 @@
 #include <iostream>
 #include "string.h"
 
-CrazyAraAgent* create_crazyara_agent(std::string modelDir, uint stateSize, bool rawNetAgent, SearchLimits searchLimits=SearchLimits())
+std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, uint stateSize, bool rawNetAgent, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
     
-    CrazyAraAgent* crazyAraAgent;
+    std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if(rawNetAgent)
     {
-        crazyAraAgent = new CrazyAraAgent(modelDir);
+        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir);
     }
     else
     {
         SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(false);
         PlaySettings playSettings;
-        crazyAraAgent = new CrazyAraAgent(modelDir, playSettings, searchSettings, searchLimits);
+        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
     // partial observability
@@ -47,15 +47,15 @@ std::pair<std::string, std::string> _extract_arg(std::string input, std::string 
     return std::pair<std::string, std::string>(arg, remainder);
 }
 
-bboard::Agent* PyInterface::new_agent(std::string agentName, long seed)
+std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, long seed)
 {
     if(agentName == "SimpleAgent")
     {
-        return new agents::SimpleAgent(seed);
+        return std::make_unique<agents::SimpleAgent>(seed);
     }
     else if(agentName == "SimpleUnbiasedAgent")
     {
-        return new agents::SimpleUnbiasedAgent(seed);
+        return std::make_unique<agents::SimpleUnbiasedAgent>(seed);
     }
     else if(agentName.find("RawNetAgent") == 0)
     {
