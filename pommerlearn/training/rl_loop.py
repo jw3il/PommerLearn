@@ -63,7 +63,7 @@ def create_dataset(exec_path, log_dir, arguments, model_dir: Path, model_subdir:
 
     print("Args: ", " ".join(local_args))
     proc = subprocess.Popen(
-        [f"./{str(exec_path)}", *local_args],
+        [f"{str(exec_path.absolute())}", *local_args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
