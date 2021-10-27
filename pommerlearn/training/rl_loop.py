@@ -5,9 +5,13 @@ import threading
 from pathlib import Path
 import time
 from datetime import datetime
-from typing import Optional, Iterator, List
+from typing import Optional, Iterator, List, Iterable
 
 import concurrent.futures
+
+import numpy as np
+import numpy.random
+
 import training.train_cnn
 import copy
 import shutil
@@ -72,21 +76,30 @@ def create_dataset(exec_path, log_dir, arguments, model_dir: Path, model_subdir:
     return proc
 
 
-def get_datatsets_sorted(dir: Path) -> List[Path]:
+def sort_paths(paths: Iterable[Path]) -> List[Path]:
     """
-    Get all datasets in a given directory, sorted by their name.
+    Sorts the given paths.
 
-    :param dir: Some directory which contains a dataset
+    :param paths: A list of paths
+    :returns: the sorted path list
+    """
+    return sorted(paths, key=lambda x: natural_keys(str(x)))
+
+
+def get_datatsets(dir: Path) -> List[Path]:
+    """
+    Get all datasets in a given directory.
+
+    :param dir: A directory which contains datasets
     :return: all subdirectories inside dir ending with ".zr" (sorted)
     """
     if not dir.exists() or not dir.is_dir():
         raise ValueError(f"{str(dir)} is no directory!")
 
-    datasets = filter(lambda p: p.is_dir and p.name.endswith(".zr"), [p for p in dir.iterdir()])
-    return sorted(datasets, key=lambda x: natural_keys(str(x)))
+    return list(filter(lambda p: p.is_dir and p.name.endswith(".zr"), [p for p in dir.iterdir()]))
 
 
-def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optional[str], train_config, num_datasets
+def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optional[str], train_config
           ) -> concurrent.futures._base.Future:
     """
     Start a training pass.
@@ -96,7 +109,6 @@ def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optiona
     :param out_dir: The output directory
     :param torch_in_dir: The torch input dir used to load an existing model
     :param train_config: The training config
-    :param num_datasets: The number of last datasets that should be used
     """
 
     # fill the config
@@ -105,7 +117,7 @@ def train(sorted_dataset_paths: List[Path], out_dir: Path, torch_in_dir: Optiona
 
     # use last x datasets
     # important: only the last dataset will be logged to tensorboard
-    local_train_config["dataset_path"] = [str(path) for path in sorted_dataset_paths[-num_datasets:]]
+    local_train_config["dataset_path"] = [str(path) for path in sorted_dataset_paths]
 
     local_train_config["torch_input_dir"] = torch_in_dir
     training.train_cnn.fill_default_config(local_train_config)
@@ -142,8 +154,48 @@ def subprocess_verbose_wait(sproc):
     #     raise RuntimeError(f"Subprocess returned {return_code}!")
 
 
+def choose_tail_and_random_from_end(li: List, num_tail: int, num_rand: int, rand_include: float):
+    """
+    Chooses the last num_tail elements in the given list and randomly num_rand elements without replacement preferably
+    from the last rand_include * (len(li) - num_tail) elements in the list. Selects further elements from the tail if
+    that's not possible.
+
+    Examples:
+        choose_tail_and_random_from_end([1, 2], 3, 3, 0.1) will return [1, 2] because there are only 2 elements in
+        the list.
+
+        choose_tail_and_random_from_end([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3, 3, 0.1) may return [7, 6, 5, 8, 9, 10].
+        It first selects the last three elements [8, 9, 10]. The last 10% of the remaining list [1, 2, 3, 4, 5, 6, 7]
+        (rounded up) just consist of the element 7. Therefore, we randomly add additional elements from the tail without
+        replacement until we reach num_rand=3 elements.
+
+        choose_tail_and_random_from_end([1, ..., 100], 3, 3, 0.1) may return [92, 95, 93, 97, 98, 99].
+
+    :param li: A list
+    :param num_tail: The number of elements to select starting at the end of the list
+    :param num_rand: The number of elements that are chosen randomly from the last elements
+    :param rand_include: How much of the list (starting at the back) should be included in the random selection
+        (0.2 means that samples will be chosen from the last 20% of the list).
+    :returns: the filtered list
+    """
+    max_index_exclusive = len(li) - num_tail
+    min_index_inclusive = int(np.floor(max_index_exclusive * (1 - rand_include)))
+    diff = max_index_exclusive - min_index_inclusive
+
+    if diff < num_rand:
+        # fill up elements outside rand_include until we have num_rand elements
+        min_index_inclusive = max(0, min_index_inclusive - (num_rand - diff))
+        diff = max_index_exclusive - min_index_inclusive
+
+    if diff > 0 and num_rand > 0:
+        indices = min_index_inclusive + numpy.random.choice(diff, min(num_rand, diff), replace=False)
+        return [li[i] for i in indices] + li[-num_tail:]
+
+    return li[-num_tail:]
+
+
 def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_args: list, train_config: dict,
-            model_subdir: str, num_datasets:int):
+            model_subdir: str, num_datasets_latest: int, num_datasets_recent: int, datasets_recent_include: float):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -156,7 +208,10 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
     :param model_subdir: The name of the subdirectory inside the model dir used for sample generation
-    :param num_datasets: The number of last datasets that are used for training in each iteration
+    :param num_datasets_latest: The number of last datasets that are used for training in each iteration
+    :param num_datasets_recent: The number of "recent" datasets that will be used
+    :param datasets_recent_include: Defines what "recent" means, proportion of the collected datasets (e.g. 0.1 means
+        that we prefer to select datasets from the most recent 10% of all datasets).
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
     """
 
@@ -203,12 +258,19 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
         if last_iteration:
             print_it("Entering the last iteration")
 
-        datasets = get_datatsets_sorted(run_archive_dir)
+        datasets = get_datatsets(run_archive_dir)
 
         # Start training if training data exists
         if len(datasets) > 0:
             print_it("Start training")
-            train_future = train(datasets, model_dir, last_model_dir, train_config, num_datasets)
+
+            # filter datasets
+            datasets = sort_paths(datasets)
+            datasets = choose_tail_and_random_from_end(datasets, num_datasets_latest, num_datasets_recent,
+                                                       datasets_recent_include)
+            datasets = sort_paths(datasets)
+
+            train_future = train(datasets, model_dir, last_model_dir, train_config)
             # wait until the training is done before we start generating samples
             train_future_res = train_future.result()
             print_it("Training done")
@@ -290,12 +352,19 @@ def get_working_dirs(base_dir: Path):
 def main():
     global stop_rl
 
-    # TODO: set base dir using args
     parser = argparse.ArgumentParser(description='PommerLearn RL Loop')
     parser.add_argument('--dir', default='.', type=check_dir,
                         help='The main training directory that is used to store all intermediate and archived results')
     parser.add_argument('--exec', default='./PommerLearn', type=check_file,
                         help='The path to the PommerLearn executable')
+    parser.add_argument('--it', default=500, type=int,
+                        help='Maximum number of iterations (-1 for endless run that has to be stopped manually)')
+    parser.add_argument('--num-latest', default=4, type=int,
+                        help='The number of last datasets that are used for training in each iteration')
+    parser.add_argument('--num-recent', default=4, type=int,
+                        help='The number of "recent" datasets that will be used in addition to --num-latest')
+    parser.add_argument('--recent-include', default=0.1, type=float,
+                        help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%)')
 
     parsed_args = parser.parse_args()
 
@@ -315,10 +384,9 @@ def main():
 
     # Info: All path-related arguments should be set inside the rl loop
 
-    num_datasets = 3
     value_version = 1
     train_config = {
-        "nb_epochs": 4,
+        "nb_epochs": 2,
         "only_test_last": True,
         "test_size": 0.5,
         "tensorboard_dir": str(base_dir / "runs" / run_id),
@@ -351,7 +419,8 @@ def main():
     max_iterations = 100
 
     # Start the rl loop
-    rl_args = (run_id, max_iterations, base_dir, exec_path, dataset_args, train_config, model_subdir, num_datasets)
+    rl_args = (run_id, max_iterations, base_dir, exec_path, dataset_args, train_config, model_subdir,
+               parsed_args.num_latest, parsed_args.num_recent, parsed_args.recent_include)
     rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 
