@@ -2,7 +2,35 @@
 
 Idea: Combine Multi-Agent Reinforcement Learning and Monte-Carlo Tree Search (MCTS).
 
-## Prerequisites
+## Docker
+
+The simplest way to get started and execute runs is to build a docker image and run it as a container
+(currently only with TensorRT)
+
+1. Clone the repository (optional, you can also just download the dockerfile)
+2. Build the image
+    ```
+    docker build -t pommer-tensorrt docker/tensorrt/
+    ```
+3. You can now run your image as a container and mount a data directory (`$POMMER_DATA_DIR`) to log the results
+
+    a) Run in interactive mode
+    ```
+    docker run --gpus 0 -v $POMMER_DATA_DIR:/data --rm -it pommer-tensorrt
+    ```
+    
+    b) Directly start training
+    ```
+    docker run --gpus 0 -v $POMMER_DATA_DIR:/data --rm pommer-tensorrt \
+        conda run --no-capture-output -n pommer \
+        python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec /PommerLearn/build/PommerLearn
+    ```
+   
+If there are changes in the repository, you can rebuild the docker image with `--no-cache`. 
+
+## Development
+
+### Prerequisites
 
 For the python side:
 
@@ -46,9 +74,9 @@ For the C++ side:
 
 (Tested on Ubuntu 20.04 LTS)
 
-## Setup
+### Setup
 
-### Download
+#### Download
 
 This repository depends on submodules. Clone it recursively with
 
@@ -56,7 +84,7 @@ This repository depends on submodules. Clone it recursively with
 git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 ```
 
-### Build and Installation
+#### Build and Installation
 
 * Build the C++ environment with the provided `CMakeLists.txt`.
 
@@ -74,12 +102,11 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
     pip install -r requirements.txt
     ```
 
-
 #### Troubleshooting Notes
-* In older versions of tensorrt, you have to manually comment out `using namespace sample;` in `deps/CrazyAra/engine/src/nn/tensorrtapi.cpp`
+* In older versions of TensorRT, you have to manually comment out `using namespace sample;` in `deps/CrazyAra/engine/src/nn/tensorrtapi.cpp`
 * Make sure that you've pulled all submodules recursively (including Stockfish for CrazyAra)
 
-### Performance Profiling 
+## Performance Profiling 
 
 Install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html):
 * https://github.com/jrfonseca/gprof2dot
