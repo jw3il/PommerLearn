@@ -1,7 +1,7 @@
+import argparse
 import subprocess
 import sys
 import threading
-from multiprocessing import Process, Queue
 from pathlib import Path
 import time
 from datetime import datetime
@@ -13,22 +13,7 @@ import copy
 import shutil
 
 from training.train_util import is_empty, rm_dir, move_content, natural_keys
-
-# The path of the main executable for data generation
-EXEC_PATH = Path("./PommerLearn")
-
-# Every subdirectory will be put into the base dir
-BASE_DIR = Path("./")
-
-# The subdirectories for training and data generation
-ARCHIVE_DIR = BASE_DIR / "archive"
-
-LOG_DIR = BASE_DIR / "log"
-MODEL_INIT_DIR = BASE_DIR / "model-init"
-
-WORKING_DIRS = [LOG_DIR]
-
-TENSORBOARD_DIR = BASE_DIR / "runs"
+from training.util_argparse import check_dir, check_file
 
 # Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
@@ -54,29 +39,31 @@ def rename_datasets_id(dir: Path, id: str):
             dir_count += 1
 
 
-def create_dataset(arguments, model_dir: Path, model_subdir: str):
+def create_dataset(exec_path, log_dir, arguments, model_dir: Path, model_subdir: str):
     """
     Create a dataset by executing the C++ program.
 
+    :param exec_path: The path to the executable that generates training data
+    :param log_dir: Where to place the generated dataset
     :param arguments: The program arguments (excluding log and file dirs)
     :param model_dir: The main directory of the model
     :param model_subdir: The relevant subdirectory inside model_dir
     """
     # clear the log dir if it already exists
-    rm_dir(LOG_DIR, keep_empty_dir=True)
+    rm_dir(log_dir, keep_empty_dir=True)
     # make sure it exists
-    LOG_DIR.mkdir(exist_ok=True)
+    log_dir.mkdir(exist_ok=True)
 
     local_args = copy.deepcopy(arguments)
     local_args.extend([
         "--log",
-        f"--file_prefix={str(LOG_DIR / Path('data'))}",
+        f"--file_prefix={str(log_dir / Path('data'))}",
         f"--model_dir={str(model_dir / model_subdir)}",
     ])
 
     print("Args: ", " ".join(local_args))
     proc = subprocess.Popen(
-        [f"./{str(EXEC_PATH)}", *local_args],
+        [f"./{str(exec_path)}", *local_args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -155,8 +142,8 @@ def subprocess_verbose_wait(sproc):
     #     raise RuntimeError(f"Subprocess returned {return_code}!")
 
 
-def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, model_subdir: str,
-            num_datasets:int):
+def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_args: list, train_config: dict,
+            model_subdir: str, num_datasets:int):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -164,6 +151,8 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
 
     :param run_id: The (unique) id of the run, all data will be archived in ARCHIVE_DIR / run_id
     :param max_iterations: Max number of iterations (-1 for endless loop)
+    :param base_dir: The base directory where all generated files will be placed
+    :param exec_path: The path to the executable that generates training data
     :param dataset_args: Arguments for dataset generation
     :param train_config: Training configuration
     :param model_subdir: The name of the subdirectory inside the model dir used for sample generation
@@ -173,25 +162,33 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
 
     global stop_rl
 
+    archive_dir = base_dir / "archive"
+    archive_dir.mkdir(exist_ok=True)
+
+    log_dir = base_dir / "log"
+    log_dir.mkdir(exist_ok=True)
+
+    model_init_dir = base_dir / "model-init"
+
     # The current iteration
     it = 0
 
     def print_it(msg: str):
         print(f"{datetime.now()} > It. {it}: {msg}")
 
-    run_archive_dir = ARCHIVE_DIR / run_id
+    run_archive_dir = archive_dir / run_id
     run_archive_dir.mkdir(exist_ok=True)
 
     last_model_dir = None
     model_dir = run_archive_dir / (str(it - 1) + "_model")
 
     # Before we can create a dataset, we need an initial model
-    if is_empty(MODEL_INIT_DIR):
+    if is_empty(model_init_dir):
         model_dir.mkdir(exist_ok=True)
         training.train_cnn.export_initial_model(train_config, model_dir)
         print("No initial model provided. Using new model.")
     else:
-        shutil.copytree(MODEL_INIT_DIR, model_dir)
+        shutil.copytree(str(model_init_dir), model_dir)
         print("Using existing model.")
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...
@@ -221,14 +218,14 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
             # Create a new dataset
             print_it("Create dataset")
 
-            sproc_create_dataset = create_dataset(dataset_args, model_dir, model_subdir)
+            sproc_create_dataset = create_dataset(exec_path, log_dir, dataset_args, model_dir, model_subdir)
             subprocess_verbose_wait(sproc_create_dataset)
 
             print_it("Dataset done")
 
             # rename the dataset according to the iteration and move it into the archive
-            rename_datasets_id(LOG_DIR, str(it))
-            move_content(LOG_DIR, run_archive_dir)
+            rename_datasets_id(log_dir, str(it))
+            move_content(log_dir, run_archive_dir)
 
         last_model_dir = model_dir
         it += 1
@@ -245,12 +242,14 @@ def rl_loop(run_id, max_iterations, dataset_args: list, train_config: dict, mode
     print("RL loop done")
 
 
-def check_clean_working_dirs():
+def check_clean_working_dirs(working_dirs: List[Path]):
     """
     Ensures that all working directories are empty.
+
+    :param working_dirs: List of working directories
     """
 
-    all_empty = all(is_empty(d) for d in WORKING_DIRS)
+    all_empty = all(is_empty(d) for d in working_dirs)
     if not all_empty:
         print("The working directories are not empty!")
         print("Before you continue, please inspect the directories and back up all valuable data.")
@@ -259,7 +258,7 @@ def check_clean_working_dirs():
             cmd = input()
             if cmd == 'clean':
                 print("Cleaning all working directories")
-                for d in WORKING_DIRS:
+                for d in working_dirs:
                     rm_dir(d, keep_empty_dir=True)
                 print("Done.")
                 return
@@ -267,20 +266,45 @@ def check_clean_working_dirs():
                 print("Unknown command")
 
 
-def clean_working_dirs():
+def clean_working_dirs(working_dirs: List[Path]):
     """
     Removes all empty working directories.
+
+    :param working_dirs: List of working directories
     """
 
-    for d in WORKING_DIRS:
+    for d in working_dirs:
         if is_empty(d):
             rm_dir(d, keep_empty_dir=False)
+
+
+def get_working_dirs(base_dir: Path):
+    """
+    Get the working directories for the given base directory.
+
+    :param base_dir: The base directory
+    """
+    return [base_dir / "log"]
 
 
 def main():
     global stop_rl
 
-    check_clean_working_dirs()
+    # TODO: set base dir using args
+    parser = argparse.ArgumentParser(description='PommerLearn RL Loop')
+    parser.add_argument('--dir', default='.', type=check_dir,
+                        help='The main training directory that is used to store all intermediate and archived results')
+    parser.add_argument('--exec', default='./PommerLearn', type=check_file,
+                        help='The path to the PommerLearn executable')
+
+    parsed_args = parser.parse_args()
+
+    base_dir = Path(parsed_args.dir)
+    exec_path = Path(parsed_args.exec)
+
+    working_dirs = get_working_dirs(base_dir)
+
+    check_clean_working_dirs(working_dirs)
 
     # What is the purpose of the current run?
     run_comment = ""
@@ -297,7 +321,7 @@ def main():
         "nb_epochs": 4,
         "only_test_last": True,
         "test_size": 0.5,
-        "tensorboard_dir": str(TENSORBOARD_DIR / run_id),
+        "tensorboard_dir": str(base_dir / "runs" / run_id),
         "discount_factor": 0.97,
         "mcts_val_weight": 0.3,
         "value_version": value_version,
@@ -327,7 +351,7 @@ def main():
     max_iterations = 100
 
     # Start the rl loop
-    rl_args = (run_id, max_iterations, dataset_args, train_config, model_subdir, num_datasets)
+    rl_args = (run_id, max_iterations, base_dir, exec_path, dataset_args, train_config, model_subdir, num_datasets)
     rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 
@@ -344,7 +368,7 @@ def main():
 
     rl_thread.join()
 
-    clean_working_dirs()
+    clean_working_dirs(working_dirs)
 
 
 if __name__ == "__main__":
