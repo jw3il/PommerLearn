@@ -21,7 +21,7 @@ The simplest way to get started and execute runs is to build a docker image and 
     
     b) Directly start training
     ```
-    docker run --gpus 0 -v $POMMER_DATA_DIR:/data --rm pommer-tensorrt \
+    docker run --gpus 0 -v $POMMER_DATA_DIR:/data --ipc=host --rm pommer-tensorrt \
         conda run --no-capture-output -n pommer \
         python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec /PommerLearn/build/PommerLearn
     ```
