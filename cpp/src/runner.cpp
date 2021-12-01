@@ -81,7 +81,7 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
     std::cout << "------------------------------" << std::endl;
 }
 
-void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, RunnerConfig config) {
+void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerConfig config) {
     // create the sample buffers for all agents wanting to collect samples
     std::vector<SampleCollector*> sampleCollectors;
     if (config.ipcManager != nullptr) {
@@ -132,7 +132,8 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
         }
 
         bboard::Environment env;
-        env.MakeGame(agents, gameMode, currentEnvSeed, currentAgentPositionSeed);
+        env.MakeGame(agents, config.gameMode, currentEnvSeed, currentAgentPositionSeed);
+        env.SetObservationParameters(config.observationParameters);
 
         EpisodeInfo result = Runner::run_env_episode(env, config.maxEpisodeSteps, config.printSteps, config.printFirstLast);
 
@@ -211,7 +212,7 @@ void Runner::run_simple_agents(RunnerConfig config) {
         agentWrappers[i].set_agent(std::make_unique<agents::SimpleAgent>(config.seed + i));
     }
 
-    Runner::run(agents, bboard::GameMode::FreeForAll, config);
+    Runner::run(agents, config);
 
     for (int i = 0; i < 4; i++) {
         agentWrappers[i].release_agent();

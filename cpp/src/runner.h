@@ -12,6 +12,16 @@
 struct RunnerConfig
 {
     /**
+     * @brief gameMode The game mode for all episodes.
+     */
+    bboard::GameMode gameMode;
+
+    /**
+     * @brief observationParameters The observation parameters for all agents in all episodes.
+     */
+    bboard::ObservationParameters observationParameters;
+
+    /**
      * @brief maxEpisodeSteps The maximum number of steps per episode.
      */
     int maxEpisodeSteps = 800;
@@ -90,7 +100,7 @@ public:
      * @param gameMode The gamemode of the environment.
      * @param config The configuration for this run.
      */
-    static void run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, RunnerConfig config);
+    static void run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerConfig config);
 
     /**
      * @brief run_simple_agents Run the environment with simple agents and optionally collect logs.

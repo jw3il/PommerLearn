@@ -36,7 +36,8 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
 
     // this is the state object of agent 0
     pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel, 800, valueVersion);
-    pommermanState->set_partial_observability(observationParameters);
+    pommermanState->set_agent_observation_params(observationParameters);
+    pommermanState->set_opponent_observation_params(observationParameters);
 
     if(!this->isRawNetAgent)
     {
@@ -98,30 +99,6 @@ void _get_q(EvalInfo* info, float* q) {
         size_t index = StateConstantsPommerman::action_to_index(a);
         q[index] = qVal;
     }
-}
-
-void _print_arr(float* arr, int count) {
-    if (count <= 0) {
-        return;
-    }
-    for (size_t i = 0; i < count - 1; i++) {
-        std::cout << arr[i] << ", ";
-    }
-    std::cout << arr[count - 1] << std::endl;
-}
-
-void _print_q(EvalInfo* info) {
-    std::cout << "Q values: ";
-    for (size_t i = 0; i < info->legalMoves.size(); i++) {
-        Action a = info->legalMoves.at(i);
-        float qVal = info->qValues.at(i);
-
-        std::cout << StateConstantsPommerman::action_to_uci(a, false) << ": " << qVal;
-        if (i < info->legalMoves.size() - 1) {
-            std::cout << ", ";
-        }
-    }
-    std::cout << std::endl;
 }
 
 bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)

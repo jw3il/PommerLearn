@@ -21,12 +21,10 @@
 
 namespace po = boost::program_options;
 
-void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
+void tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
-
-    bboard::GameMode gameMode = bboard::GameMode::FreeForAll;
 
     std::cout << "Loading agents.." << std::endl;
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
@@ -40,14 +38,7 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
         crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
-    // partial observability
-    bboard::ObservationParameters obsParams;
-    obsParams.agentPartialMapView = false;
-    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
-    obsParams.exposePowerUps = false;
-    obsParams.agentViewSize = 4;
-
-    crazyAraAgent->init_state(gameMode, obsParams, valueVersion, planningAgentType);
+    crazyAraAgent->init_state(config.gameMode, config.observationParameters, valueVersion, planningAgentType);
 
     srand(config.seed);
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
@@ -58,14 +49,21 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     };
 
     std::cout << "Agents loaded. Starting the runner.." << std::endl;
-    Runner::run(agents, gameMode, config);
-
+    Runner::run(agents, config);
     /*
     MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(crazyAraAgent->get_agent());
     if (mctsAgent != nullptr) {
         mctsAgent->export_search_tree(3, "lastSearchTee.gv");
     }
     */
+}
+
+inline void setDefaultFFAConfig(RunnerConfig &config) {
+    config.gameMode = bboard::GameMode::FreeForAll;
+    // regular ffa rules
+    config.observationParameters.exposePowerUps = false;
+    config.observationParameters.agentPartialMapView = false;
+    config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
 }
 
 int main(int argc, char **argv) {
@@ -151,6 +149,7 @@ int main(int argc, char **argv) {
 
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {
+        setDefaultFFAConfig(config);
         Runner::run_simple_agents(config);
     }
     else if (mode == "ffa_mcts") {
@@ -181,7 +180,8 @@ int main(int argc, char **argv) {
         searchLimits.simulations = configVals["simulations"].as<int>();
         searchLimits.movetime = configVals["movetime"].as<int>();
 
-        free_for_all_tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits);
+        setDefaultFFAConfig(config);
+        tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
