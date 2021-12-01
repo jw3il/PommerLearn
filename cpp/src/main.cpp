@@ -106,7 +106,8 @@ int main(int argc, char **argv) {
             ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
-            ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
+            ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
+                                                                                                "Available options [SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("value_version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
     ;
 
@@ -170,6 +171,10 @@ int main(int argc, char **argv) {
         else if (planningAgentStr == "LazyAgent")
         {
             planningAgentType = PlanningAgentType::LazyAgent;
+        }
+        else if (planningAgentStr == "RawNetAgent")
+        {
+            planningAgentType = PlanningAgentType::RawNetworkAgent;
         }
         else
         {

@@ -15,7 +15,8 @@ enum PlanningAgentType
 {
     SimpleUnbiasedAgent,
     SimpleAgent,
-    LazyAgent
+    LazyAgent,
+    RawNetworkAgent  // "RawNetworkAgent" instead of "RawNetAgent" is used to avoid naming conflict
 };
 
 /**
@@ -30,6 +31,7 @@ private:
     PlaySettings playSettings;
     SearchSettings searchSettings;
     SearchLimits searchLimits;
+    string modelDirectory;
 
     std::unique_ptr<PommermanState> pommermanState;
     EvalInfo evalInfo;
@@ -38,13 +40,19 @@ private:
     float planeBuffer[PLANES_TOTAL_FLOATS];
     float policyBuffer[NUM_MOVES];
     float qBuffer[NUM_MOVES];
+    bool isRawNetAgent;
 
 public:
-    const bool isRawNetAgent;
+    CrazyAraAgent();  // needed for Clonable functionality
+    CrazyAraAgent(const std::string& modelDirectory);
+    CrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
-public:
-    CrazyAraAgent(std::string modelDirectory);
-    CrazyAraAgent(std::string modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
+    /**
+     * @brief operator = Copies over all member variable except the planning agents to avoid recursions.
+     * This is required for the Clonable functionality.
+     * @return Deep copy of this agent
+     */
+    CrazyAraAgent& operator=(const CrazyAraAgent&);
 
     void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
 

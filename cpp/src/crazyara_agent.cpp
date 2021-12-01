@@ -10,7 +10,11 @@
 #include "agents/rawnetagent.h"
 #include "agents/mctsagent.h"
 
-CrazyAraAgent::CrazyAraAgent(std::string modelDirectory):
+CrazyAraAgent::CrazyAraAgent():
+    CrazyAraAgent("./model") { }
+
+CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory):
+    modelDirectory(modelDirectory),
     isRawNetAgent(true)
 {
     singleNet = load_network(modelDirectory);
@@ -18,15 +22,42 @@ CrazyAraAgent::CrazyAraAgent(std::string modelDirectory):
     agent = std::make_unique<RawNetAgent>(singleNet.get(), &this->playSettings, false);
 }
 
-CrazyAraAgent::CrazyAraAgent(std::string modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
+CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
     playSettings(playSettings),
     searchSettings(searchSettings),
     searchLimits(searchLimits),
+    modelDirectory(modelDirectory),
     isRawNetAgent(false)
 {
     singleNet = load_network(modelDirectory);
     netBatches = load_network_batches(modelDirectory, searchSettings);
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
+}
+
+CrazyAraAgent &CrazyAraAgent::operator=(const CrazyAraAgent & crazyAraAgent)
+{
+//    if (isRawNetAgent) {
+//        return *(new CrazyAraAgent(crazyAraAgent.modelDirectory));
+//    }
+//    // mctsAgent
+//    return *(new CrazyAraAgent(crazyAraAgent.modelDirectory, crazyAraAgent.playSettings, crazyAraAgent.searchSettings, crazyAraAgent.searchLimits));
+
+    playSettings = crazyAraAgent.playSettings;
+    searchSettings = crazyAraAgent.searchSettings;
+    searchLimits = crazyAraAgent.searchLimits;
+    modelDirectory = crazyAraAgent.modelDirectory;
+    isRawNetAgent = crazyAraAgent.isRawNetAgent;
+
+    singleNet = load_network(modelDirectory);
+    if (isRawNetAgent) {
+        // agent uses default playsettings, are not used anyway
+        agent = std::make_unique<RawNetAgent>(singleNet.get(), &this->playSettings, false);
+        return *this;
+    }
+    // mctsAgent
+    netBatches = load_network_batches(modelDirectory, searchSettings);
+    agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
+    return *this;
 }
 
 void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType)
@@ -43,7 +74,7 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
         // other agents used for planning
         switch (planningAgentType)
         {
-        case SimpleUnbiasedAgent:
+        case PlanningAgentType::SimpleUnbiasedAgent:
             this->planningAgents = {
                 new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
                 new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
@@ -52,7 +83,7 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
             };
             break;
 
-        case SimpleAgent:
+        case PlanningAgentType::SimpleAgent:
             this->planningAgents = {
                 new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
                 new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
@@ -61,7 +92,7 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
             };
             break;
 
-        case LazyAgent:
+        case PlanningAgentType::LazyAgent:
             this->planningAgents = {
                 new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
                 new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
@@ -70,6 +101,15 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
             };
             break;
         
+        case PlanningAgentType::RawNetworkAgent:
+            this->planningAgents = {
+                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
+                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
+                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
+                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
+            };
+            break;
+
         default:
             break;
         }
