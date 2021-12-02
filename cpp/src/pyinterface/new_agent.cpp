@@ -29,7 +29,7 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, uint 
     obsParams.exposePowerUps = false;
 
     uint valueVersion = 2;
-    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, valueVersion);
+    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams, valueVersion);
 
     return crazyAraAgent;
 }
