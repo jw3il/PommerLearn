@@ -38,7 +38,9 @@ void tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint sta
         crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
-    crazyAraAgent->init_state(config.gameMode, config.observationParameters, valueVersion, planningAgentType);
+    // for now, just use the same observation parameters for opponents
+    bboard::ObservationParameters opponentObsParams = config.observationParameters;
+    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, valueVersion, planningAgentType);
 
     srand(config.seed);
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
@@ -106,6 +108,7 @@ int main(int argc, char **argv) {
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
             ("value_version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
+            ("no_state", "Whether to use (partial) observations instead of the true state for mcts.")
     ;
 
     po::variables_map configVals;
@@ -146,6 +149,7 @@ int main(int argc, char **argv) {
     config.printSteps = configVals.count("print") > 0;
     config.printFirstLast = configVals.count("print_first_last") > 0;
     config.ipcManager = ipcManager.get();
+    config.useStateInSearch = configVals.count("no_state") == 0;
 
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {

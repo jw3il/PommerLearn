@@ -72,6 +72,11 @@ struct RunnerConfig
     bool printFirstLast = false;
 
     /**
+     * @brief useStateInSearch Whether to use the true environment state in CrazyAraAgents.
+     */
+    bool useStateInSearch = true;
+
+    /**
      * @brief ipcManager The IPCManager which is used to save/transmit the episode logs. No logs are saved if this is a nullptr.
      */
     IPCManager* ipcManager = nullptr;

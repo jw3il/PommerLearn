@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include "log_agent.h"
+#include "crazyara_agent.h"
 
 #include "agents.hpp"
 
@@ -96,6 +97,17 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
 
     std::cout << "Number of logging agents: " << sampleCollectors.size() << std::endl;
 
+    bboard::Environment env;
+    if (config.useStateInSearch) {
+        for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+            CrazyAraAgent* crazyAraAgent = dynamic_cast<CrazyAraAgent*>(agents[i]);
+            if (crazyAraAgent) {
+                std::cout << "Info: Agent " << i << " has access to the state." << std::endl;
+                crazyAraAgent->use_environment_state(&env);
+            }
+        }
+    }
+
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     int nbNotDone = 0;
@@ -131,7 +143,6 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
             currentAgentPositionSeed = agentPositionRNG();
         }
 
-        bboard::Environment env;
         env.MakeGame(agents, config.gameMode, currentEnvSeed, currentAgentPositionSeed);
         env.SetObservationParameters(config.observationParameters);
 
@@ -218,6 +229,3 @@ void Runner::run_simple_agents(RunnerConfig config) {
         agentWrappers[i].release_agent();
     }
 }
-
-
-

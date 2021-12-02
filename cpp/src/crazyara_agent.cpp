@@ -29,15 +29,15 @@ CrazyAraAgent::CrazyAraAgent(std::string modelDirectory, PlaySettings playSettin
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion, PlanningAgentType planningAgentType)
 {
     // assuming that the model is stateful when we have auxiliary outputs
     bool statefulModel = singleNet->has_auxiliary_outputs();
 
     // this is the state object of agent 0
     pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel, 800, valueVersion);
-    pommermanState->set_agent_observation_params(observationParameters);
-    pommermanState->set_opponent_observation_params(observationParameters);
+    pommermanState->set_agent_observation_params(obsParams);
+    pommermanState->set_opponent_observation_params(opponentObsParams);
 
     if(!this->isRawNetAgent)
     {
@@ -79,6 +79,11 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
     }
 }
 
+void CrazyAraAgent::use_environment_state(bboard::Environment* env) 
+{
+    this->env = env;
+}
+
 void _get_policy(EvalInfo* info, float* policyProbs) {
     std::fill_n(policyProbs, NUM_MOVES, 0);
     for (size_t i = 0; i < info->legalMoves.size(); i++) {
@@ -103,7 +108,16 @@ void _get_q(EvalInfo* info, float* q) {
 
 bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
 {
-    pommermanState->set_observation(obs);
+    if (env) {
+        bboard::State& state = env->GetState();
+        // sanity check: the given observation should originate from the 
+        // same environment and therefore have the same time step
+        assert(state.timeStep == obs->timeStep);
+        pommermanState->set_state(&state);
+    }
+    else {
+        pommermanState->set_observation(obs);
+    }
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
     agent->perform_action();
 
