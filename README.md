@@ -18,15 +18,15 @@ The simplest way to get started and execute runs is to build a docker image and 
     ```
     docker run --gpus 0 -v $POMMER_DATA_DIR:/data --rm -it pommer-tensorrt
     ```
-    
+
     b) Directly start training
     ```
     docker run --gpus 0 -v $POMMER_DATA_DIR:/data --ipc=host --rm pommer-tensorrt \
         conda run --no-capture-output -n pommer \
         python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec /PommerLearn/build/PommerLearn
     ```
-   
-If there are changes in the repository, you can rebuild the docker image with `--no-cache`. 
+
+If there are changes in the repository, you can rebuild the docker image with `--no-cache`.
 
 ## Development
 
@@ -34,7 +34,7 @@ If there are changes in the repository, you can rebuild the docker image with `-
 
 For the python side:
 
-* `python 3.7` 
+* `python 3.7`
 
     It is recommend to use virtual environments. This guide will use [Anaconda](https://www.anaconda.com/). Create an environment named `pommer` with
 
@@ -78,10 +78,14 @@ For the C++ side:
 
 #### Download
 
-This repository depends on submodules. Clone it recursively with
+This repository depends on submodules. Clone it and initialize all submodules with
 
 ```
-git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
+git clone git@gitlab.com:jweil/PommerLearn.git && \
+cd PommerLearn && \
+git submodule update --init deps/playground && \
+git submodule update --init deps/pomcpp && \
+git submodule update --init deps/CrazyAra
 ```
 
 #### Build and Installation
@@ -89,7 +93,7 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 * Build the C++ environment with the provided `CMakeLists.txt`.
 
     The current version requires you to set the env variables
-    
+
     * `CONDA_ENV_PATH`: path of your conda environment (e.g. `~/conda/envs/pommer`)
     * `BLAZE_PATH`: blaze installation path (e.g. `/usr/local/include`)
     * `CUDA_PATH`: cuda installation path (e.g. `/usr/local/cuda`)
@@ -106,7 +110,7 @@ git clone --recurse-submodules git@gitlab.com:jweil/PommerLearn.git
 * In older versions of TensorRT, you have to manually comment out `using namespace sample;` in `deps/CrazyAra/engine/src/nn/tensorrtapi.cpp`
 * Make sure that you've pulled all submodules recursively (including Stockfish for CrazyAra)
 
-## Performance Profiling 
+## Performance Profiling
 
 Install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html):
 * https://github.com/jrfonseca/gprof2dot
@@ -117,4 +121,3 @@ Run the executable and generate the plot:
 ./PommerLearn --mode ffa_mcts --max_games 10
 gprof PommerLearn | gprof2dot | dot -Tpng -o profile.png
 ```
-

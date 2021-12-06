@@ -23,14 +23,18 @@ RUN wget -nv https://repo.anaconda.com/miniconda/Miniconda3-py37_4.10.3-Linux-x8
     # main runtime dependencies
     pip install --no-input --no-cache-dir numpy matplotlib imageio torch zarr numcodecs tqdm sklearn tensorboard && \
     conda clean --all --yes
-    
+
 # set environment variables from parent image
 ENV TENSORRT_PATH="/opt/tensorrt"
 ENV CUDA_PATH="/usr/local/cuda"
 
-# clone repository 
+# clone repository
 WORKDIR /
-RUN git clone --recurse-submodules https://gitlab.com/jweil/PommerLearn.git
+RUN git clone https://gitlab.com/jweil/PommerLearn.git && \
+    cd PommerLearn && \
+    git submodule update --init deps/playground && \
+    git submodule update --init deps/pomcpp && \
+    git submodule update --init deps/CrazyAra
 
 # build the binary
 WORKDIR /PommerLearn/build
@@ -47,4 +51,3 @@ RUN source /opt/miniconda3/bin/activate pommer && \
 
 # start environment
 CMD ["conda", "run", "--no-capture-output", "-n", "pommer", "/bin/bash"]
-
