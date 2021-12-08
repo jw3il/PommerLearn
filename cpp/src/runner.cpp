@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include "log_agent.h"
+#include "crazyara_agent.h"
 
 #include "agents.hpp"
 
@@ -81,7 +82,7 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
     std::cout << "------------------------------" << std::endl;
 }
 
-void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard::GameMode gameMode, RunnerConfig config) {
+void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerConfig config) {
     // create the sample buffers for all agents wanting to collect samples
     std::vector<SampleCollector*> sampleCollectors;
     if (config.ipcManager != nullptr) {
@@ -95,6 +96,17 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
     }
 
     std::cout << "Number of logging agents: " << sampleCollectors.size() << std::endl;
+
+    bboard::Environment env;
+    if (config.useStateInSearch) {
+        for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+            CrazyAraAgent* crazyAraAgent = dynamic_cast<CrazyAraAgent*>(agents[i]);
+            if (crazyAraAgent) {
+                std::cout << "Info: Agent " << i << " has access to the state." << std::endl;
+                crazyAraAgent->use_environment_state(&env);
+            }
+        }
+    }
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -131,8 +143,8 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, bboard:
             currentAgentPositionSeed = agentPositionRNG();
         }
 
-        bboard::Environment env;
-        env.MakeGame(agents, gameMode, currentEnvSeed, currentAgentPositionSeed);
+        env.MakeGame(agents, config.gameMode, currentEnvSeed, currentAgentPositionSeed);
+        env.SetObservationParameters(config.observationParameters);
 
         EpisodeInfo result = Runner::run_env_episode(env, config.maxEpisodeSteps, config.printSteps, config.printFirstLast);
 
@@ -211,12 +223,9 @@ void Runner::run_simple_agents(RunnerConfig config) {
         agentWrappers[i].set_agent(std::make_unique<agents::SimpleAgent>(config.seed + i));
     }
 
-    Runner::run(agents, bboard::GameMode::FreeForAll, config);
+    Runner::run(agents, config);
 
     for (int i = 0; i < 4; i++) {
         agentWrappers[i].release_agent();
     }
 }
-
-
-

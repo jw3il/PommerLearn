@@ -11,15 +11,15 @@
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
 PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
+    hasTrueState(false),
     agentID(-1),
     gameMode(gameMode),
-    usePartialObservability(false),
     eventHash(0),
     statefulModel(statefulModel),
-    hasPlanningAgents(false),
-    hasBufferedActions(false),
     maxTimeStep(maxTimeStep),
-    valueVersion(valueVersion)
+    valueVersion(valueVersion),
+    hasPlanningAgents(false),
+    hasBufferedActions(false)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
@@ -38,19 +38,9 @@ void PommermanState::set_agent_id(const int id)
 
 void PommermanState::set_state(const bboard::State* state)
 {
-    if(this->usePartialObservability)
-    {
-        // simulate partial observability
-
-        bboard::Observation obs;
-        // TODO: Maybe directly use the state object instead of observations?
-        bboard::Observation::Get(*state, agentID, this->params, obs);
-        set_observation(&obs);
-    }
-    else
-    {
-        this->state = *state;
-    }
+    // copy the state
+    this->state = *state;
+    this->hasTrueState = true;
 
     if (hasPlanningAgents) {
         planning_agents_reset();
@@ -61,34 +51,25 @@ void PommermanState::set_observation(const bboard::Observation* obs)
 {
     // TODO: Merge observations
     obs->ToState(this->state);
+    this->hasTrueState = false;
 
     if (hasPlanningAgents) {
         planning_agents_reset();
     }
 }
 
-bool _supportedPlanningAgents(PommermanState* state)
+void PommermanState::set_agent_observation_params(const bboard::ObservationParameters params)
 {
-    // supported: full observability of the board and all agent information is known
-    return !state->usePartialObservability || (state->params.agentInfoVisibility == bboard::AgentInfoVisibility::All && !state->params.agentPartialMapView);
+    this->agentObsParams = params;
 }
 
-void PommermanState::set_partial_observability(const bboard::ObservationParameters params)
+void PommermanState::set_opponent_observation_params(const bboard::ObservationParameters params)
 {
-    this->usePartialObservability = true;
-    this->params = params;
-
-    if (this->hasPlanningAgents && !_supportedPlanningAgents(this)) {
-        throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
-    }
+    this->opponentObsParams = params;
 }
 
 void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents)
 {
-    if (this->usePartialObservability && !_supportedPlanningAgents(this)) {
-        throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
-    }
-
     hasPlanningAgents = false;
     for (size_t i = 0; i < agents.size(); i++) {
         // skip own id, as we won't use this agent
@@ -135,9 +116,14 @@ void PommermanState::planning_agents_act()
             continue;
         }
 
+        if (!state.agents[i].visible) {
+            moves[i] = bboard::Move::IDLE;
+            continue;
+        }
+
         Clonable<bboard::Agent>* agent = planningAgents[i].get();
         if (agent != nullptr) {
-            bboard::Observation::Get(state, i, this->params, obs);
+            bboard::Observation::Get(state, i, this->opponentObsParams, obs);
             moves[i] = agent->get()->act(&obs);
         }
     }
@@ -209,8 +195,11 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
 
 void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
 {
-    // TODO
-    BoardToPlanes(&state, 0, inputPlanes);
+    // TODO: Does not account for merged observations
+    bboard::Observation obs;
+    bboard::Observation::Get(state, agentID, this->agentObsParams, obs);
+    BoardToPlanes(&obs, 0, inputPlanes);
+
     if (this->statefulModel)
     {
         // add auxiliary outputs
@@ -385,7 +374,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     return TERMINAL_NONE;
 }
 
-inline int _get_num_of_dead_opponents(const bboard::State& state, const int ownId)
+inline int _get_num_of_dead_opponents(const bboard::State& state, const uint ownId)
 {
     const bboard::AgentInfo& ownInfo = state.agents[ownId];
     int deadOpponents = 0;
@@ -483,7 +472,10 @@ PommermanState* PommermanState::clone() const
 {
     PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep, valueVersion);
     clone->state = state;
+    clone->hasTrueState = hasTrueState;
     clone->agentID = agentID;
+    clone->agentObsParams = agentObsParams;
+    clone->opponentObsParams = opponentObsParams;
     if (hasPlanningAgents) {
         // clone all agents
         for (size_t i = 0; i < planningAgents.size(); i++) {
@@ -530,4 +522,3 @@ void PommermanState::set_auxiliary_outputs(const float *auxiliaryOutputs)
         std::copy(auxiliaryOutputs, auxiliaryOutputs+StateConstantsPommerman::NB_AUXILIARY_OUTPUTS(), this->auxiliaryOutputs.begin());
     }
 }
-

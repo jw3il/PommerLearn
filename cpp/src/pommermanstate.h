@@ -90,12 +90,13 @@ public:
      * @param valueVersion Specifies how the value of terminal states is defined. 1 = considers only win/loss, 2 = considers defeated agents
      */
     PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion);
+    bool hasTrueState;
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
     uint agentID;
     const bboard::GameMode gameMode;
-    bool usePartialObservability;
-    bboard::ObservationParameters params;
+    bboard::ObservationParameters agentObsParams;
+    bboard::ObservationParameters opponentObsParams;
     int eventHash;
     std::vector<float> auxiliaryOutputs;
     const bool statefulModel;
@@ -120,7 +121,8 @@ public:
 public:
     void set_state(const bboard::State* state);
     void set_observation(const bboard::Observation* obs);
-    void set_partial_observability(const bboard::ObservationParameters params);
+    void set_agent_observation_params(const bboard::ObservationParameters params);
+    void set_opponent_observation_params(const bboard::ObservationParameters params);
     void set_agent_id(const int id);
 
     // planning agent methods

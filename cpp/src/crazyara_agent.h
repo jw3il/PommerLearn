@@ -39,6 +39,7 @@ private:
     float policyBuffer[NUM_MOVES];
     float qBuffer[NUM_MOVES];
 
+    bboard::Environment* env = nullptr;
 public:
     const bool isRawNetAgent;
 
@@ -46,7 +47,15 @@ public:
     CrazyAraAgent(std::string modelDirectory);
     CrazyAraAgent(std::string modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
+
+    /**
+     * @brief Use the true state of the given environment instead of the observation in the act method.
+     * Note that the view of this agent is still controlled via the ObservationParameters given in init_state.
+     * 
+     * @param env The environment. Call with nullptr to remove a previously set environment and use regular observations again.
+     */
+    void use_environment_state(bboard::Environment* env);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);

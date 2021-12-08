@@ -29,14 +29,15 @@ CrazyAraAgent::CrazyAraAgent(std::string modelDirectory, PlaySettings playSettin
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion, PlanningAgentType planningAgentType)
 {
     // assuming that the model is stateful when we have auxiliary outputs
     bool statefulModel = singleNet->has_auxiliary_outputs();
 
     // this is the state object of agent 0
     pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel, 800, valueVersion);
-    pommermanState->set_partial_observability(observationParameters);
+    pommermanState->set_agent_observation_params(obsParams);
+    pommermanState->set_opponent_observation_params(opponentObsParams);
 
     if(!this->isRawNetAgent)
     {
@@ -78,6 +79,11 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
     }
 }
 
+void CrazyAraAgent::use_environment_state(bboard::Environment* env) 
+{
+    this->env = env;
+}
+
 void _get_policy(EvalInfo* info, float* policyProbs) {
     std::fill_n(policyProbs, NUM_MOVES, 0);
     for (size_t i = 0; i < info->legalMoves.size(); i++) {
@@ -100,33 +106,18 @@ void _get_q(EvalInfo* info, float* q) {
     }
 }
 
-void _print_arr(float* arr, int count) {
-    if (count <= 0) {
-        return;
-    }
-    for (size_t i = 0; i < count - 1; i++) {
-        std::cout << arr[i] << ", ";
-    }
-    std::cout << arr[count - 1] << std::endl;
-}
-
-void _print_q(EvalInfo* info) {
-    std::cout << "Q values: ";
-    for (size_t i = 0; i < info->legalMoves.size(); i++) {
-        Action a = info->legalMoves.at(i);
-        float qVal = info->qValues.at(i);
-
-        std::cout << StateConstantsPommerman::action_to_uci(a, false) << ": " << qVal;
-        if (i < info->legalMoves.size() - 1) {
-            std::cout << ", ";
-        }
-    }
-    std::cout << std::endl;
-}
-
 bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
 {
-    pommermanState->set_observation(obs);
+    if (env) {
+        bboard::State& state = env->GetState();
+        // sanity check: the given observation should originate from the 
+        // same environment and therefore have the same time step
+        assert(state.timeStep == obs->timeStep);
+        pommermanState->set_state(&state);
+    }
+    else {
+        pommermanState->set_observation(obs);
+    }
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
     agent->perform_action();
 
