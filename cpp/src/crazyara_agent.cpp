@@ -217,11 +217,17 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     bboard::Move bestAction = bboard::Move(agent->get_best_action());
 
     if (has_buffer()) {
-        pommermanState->get_state_planes(true, planeBuffer, singleNet->get_version());
-        _get_policy(&evalInfo, policyBuffer);
-        _get_q(&evalInfo, qBuffer);
+        if (!planeBuffer) {
+            // create buffers on the fly
+            planeBuffer = std::unique_ptr<float[]>(new float[PLANES_TOTAL_FLOATS]);
+            policyBuffer = std::unique_ptr<float[]>(new float[NUM_MOVES]);
+            qBuffer = std::unique_ptr<float[]>(new float[NUM_MOVES]);
+        }
+        pommermanState->get_state_planes(true, planeBuffer.get(), singleNet->get_version());
+        _get_policy(&evalInfo, policyBuffer.get());
+        _get_q(&evalInfo, qBuffer.get());
 
-        sampleBuffer->addSample(planeBuffer, bestAction, policyBuffer, evalInfo.bestMoveQ.at(0), qBuffer);
+        sampleBuffer->addSample(planeBuffer.get(), bestAction, policyBuffer.get(), evalInfo.bestMoveQ.at(0), qBuffer.get());
     }
 
     return bestAction;

@@ -36,9 +36,9 @@ private:
     std::unique_ptr<PommermanState> pommermanState;
     EvalInfo evalInfo;
 
-    float planeBuffer[PLANES_TOTAL_FLOATS];
-    float policyBuffer[NUM_MOVES];
-    float qBuffer[NUM_MOVES];
+    std::unique_ptr<float[]> planeBuffer;
+    std::unique_ptr<float[]> policyBuffer;
+    std::unique_ptr<float[]> qBuffer;
     bool isRawNetAgent;
 
 public:
