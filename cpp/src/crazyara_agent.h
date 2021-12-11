@@ -26,13 +26,12 @@ enum PlanningAgentType
 class CrazyAraAgent : public LogAgent, public Clonable<bboard::Agent>
 {
 private:
-    std::unique_ptr<crazyara::Agent> agent;
-    std::unique_ptr<NeuralNetAPI> singleNet;
-    vector<unique_ptr<NeuralNetAPI>> netBatches;
+    std::shared_ptr<crazyara::Agent> agent;
+    std::shared_ptr<NeuralNetAPI> singleNet;
+    vector<std::shared_ptr<NeuralNetAPI>> netBatches;
     PlaySettings playSettings;
     SearchSettings searchSettings;
     SearchLimits searchLimits;
-    string modelDirectory;
 
     std::unique_ptr<PommermanState> pommermanState;
     EvalInfo evalInfo;
@@ -43,22 +42,20 @@ private:
     bool isRawNetAgent;
 
 public:
-    CrazyAraAgent();  // needed for Clonable functionality
+    // raw net agent constructors
+    CrazyAraAgent(const std::shared_ptr<NeuralNetAPI> singleNet);
+    CrazyAraAgent(const std::shared_ptr<crazyara::Agent> agent);
     CrazyAraAgent(const std::string& modelDirectory);
+    
+    // mcts agent constructors
+    CrazyAraAgent(std::shared_ptr<NeuralNetAPI> singleNet, vector<std::shared_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
     CrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
-
-    /**
-     * @brief operator = Copies over all member variable except the planning agents to avoid recursions.
-     * This is required for the Clonable functionality.
-     * @return Deep copy of this agent
-     */
-    CrazyAraAgent& operator=(const CrazyAraAgent&);
 
     void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::None);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
-    static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
+    static vector<shared_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
     static SearchSettings get_default_search_settings(const bool selfPlay);
 
     crazyara::Agent* get_agent();

@@ -10,31 +10,50 @@
 #include "agents/rawnetagent.h"
 #include "agents/mctsagent.h"
 
-CrazyAraAgent::CrazyAraAgent()
-{
-
-}
-
-CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory):
-    modelDirectory(modelDirectory),
+CrazyAraAgent::CrazyAraAgent(const std::shared_ptr<NeuralNetAPI> singleNet):
     isRawNetAgent(true)
 {
-    singleNet = load_network(modelDirectory);
+    // share network...
+    this->singleNet = singleNet;
+    // .. and create a new agent (this creates a new NeuralNetAPIUser and allocates VRAM)
     // agent uses default playsettings, are not used anyway
-    agent = std::make_unique<RawNetAgent>(singleNet.get(), &this->playSettings, false);
+    this->agent = std::make_shared<RawNetAgent>(singleNet.get(), &this->playSettings, false);
 }
 
-CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
+CrazyAraAgent::CrazyAraAgent(const std::shared_ptr<crazyara::Agent> agent):
+    isRawNetAgent(true)
+{
+    assert(dynamic_cast<RawNetAgent*>(agent.get())); 
+    // use an existing agent
+    this->agent = agent;
+}
+
+CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory): 
+    CrazyAraAgent(load_network(modelDirectory)) {}
+
+CrazyAraAgent::CrazyAraAgent(const std::shared_ptr<NeuralNetAPI> singleNet, const std::vector<std::shared_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
     playSettings(playSettings),
     searchSettings(searchSettings),
     searchLimits(searchLimits),
-    modelDirectory(modelDirectory),
     isRawNetAgent(false)
 {
-    singleNet = load_network(modelDirectory);
-    netBatches = load_network_batches(modelDirectory, searchSettings);
-    agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
+    this->singleNet = singleNet;
+    this->netBatches = netBatches;
+    // VERY UGLY workaround to be compatible with MCTSAgent which expects std::vector<unique_ptr<NeuralNetAPI>>&
+    // and just copies the pointers without taking ownership
+    std::vector<unique_ptr<NeuralNetAPI>> mctsAgentNetBatches;
+    for (auto& p : netBatches) {
+        mctsAgentNetBatches.push_back(std::unique_ptr<NeuralNetAPI>(p.get()));
+    }
+    agent = std::make_unique<MCTSAgent>(this->singleNet.get(), mctsAgentNetBatches, &this->searchSettings, &this->playSettings);
+    for (auto& p : mctsAgentNetBatches) {
+        // directly release ownership so that original objects are not deleted
+        p.release();
+    }
 }
+
+CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
+    CrazyAraAgent(load_network(modelDirectory), load_network_batches(modelDirectory, searchSettings), playSettings, searchSettings, searchLimits) {}
 
 bboard::Agent* CrazyAraAgent::get()
 {
@@ -50,10 +69,10 @@ std::unique_ptr<Clonable<bboard::Agent>> CrazyAraAgent::clone()
     std::unique_ptr<CrazyAraAgent> clonedCrazyAraAgent;
     
     if (isRawNetAgent) {
-        clonedCrazyAraAgent = std::make_unique<CrazyAraAgent>(modelDirectory);
+        clonedCrazyAraAgent = std::make_unique<CrazyAraAgent>(agent);
     }
     else {
-        clonedCrazyAraAgent = std::make_unique<CrazyAraAgent>(modelDirectory, playSettings, searchSettings, searchLimits);
+        clonedCrazyAraAgent = std::make_unique<CrazyAraAgent>(singleNet, netBatches, playSettings, searchSettings, searchLimits);
     }
 
     clonedCrazyAraAgent->id = id;
@@ -70,6 +89,7 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
     // this is the state object of agent 0
     pommermanState = std::make_unique<PommermanState>(gameMode, statefulModel, 800, valueVersion);
     pommermanState->set_partial_observability(observationParameters);
+    pommermanState->set_planning_agents_lock(searchSettings.threads > 1 && planningAgentType == PlanningAgentType::RawNetworkAgent);
 
     if(!this->isRawNetAgent)
     {
@@ -102,7 +122,7 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
             }
             case PlanningAgentType::RawNetworkAgent:
             {
-                std::unique_ptr<CrazyAraAgent> crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDirectory);
+                std::unique_ptr<CrazyAraAgent> crazyAraAgent = std::make_unique<CrazyAraAgent>(singleNet);
                 crazyAraAgent->id = i;
                 crazyAraAgent->init_state(gameMode, observationParameters, valueVersion);
                 agent = std::move(crazyAraAgent);
@@ -226,9 +246,9 @@ std::unique_ptr<NeuralNetAPI> CrazyAraAgent::load_network(const std::string& mod
 #endif
 }
 
-vector<unique_ptr<NeuralNetAPI>> CrazyAraAgent::load_network_batches(const string& modelDirectory, const SearchSettings& searchSettings)
+vector<shared_ptr<NeuralNetAPI>> CrazyAraAgent::load_network_batches(const string& modelDirectory, const SearchSettings& searchSettings)
 {
-    vector<unique_ptr<NeuralNetAPI>> netBatches;
+    vector<shared_ptr<NeuralNetAPI>> netBatches;
 #ifdef MXNET
     #ifdef TENSORRT
         const bool useTensorRT = bool(Options["Use_TensorRT"]);
@@ -241,11 +261,11 @@ vector<unique_ptr<NeuralNetAPI>> CrazyAraAgent::load_network_batches(const strin
     for (int deviceId = First_Device_ID; deviceId <= Last_Device_ID; ++deviceId) {
         for (size_t i = 0; i < searchSettings.threads; ++i) {
     #ifdef MXNET
-            netBatches.push_back(make_unique<MXNetAPI>(Options["Context"], deviceId, searchSettings.batchSize, modelDirectory, useTensorRT));
+            netBatches.push_back(make_shared<MXNetAPI>(Options["Context"], deviceId, searchSettings.batchSize, modelDirectory, useTensorRT));
     #elif defined TENSORRT
-            netBatches.push_back(make_unique<TensorrtAPI>(deviceId, searchSettings.batchSize, modelDirectory, "float16"));
+            netBatches.push_back(make_shared<TensorrtAPI>(deviceId, searchSettings.batchSize, modelDirectory, "float16"));
     #elif defined TORCH
-            netBatches.push_back(make_unique<TorchAPI>("cpu", deviceId, searchSettings.batchSize, modelDirectory));
+            netBatches.push_back(make_shared<TorchAPI>("cpu", deviceId, searchSettings.batchSize, modelDirectory));
     #endif
         }
     }

@@ -8,7 +8,10 @@
 #include "data_representation.h"
 #include "agents.hpp"
 
+#include <mutex>
+
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
+std::mutex planningAgentMutex;
 
 PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
     agentID(-1),
@@ -19,7 +22,8 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
     hasPlanningAgents(false),
     hasBufferedActions(false),
     maxTimeStep(maxTimeStep),
-    valueVersion(valueVersion)
+    valueVersion(valueVersion),
+    planningAgentsLock(false)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
@@ -89,6 +93,10 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
         throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
     }
 
+    if (planningAgentsLock) {
+        planningAgentMutex.lock();
+    }
+
     hasPlanningAgents = false;
     for (size_t i = 0; i < agents.size(); i++) {
         // skip own id, as we won't use this agent
@@ -104,6 +112,10 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
             // we have at least one agent
             hasPlanningAgents = true;
         }
+    }
+
+    if (planningAgentsLock) {
+        planningAgentMutex.unlock();
     }
 }
 
@@ -130,6 +142,10 @@ void PommermanState::set_planning_agent(std::unique_ptr<Clonable<bboard::Agent>>
 
 void PommermanState::planning_agents_reset()
 {
+    if (planningAgentsLock) {
+        planningAgentMutex.lock();
+    }
+
     for (size_t i = 0; i < planningAgents.size(); i++) {
         if (i == agentID) {
             continue;
@@ -141,6 +157,10 @@ void PommermanState::planning_agents_reset()
         }
     }
 
+    if (planningAgentsLock) {
+        planningAgentMutex.unlock();
+    }
+
     hasBufferedActions = false;
 }
 
@@ -149,6 +169,10 @@ void PommermanState::planning_agents_act()
     // we don't have to act when the actions are already buffered
     if (hasBufferedActions)
         return;
+
+    if (planningAgentsLock) {
+        planningAgentMutex.lock();
+    }
 
     bboard::Observation obs;
     for (size_t i = 0; i < planningAgents.size(); i++) {
@@ -163,9 +187,17 @@ void PommermanState::planning_agents_act()
         }
     }
 
+    if (planningAgentsLock) {
+        planningAgentMutex.unlock();
+    }
+
     hasBufferedActions = true;
 }
 
+void PommermanState::set_planning_agents_lock(bool planningAgentsLock)
+{
+    this->planningAgentsLock = planningAgentsLock;
+}
 
 // State methods
 
@@ -503,6 +535,7 @@ bool PommermanState::gives_check(Action action) const
 PommermanState* PommermanState::clone() const
 {
     PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep, valueVersion);
+    clone->planningAgentsLock = planningAgentsLock;
     clone->state = state;
     clone->agentID = agentID;
     if (hasPlanningAgents) {

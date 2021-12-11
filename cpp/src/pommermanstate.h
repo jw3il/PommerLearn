@@ -117,7 +117,6 @@ public:
      */
     bool hasBufferedActions;
 
-public:
     void set_state(const bboard::State* state);
     void set_observation(const bboard::Observation* obs);
     void set_partial_observability(const bboard::ObservationParameters params);
@@ -143,6 +142,13 @@ public:
     void planning_agents_reset();
     void planning_agents_act();
 
+    /**
+     * @brief Whether to lock methods executed on planning agents to make them thread-safe.
+     * 
+     * @param planningAgentsLock whether to use locking.
+     */
+    void set_planning_agents_lock(bool planningAgentsLock);
+
     // State interface
     std::vector<Action> legal_actions() const override;
     void set(const std::string &fenStr, bool isChess960, int variant) override;
@@ -166,6 +172,9 @@ public:
     void set_auxiliary_outputs(const float* auxiliaryOutputs) override;
     PommermanState* clone() const override;
     void init(int variant, bool isChess960) override;
+
+private:
+    bool planningAgentsLock;
 };
 
 #endif // POMMERMANSTATE_H
