@@ -13,33 +13,87 @@ float inline _getNormalizedBombStrength(int stength)
 template <typename xtPlanesType>
 inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPlanes, int& planeIndex)
 {
-    // shape of a single plane (BOARD_SIZE == PLANE_SIZE)
-    std::vector<std::size_t> boardShape = { bboard::BOARD_SIZE, bboard::BOARD_SIZE };
-    // adapt state.board without copying its values
-    auto items = xt::adapt(&(board->items[0][0]), bboard::BOARD_SIZE * bboard::BOARD_SIZE, xt::no_ownership(), boardShape);
+    // reset content
+    xt::view(xtPlanes, xt::all()) = 0;
 
     // obstacle planes
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::RIGID));
-    // wood blocks can also contain an item (+0, +1, +2, +3)
-    auto isWood = xt::equal(items, bboard::Item::WOOD) + xt::equal(items, bboard::Item::WOOD + 1)
-            + xt::equal(items, bboard::Item::WOOD + 2) + xt::equal(items, bboard::Item::WOOD + 3);
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(isWood);
+    int rigidPlane = planeIndex++;
+    int woodPlane = planeIndex++;
 
     // item planes
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::EXTRABOMB));
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::INCRRANGE));
-    xt::view(xtPlanes, planeIndex++) = xt::cast<float>(xt::equal(items, bboard::Item::KICK));
+    int extraBombPlane = planeIndex++;
+    int incrangePlane = planeIndex++;
+    int kickPlane = planeIndex++;
 
-    // bomb planes (lifetime & strength)
+    // bomb planes
     int bombTimePlane = planeIndex++;
     int bombStrengthPlane = planeIndex++;
     int bombMovementHorizontalPlane = planeIndex++;
     int bombMovementVerticalPlane = planeIndex++;
 
-    xt::view(xtPlanes, bombTimePlane) = 0;
-    xt::view(xtPlanes, bombStrengthPlane) = 0;
-    xt::view(xtPlanes, bombMovementHorizontalPlane) = 0;
-    xt::view(xtPlanes, bombMovementVerticalPlane) = 0;
+    int flamesPlane = planeIndex++;
+    
+    int agent0Plane = planeIndex++;
+    int agent1Plane = planeIndex++;
+    int agent2Plane = planeIndex++;
+    int agent3Plane = planeIndex++;
+
+    for (int y = 0; y < bboard::BOARD_SIZE; y++) {
+        for (int x = 0; x < bboard::BOARD_SIZE; x++) {
+            const bboard::Item item = static_cast<bboard::Item>(board->items[y][x]);
+            if (bboard::IS_WOOD(item)) {
+                xt::view(xtPlanes, woodPlane, y, x) = 1;
+                continue;
+            }
+            switch (item)
+            {
+            case bboard::Item::RIGID:
+            {
+                xt::view(xtPlanes, rigidPlane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::EXTRABOMB:
+            {
+                xt::view(xtPlanes, extraBombPlane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::INCRRANGE:
+            {
+                xt::view(xtPlanes, incrangePlane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::KICK:
+            {
+                xt::view(xtPlanes, kickPlane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::AGENT0:
+            {
+                xt::view(xtPlanes, agent0Plane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::AGENT1:
+            {
+                xt::view(xtPlanes, agent1Plane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::AGENT2:
+            {
+                xt::view(xtPlanes, agent2Plane, y, x) = 1;
+                break;
+            }
+            case bboard::Item::AGENT3:
+            {
+                xt::view(xtPlanes, agent3Plane, y, x) = 1;
+                break;
+            }
+            default:
+            {
+                break;
+            }
+            }
+        }
+    }
 
     for (int i = 0; i < board->bombs.count; i++)
     {
@@ -73,9 +127,6 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
     }
 
     // flame plane (lifetime)
-    int flamesPlane = planeIndex++;
-    xt::view(xtPlanes, flamesPlane) = 0;
-
     float cumulativeTimeLeft = 0;
     for (int i = 0; i < board->flames.count; i++)
     {
@@ -84,15 +135,6 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
         cumulativeTimeLeft += (float)flame.timeLeft;
         float flameValue = cumulativeTimeLeft / bboard::FLAME_LIFETIME;
         xt::view(xtPlanes, flamesPlane, flame.position.y, flame.position.x) = flameValue;
-    }
-
-    // player position planes
-    for (int i = 0; i < 4; i++)
-    {
-        int currentId = (id + i) % 4;
-
-        int currentPlane = planeIndex++;
-        xt::view(xtPlanes, currentPlane) = xt::cast<float>(xt::equal(items, bboard::Item::AGENT0 + currentId));;
     }
 }
 
