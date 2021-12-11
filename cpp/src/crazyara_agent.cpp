@@ -10,8 +10,10 @@
 #include "agents/rawnetagent.h"
 #include "agents/mctsagent.h"
 
-CrazyAraAgent::CrazyAraAgent():
-    CrazyAraAgent("./model") { }
+CrazyAraAgent::CrazyAraAgent()
+{
+
+}
 
 CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory):
     modelDirectory(modelDirectory),
@@ -34,30 +36,30 @@ CrazyAraAgent::CrazyAraAgent(const std::string& modelDirectory, PlaySettings pla
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-CrazyAraAgent &CrazyAraAgent::operator=(const CrazyAraAgent & crazyAraAgent)
+bboard::Agent* CrazyAraAgent::get()
 {
-//    if (isRawNetAgent) {
-//        return *(new CrazyAraAgent(crazyAraAgent.modelDirectory));
-//    }
-//    // mctsAgent
-//    return *(new CrazyAraAgent(crazyAraAgent.modelDirectory, crazyAraAgent.playSettings, crazyAraAgent.searchSettings, crazyAraAgent.searchLimits));
+    return this;
+}
 
-    playSettings = crazyAraAgent.playSettings;
-    searchSettings = crazyAraAgent.searchSettings;
-    searchLimits = crazyAraAgent.searchLimits;
-    modelDirectory = crazyAraAgent.modelDirectory;
-    isRawNetAgent = crazyAraAgent.isRawNetAgent;
-
-    singleNet = load_network(modelDirectory);
-    if (isRawNetAgent) {
-        // agent uses default playsettings, are not used anyway
-        agent = std::make_unique<RawNetAgent>(singleNet.get(), &this->playSettings, false);
-        return *this;
+std::unique_ptr<Clonable<bboard::Agent>> CrazyAraAgent::clone()
+{
+    if (!pommermanState.get()) {
+        throw std::runtime_error("Cannot clone agent with uninitialized state!");
     }
-    // mctsAgent
-    netBatches = load_network_batches(modelDirectory, searchSettings);
-    agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
-    return *this;
+
+    std::unique_ptr<CrazyAraAgent> clonedCrazyAraAgent;
+    
+    if (isRawNetAgent) {
+        clonedCrazyAraAgent = std::make_unique<CrazyAraAgent>(modelDirectory);
+    }
+    else {
+        clonedCrazyAraAgent = std::make_unique<CrazyAraAgent>(modelDirectory, playSettings, searchSettings, searchLimits);
+    }
+
+    clonedCrazyAraAgent->id = id;
+    clonedCrazyAraAgent->pommermanState = std::unique_ptr<PommermanState>(pommermanState->clone());
+
+    return clonedCrazyAraAgent;
 }
 
 void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType)
@@ -71,50 +73,47 @@ void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationPar
 
     if(!this->isRawNetAgent)
     {
-        // other agents used for planning
-        switch (planningAgentType)
-        {
-        case PlanningAgentType::SimpleUnbiasedAgent:
-            this->planningAgents = {
-                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-                new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand())),
-            };
-            break;
+        for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+            std::unique_ptr<Clonable<bboard::Agent>> agent;
 
-        case PlanningAgentType::SimpleAgent:
-            this->planningAgents = {
-                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-                new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand())),
-            };
-            break;
+            // other agents used for planning
+            switch (planningAgentType)
+            {
+            case PlanningAgentType::SimpleUnbiasedAgent:
+            {
+                agent = std::unique_ptr<Clonable<bboard::Agent>>(
+                    new CopyClonable<bboard::Agent, agents::SimpleUnbiasedAgent>(agents::SimpleUnbiasedAgent(rand()))
+                );
+                break;
+            }
+            case PlanningAgentType::SimpleAgent:
+            {
+                agent = std::unique_ptr<Clonable<bboard::Agent>>(
+                    new CopyClonable<bboard::Agent, agents::SimpleAgent>(agents::SimpleAgent(rand()))
+                );
+                break;
+            }
+            case PlanningAgentType::LazyAgent:
+            {
+                agent = std::unique_ptr<Clonable<bboard::Agent>>(
+                    new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent())
+                );
+                break;
+            }
+            case PlanningAgentType::RawNetworkAgent:
+            {
+                std::unique_ptr<CrazyAraAgent> crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDirectory);
+                crazyAraAgent->id = i;
+                crazyAraAgent->init_state(gameMode, observationParameters, valueVersion);
+                agent = std::move(crazyAraAgent);
+                break;
+            }
+            default:
+                break;
+            }
 
-        case PlanningAgentType::LazyAgent:
-            this->planningAgents = {
-                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
-                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
-                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
-                new CopyClonable<bboard::Agent, agents::LazyAgent>(agents::LazyAgent()),
-            };
-            break;
-        
-        case PlanningAgentType::RawNetworkAgent:
-            this->planningAgents = {
-                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
-                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
-                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
-                new CopyClonable<bboard::Agent, CrazyAraAgent>(CrazyAraAgent(modelDirectory)),
-            };
-            break;
-
-        default:
-            break;
+            pommermanState->set_planning_agent(std::move(agent), i);
         }
-
-        pommermanState->set_planning_agents(this->planningAgents);
     }
 }
 

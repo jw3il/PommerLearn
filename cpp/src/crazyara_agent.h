@@ -13,6 +13,7 @@
  */
 enum PlanningAgentType 
 {
+    None,
     SimpleUnbiasedAgent,
     SimpleAgent,
     LazyAgent,
@@ -22,7 +23,7 @@ enum PlanningAgentType
 /**
  * @brief Wrapper for any kind of crazyara::Agent (e.g. RawNetAgent, MCTSAgent) used as a bboard::Agent.
  */
-class CrazyAraAgent : public LogAgent
+class CrazyAraAgent : public LogAgent, public Clonable<bboard::Agent>
 {
 private:
     std::unique_ptr<crazyara::Agent> agent;
@@ -35,7 +36,6 @@ private:
 
     std::unique_ptr<PommermanState> pommermanState;
     EvalInfo evalInfo;
-    std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> planningAgents;
 
     float planeBuffer[PLANES_TOTAL_FLOATS];
     float policyBuffer[NUM_MOVES];
@@ -54,7 +54,7 @@ public:
      */
     CrazyAraAgent& operator=(const CrazyAraAgent&);
 
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::SimpleUnbiasedAgent);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::None);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
@@ -66,6 +66,10 @@ public:
     // bboard::Agent
     bboard::Move act(const bboard::Observation* obs) override;
     void reset() override;
+
+    // Clonable
+    bboard::Agent* get() override;
+    std::unique_ptr<Clonable<bboard::Agent>> clone() override;
 };
 
 #endif // POMMERMANCRAZYARAAGENT_H

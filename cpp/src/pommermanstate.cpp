@@ -107,6 +107,27 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
     }
 }
 
+void PommermanState::set_planning_agent(std::unique_ptr<Clonable<bboard::Agent>> agent, int index)
+{
+    // skip own id, as we won't use this agent anyway
+    if (index == agentID) {
+        return;
+    }
+
+    if (agent) {
+        agent->get()->id = index;
+    }
+    planningAgents[index] = std::move(agent);
+
+    hasPlanningAgents = false;
+    for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+        if (planningAgents[i]) {
+            hasPlanningAgents = true;
+            break;
+        }
+    }
+}
+
 void PommermanState::planning_agents_reset()
 {
     for (size_t i = 0; i < planningAgents.size(); i++) {
@@ -485,8 +506,11 @@ PommermanState* PommermanState::clone() const
     clone->state = state;
     clone->agentID = agentID;
     if (hasPlanningAgents) {
-        // clone all agents
+        // clone all relevant agents
         for (size_t i = 0; i < planningAgents.size(); i++) {
+            if (i == agentID) {
+                continue;
+            }
             auto ptr = planningAgents[i].get();
             if (ptr != nullptr) {
                 clone->planningAgents[i] = ptr->clone();

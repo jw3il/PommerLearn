@@ -124,7 +124,22 @@ public:
     void set_agent_id(const int id);
 
     // planning agent methods
+
+    /**
+     * @brief Creates clones of the provided agents and uses them during planning.
+     * 
+     * @param agents array of clonable agents
+     */
     void set_planning_agents(const std::array<Clonable<bboard::Agent>*, bboard::AGENT_COUNT> agents);
+   
+    /**
+     * @brief Use the provided agent for planning.
+     * 
+     * @param agent The clonable agent
+     * @param index An index in the agent array
+     */
+    void set_planning_agent(std::unique_ptr<Clonable<bboard::Agent>> agent, int index);
+
     void planning_agents_reset();
     void planning_agents_act();
 
