@@ -37,6 +37,7 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
     int agent1Plane = planeIndex++;
     int agent2Plane = planeIndex++;
     int agent3Plane = planeIndex++;
+    int agentOffset = 4 - id;
 
     for (int y = 0; y < bboard::BOARD_SIZE; y++) {
         for (int x = 0; x < bboard::BOARD_SIZE; x++) {
@@ -69,22 +70,22 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
             }
             case bboard::Item::AGENT0:
             {
-                xt::view(xtPlanes, agent0Plane, y, x) = 1;
+                xt::view(xtPlanes, agent0Plane + ((0 + agentOffset) % 4), y, x) = 1;
                 break;
             }
             case bboard::Item::AGENT1:
             {
-                xt::view(xtPlanes, agent1Plane, y, x) = 1;
+                xt::view(xtPlanes, agent0Plane + ((1 + agentOffset) % 4), y, x) = 1;
                 break;
             }
             case bboard::Item::AGENT2:
             {
-                xt::view(xtPlanes, agent2Plane, y, x) = 1;
+                xt::view(xtPlanes, agent0Plane + ((2 + agentOffset) % 4), y, x) = 1;
                 break;
             }
             case bboard::Item::AGENT3:
             {
-                xt::view(xtPlanes, agent3Plane, y, x) = 1;
+                xt::view(xtPlanes, agent0Plane + ((3 + agentOffset) % 4), y, x) = 1;
                 break;
             }
             default:
