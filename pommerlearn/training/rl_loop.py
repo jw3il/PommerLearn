@@ -6,16 +6,16 @@ from pathlib import Path
 import time
 from datetime import datetime
 from typing import Optional, Iterator, List, Iterable
-
 import concurrent.futures
 
 import numpy as np
 import numpy.random
 
-import training.train_cnn
 import copy
 import shutil
+from rtpt.rtpt import RTPT
 
+import training.train_cnn
 from training.train_util import is_empty, rm_dir, move_content, natural_keys
 from training.util_argparse import check_dir, check_file
 
@@ -195,7 +195,8 @@ def choose_tail_and_random_from_end(li: List, num_tail: int, num_rand: int, rand
 
 
 def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_args: list, train_config: dict,
-            model_subdir: str, num_datasets_latest: int, num_datasets_recent: int, datasets_recent_include: float):
+            model_subdir: str, num_datasets_latest: int, num_datasets_recent: int, datasets_recent_include: float,
+            rtpt: RTPT):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -213,6 +214,7 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
     :param datasets_recent_include: Defines what "recent" means, proportion of the collected datasets (e.g. 0.1 means
         that we prefer to select datasets from the most recent 10% of all datasets).
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
+    :param rtpt: RTPT object
     """
 
     global stop_rl
@@ -300,6 +302,8 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             # we executed a training step
             train_config["global_step"] = train_future_res["global_step"] + 1
             train_config["iteration"] += 1
+            # Update the RTPT (subtitle is optional)
+            rtpt.step(subtitle=f"global_step={train_config['global_step']:d}")
 
     print("RL loop done")
 
@@ -365,6 +369,8 @@ def main():
                         help='The number of "recent" datasets that will be used in addition to --num-latest')
     parser.add_argument('--recent-include', default=0.1, type=float,
                         help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%)')
+    parser.add_argument('--name-initials', default='XX', type=str,
+                        help='The main training directory that is used to store all intermediate and archived results')
 
     parsed_args = parser.parse_args()
 
@@ -418,9 +424,15 @@ def main():
 
     max_iterations = 100
 
+    # Create RTPT object
+    rtpt = RTPT(name_initials=parsed_args.name_initials, experiment_name='Pommer', max_iterations=parsed_args.it)
+
+    # Start the RTPT tracking
+    rtpt.start()
+
     # Start the rl loop
     rl_args = (run_id, max_iterations, base_dir, exec_path, dataset_args, train_config, model_subdir,
-               parsed_args.num_latest, parsed_args.num_recent, parsed_args.recent_include)
+               parsed_args.num_latest, parsed_args.num_recent, parsed_args.recent_include, rtpt)
     rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 

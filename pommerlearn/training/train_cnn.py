@@ -300,7 +300,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param use_cuda: True, when GPU should be used
     :param log_dir: The (base) log dir for the tensorboard writer(s)
     :param global_step: The global step used for logging
-    :return:
+    :return: global_step after training
     """
 
     m_train = Metrics()
