@@ -1,6 +1,8 @@
 import argparse
 import subprocess
 import sys
+import os
+import logging
 import threading
 from pathlib import Path
 import time
@@ -22,6 +24,23 @@ from training.util_argparse import check_dir, check_file
 # Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
 stop_rl_lock = threading.Lock()
+
+
+def change_binary_name(binary_dir: str, current_binary_name: str, process_name: str, nn_update_idx: int):
+    """
+    Change the name of the binary to the process' name (which includes initials,
+    binary name and remaining time) & additionally add the current epoch.
+    (based on implementation by maxalexger (GitHub))
+    :return: the new binary name
+    """
+    idx = process_name.find(f'#')
+    new_binary_name = f'{process_name[:idx]}_UP={nn_update_idx}{process_name[idx:]}'
+
+    if not os.path.exists(binary_dir + new_binary_name):
+        os.rename(binary_dir + current_binary_name, binary_dir + new_binary_name)
+        logging.info(f'Changed binary name to: {new_binary_name}')
+
+    return new_binary_name
 
 
 def rename_datasets_id(dir: Path, id: str):
@@ -282,6 +301,7 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             # Create a new dataset
             print_it("Create dataset")
 
+            exec_path = adjust_exec_path(exec_path, rtpt._get_title(), train_config["iteration"])
             sproc_create_dataset = create_dataset(exec_path, log_dir, dataset_args, model_dir, model_subdir)
             subprocess_verbose_wait(sproc_create_dataset)
 
@@ -306,6 +326,21 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             rtpt.step(subtitle=f"global_step={train_config['global_step']:d}")
 
     print("RL loop done")
+
+
+def adjust_exec_path(exec_path: Path, rtpt_title: str, iteration: int) -> Path:
+    """
+    Changes the binary name and returns an adjusted version of the exec path based on iteration number and rtpt title.
+    :param exec_path: Execution path / binary file path
+    :param rtpt_title: Title of the rtpt object
+    :param iteration: Iteration index
+    :return: Adjusted rtpt title
+    """
+    current_binary_name = str(exec_path).split(os.sep)[-1]
+    binary_dir = str(exec_path)[:-len(current_binary_name)]
+    new_binary_name = change_binary_name(binary_dir, current_binary_name, rtpt_title, iteration)
+    exec_path = Path(binary_dir + new_binary_name)
+    return exec_path
 
 
 def check_clean_working_dirs(working_dirs: List[Path]):
