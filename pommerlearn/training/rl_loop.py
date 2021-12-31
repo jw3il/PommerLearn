@@ -405,7 +405,7 @@ def main():
     parser.add_argument('--recent-include', default=0.1, type=float,
                         help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%)')
     parser.add_argument('--name-initials', default='XX', type=str,
-                        help='The main training directory that is used to store all intermediate and archived results')
+                        help='The name initials that are used to specify the user for the RTPT library.')
 
     parsed_args = parser.parse_args()
 
