@@ -1,27 +1,54 @@
 import argparse
 import subprocess
 import sys
+import os
+import logging
 import threading
 from pathlib import Path
 import time
 from datetime import datetime
 from typing import Optional, Iterator, List, Iterable
-
 import concurrent.futures
 
 import numpy as np
 import numpy.random
 
-import training.train_cnn
 import copy
 import shutil
+from rtpt.rtpt import RTPT
 
+import training.train_cnn
 from training.train_util import is_empty, rm_dir, move_content, natural_keys
 from training.util_argparse import check_dir, check_file
 
 # Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
 stop_rl_lock = threading.Lock()
+
+
+def change_binary_name(binary_dir: str, current_binary_name: str, process_name: str, nn_update_idx: int,
+                       overwrite: bool):
+    """
+    Change the name of the binary to the process' name (which includes initials,
+    binary name and remaining time) & additionally add the current epoch.
+    (based on implementation by maxalexger (GitHub))
+    :return: the new binary name
+    """
+    idx = process_name.find(f'#')
+    new_binary_name = f'{process_name[:idx]}_UP={nn_update_idx}{process_name[idx:]}'
+
+    if os.path.exists(binary_dir + new_binary_name) and new_binary_name != current_binary_name:
+        if overwrite:
+            logging.info(f'Binary with target name {new_binary_name} already exists. Removing old binary.')
+            os.remove(binary_dir + new_binary_name)
+        else:
+            raise ValueError(f"Binary with target name {new_binary_name} already exists.")
+
+    if new_binary_name != current_binary_name:
+        os.rename(binary_dir + current_binary_name, binary_dir + new_binary_name)
+        logging.info(f'Changed binary name to: {new_binary_name}')
+
+    return new_binary_name
 
 
 def rename_datasets_id(dir: Path, id: str):
@@ -195,7 +222,8 @@ def choose_tail_and_random_from_end(li: List, num_tail: int, num_rand: int, rand
 
 
 def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_args: list, train_config: dict,
-            model_subdir: str, num_datasets_latest: int, num_datasets_recent: int, datasets_recent_include: float):
+            model_subdir: str, num_datasets_latest: int, num_datasets_recent: int, datasets_recent_include: float,
+            rtpt: RTPT):
     """
     The main RL loop which alternates between data generation and training:
 
@@ -213,6 +241,7 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
     :param datasets_recent_include: Defines what "recent" means, proportion of the collected datasets (e.g. 0.1 means
         that we prefer to select datasets from the most recent 10% of all datasets).
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
+    :param rtpt: RTPT object
     """
 
     global stop_rl
@@ -224,6 +253,13 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
     log_dir.mkdir(exist_ok=True)
 
     model_init_dir = base_dir / "model-init"
+
+    # copy the executable and rename this copy according to rtpt (to be removed after the rl loop)
+    # => if this process is killed, we don't have to manually rename the original executable again
+    exec_copy_path = exec_path.parent.absolute() / (exec_path.stem + "WorkingCopy")
+    if exec_copy_path.exists():
+        exec_copy_path.unlink()
+    shutil.copy2(exec_path, exec_copy_path)
 
     # The current iteration
     it = 0
@@ -274,13 +310,17 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             # wait until the training is done before we start generating samples
             train_future_res = train_future.result()
             print_it("Training done")
+            
+            # Update the RTPT (subtitle is optional)
+            rtpt.step(subtitle=f"global_step={train_config['global_step']:d}")
 
         # Create a new dataset using the current model
         if not last_iteration:
             # Create a new dataset
             print_it("Create dataset")
 
-            sproc_create_dataset = create_dataset(exec_path, log_dir, dataset_args, model_dir, model_subdir)
+            exec_copy_path = adjust_exec_path(exec_copy_path, rtpt._get_title(), train_config["iteration"])
+            sproc_create_dataset = create_dataset(exec_copy_path, log_dir, dataset_args, model_dir, model_subdir)
             subprocess_verbose_wait(sproc_create_dataset)
 
             print_it("Dataset done")
@@ -302,6 +342,22 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             train_config["iteration"] += 1
 
     print("RL loop done")
+    exec_copy_path.unlink()
+
+
+def adjust_exec_path(exec_path: Path, rtpt_title: str, iteration: int) -> Path:
+    """
+    Changes the binary name and returns an adjusted version of the exec path based on iteration number and rtpt title.
+    :param exec_path: Execution path / binary file path
+    :param rtpt_title: Title of the rtpt object
+    :param iteration: Iteration index
+    :return: Adjusted rtpt title
+    """
+    current_binary_name = str(exec_path).split(os.sep)[-1]
+    binary_dir = str(exec_path)[:-len(current_binary_name)]
+    new_binary_name = change_binary_name(binary_dir, current_binary_name, rtpt_title, iteration, True)
+    exec_path = Path(binary_dir + new_binary_name)
+    return exec_path
 
 
 def check_clean_working_dirs(working_dirs: List[Path]):
@@ -357,7 +413,7 @@ def main():
                         help='The main training directory that is used to store all intermediate and archived results')
     parser.add_argument('--exec', default='./PommerLearn', type=check_file,
                         help='The path to the PommerLearn executable')
-    parser.add_argument('--it', default=500, type=int,
+    parser.add_argument('--it', default=100, type=int,
                         help='Maximum number of iterations (-1 for endless run that has to be stopped manually)')
     parser.add_argument('--num-latest', default=4, type=int,
                         help='The number of last datasets that are used for training in each iteration')
@@ -365,6 +421,8 @@ def main():
                         help='The number of "recent" datasets that will be used in addition to --num-latest')
     parser.add_argument('--recent-include', default=0.1, type=float,
                         help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%)')
+    parser.add_argument('--name-initials', default='XX', type=str,
+                        help='The name initials that are used to specify the user for the RTPT library.')
 
     parsed_args = parser.parse_args()
 
@@ -416,11 +474,15 @@ def main():
         f"--value_version={value_version}",
     ]
 
-    max_iterations = 100
+    # Create RTPT object
+    rtpt = RTPT(name_initials=parsed_args.name_initials, experiment_name='Pommer', max_iterations=parsed_args.it)
+
+    # Start the RTPT tracking
+    rtpt.start()
 
     # Start the rl loop
-    rl_args = (run_id, max_iterations, base_dir, exec_path, dataset_args, train_config, model_subdir,
-               parsed_args.num_latest, parsed_args.num_recent, parsed_args.recent_include)
+    rl_args = (run_id, parsed_args.it, base_dir, exec_path, dataset_args, train_config, model_subdir,
+               parsed_args.num_latest, parsed_args.num_recent, parsed_args.recent_include, rtpt)
     rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 
