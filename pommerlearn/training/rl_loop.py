@@ -310,6 +310,9 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             # wait until the training is done before we start generating samples
             train_future_res = train_future.result()
             print_it("Training done")
+            
+            # Update the RTPT (subtitle is optional)
+            rtpt.step(subtitle=f"global_step={train_config['global_step']:d}")
 
         # Create a new dataset using the current model
         if not last_iteration:
@@ -337,8 +340,6 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             # we executed a training step
             train_config["global_step"] = train_future_res["global_step"] + 1
             train_config["iteration"] += 1
-            # Update the RTPT (subtitle is optional)
-            rtpt.step(subtitle=f"global_step={train_config['global_step']:d}")
 
     print("RL loop done")
     exec_copy_path.unlink()
