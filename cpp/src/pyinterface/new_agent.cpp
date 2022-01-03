@@ -5,7 +5,7 @@
 #include <iostream>
 #include "string.h"
 
-std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, uint stateSize, bool rawNetAgent, SearchLimits searchLimits=SearchLimits())
+std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -13,13 +13,13 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, uint 
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if(rawNetAgent)
     {
-        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir);
+        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir, deviceID);
     }
     else
     {
         SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(false);
         PlaySettings playSettings;
-        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
+        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
     }
 
     // partial observability
@@ -100,7 +100,10 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         SearchLimits searchLimits;
         searchLimits.simulations = std::stoi(simulations);
         searchLimits.movetime = std::stoi(moveTime);
-        return create_crazyara_agent(modelDir, std::stoi(stateSize), false, searchLimits=searchLimits);
+        
+        // always use device with id 0
+        int deviceID = 0;
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, searchLimits=searchLimits);
     }
 
     return nullptr;
