@@ -1,6 +1,6 @@
 #include "pymethods.hpp"
 #include "agents.hpp"
-#include "crazyara_agent.h"
+#include "agents/crazyara_agent.h"
 
 #include <iostream>
 #include "string.h"
@@ -13,13 +13,13 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, uint 
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if(rawNetAgent)
     {
-        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir);
+        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir);
     }
     else
     {
-        SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(false);
+        SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(false);
         PlaySettings playSettings;
-        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
+        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
     // partial observability
@@ -28,8 +28,8 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, uint 
     obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
     obsParams.exposePowerUps = false;
 
-    uint valueVersion = 2;
-    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, valueVersion);
+    uint valueVersion = 1;
+    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, valueVersion, PlanningAgentType::SimpleAgent);
 
     return crazyAraAgent;
 }

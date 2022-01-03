@@ -7,7 +7,7 @@
 #include "nn/neuralnetapi.h"
 #include "nn/tensorrtapi.h"
 #include "nn/torchapi.h"
-#include "crazyara_agent.h"
+#include "agents/crazyara_agent.h"
 #include "stateobj.h"
 
 #include "agents.hpp"
@@ -32,12 +32,12 @@ void free_for_all_tourney(std::string modelDir, RunnerConfig config, bool useRaw
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if (useRawNet)
     {
-        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir);
+        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir);
     }
     else {
-        SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(true);
+        SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
         PlaySettings playSettings;
-        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
+        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
     // partial observability
