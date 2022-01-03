@@ -15,11 +15,14 @@ import numpy.random
 
 import copy
 import shutil
+
+import torch.cuda
 from rtpt.rtpt import RTPT
 
 import training.train_cnn
 from training.train_util import is_empty, rm_dir, move_content, natural_keys
 from training.util_argparse import check_dir, check_file
+import warnings
 
 # Global variable used to stop the rl loop while it is running asynchronously
 stop_rl = False
@@ -423,8 +426,24 @@ def main():
                         help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%)')
     parser.add_argument('--name-initials', default='XX', type=str,
                         help='The name initials that are used to specify the user for the RTPT library.')
+    parser.add_argument('--gpu', default=0 if torch.cuda.is_available() else None, type=str,
+                        help='The device index for cuda (also passed to the executable for sample generation).')
 
     parsed_args = parser.parse_args()
+
+    if torch.cuda.is_available() and parsed_args.gpu is not None:
+        device_str = f"cuda:{parsed_args.gpu}"
+        # ensure that we can use that device before starting anything
+        torch.zeros(1, device=device_str)
+        # model_subdir = "torch_cuda"
+        model_subdir = "onnx"
+    else:
+        device_str = "cpu"
+        warnings.warn("Make sure that your executable is built for the correct device type. Only the gpu device index "
+                      " (if available) is passed at the moment.")
+        model_subdir = "torch_cpu"
+
+    print(f"Using device '{device_str}'")
 
     base_dir = Path(parsed_args.dir)
     exec_path = Path(parsed_args.exec)
@@ -444,6 +463,7 @@ def main():
 
     value_version = 1
     train_config = {
+        "device": device_str,
         "nb_epochs": 2,
         "only_test_last": True,
         "test_size": 0.5,
@@ -459,9 +479,6 @@ def main():
     }
     train_config = training.train_cnn.fill_default_config(train_config)
 
-    model_subdir = "onnx"
-    # model_subdir = "torch_cpu"
-    # model_subdir = "torch_cuda"
     dataset_args = [
         "--mode=ffa_mcts",
         "--env_gen_seed_eps=2",
@@ -473,6 +490,9 @@ def main():
         "--movetime=100",
         f"--value_version={value_version}",
     ]
+
+    if torch.cuda.is_available() and parsed_args.gpu is not None:
+        dataset_args += [f"--gpu={parsed_args.gpu}"]
 
     # Create RTPT object
     rtpt = RTPT(name_initials=parsed_args.name_initials, experiment_name='Pommer', max_iterations=parsed_args.it)
