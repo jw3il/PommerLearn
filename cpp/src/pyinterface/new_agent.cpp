@@ -73,7 +73,9 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
             << "> Model dir: " << modelDir << std::endl
             << "> State size: " << stateSize << std::endl;
 
-        return create_crazyara_agent(modelDir, std::stoi(stateSize), true);
+        // always use device with id 0
+        int deviceID = 0;
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true);
     }
     else if(agentName.find("CrazyAraAgent") == 0)
     {
