@@ -18,10 +18,15 @@ public:
     virtual T* get() = 0;
 
     /**
-     * @brief clone Create a clonable clone of the underlying object.
+     * @brief Create a clonable clone of the underlying object.
      * @return A clonable clone of the object.
      */
     virtual std::unique_ptr<Clonable<T>> clone() = 0;
+
+    /**
+     * @brief Virtual destructor to correctly delete deriving classes.
+     */
+    virtual ~Clonable() {}
 };
 
 /**

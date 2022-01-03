@@ -168,6 +168,8 @@ FIND_PACKAGE(Boost COMPONENTS program_options REQUIRED)
 file(GLOB source_files
     "cpp/src/*.cpp"
     "cpp/src/*.h"
+    "cpp/src/agents/*.cpp"
+    "cpp/src/agents/*.h"
 )
 
 set(source_files_nomain ${source_files})

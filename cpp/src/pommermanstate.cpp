@@ -8,6 +8,8 @@
 #include "data_representation.h"
 #include "agents.hpp"
 
+#include <mutex>
+
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
 PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
@@ -88,6 +90,27 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
     }
 }
 
+void PommermanState::set_planning_agent(std::unique_ptr<Clonable<bboard::Agent>> agent, int index)
+{
+    // skip own id, as we won't use this agent anyway
+    if (index == agentID) {
+        return;
+    }
+
+    if (agent) {
+        agent->get()->id = index;
+    }
+    planningAgents[index] = std::move(agent);
+
+    hasPlanningAgents = false;
+    for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+        if (planningAgents[i]) {
+            hasPlanningAgents = true;
+            break;
+        }
+    }
+}
+
 void PommermanState::planning_agents_reset()
 {
     for (size_t i = 0; i < planningAgents.size(); i++) {
@@ -116,7 +139,7 @@ void PommermanState::planning_agents_act()
             continue;
         }
 
-        if (!state.agents[i].visible) {
+        if (state.agents[i].dead || !state.agents[i].visible) {
             moves[i] = bboard::Move::IDLE;
             continue;
         }
@@ -130,7 +153,6 @@ void PommermanState::planning_agents_act()
 
     hasBufferedActions = true;
 }
-
 
 // State methods
 
@@ -477,11 +499,15 @@ PommermanState* PommermanState::clone() const
     clone->agentObsParams = agentObsParams;
     clone->opponentObsParams = opponentObsParams;
     if (hasPlanningAgents) {
-        // clone all agents
+        // clone all relevant agents
         for (size_t i = 0; i < planningAgents.size(); i++) {
+            if (i == agentID || state.agents[i].dead) {
+                continue;
+            }
             auto ptr = planningAgents[i].get();
             if (ptr != nullptr) {
                 clone->planningAgents[i] = ptr->clone();
+                clone->hasPlanningAgents = true;
             }
         }
 
@@ -489,9 +515,6 @@ PommermanState* PommermanState::clone() const
         if (hasBufferedActions) {
             std::copy_n(moves, bboard::AGENT_COUNT, clone->moves);
         }
-
-        // we'll also use the agents in the clone
-        clone->hasPlanningAgents = true;
     }
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
         clone->auxiliaryOutputs = auxiliaryOutputs;  // deep copy auxiliary outputs

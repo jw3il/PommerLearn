@@ -7,7 +7,7 @@
 #include "nn/neuralnetapi.h"
 #include "nn/tensorrtapi.h"
 #include "nn/torchapi.h"
-#include "crazyara_agent.h"
+#include "agents/crazyara_agent.h"
 #include "stateobj.h"
 
 #include "agents.hpp"
@@ -30,12 +30,12 @@ void tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint sta
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if (useRawNet)
     {
-        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir);
+        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir);
     }
     else {
-        SearchSettings searchSettings = CrazyAraAgent::get_default_search_settings(true);
+        SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
         PlaySettings playSettings;
-        crazyAraAgent = std::make_unique<CrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
+        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
     }
 
     // for now, just use the same observation parameters for opponents
@@ -106,7 +106,8 @@ int main(int argc, char **argv) {
             ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
-            ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning")
+            ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
+                                                                                                "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("value_version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
             ("no_state", "Whether to use (partial) observations instead of the true state for mcts.")
     ;
@@ -162,7 +163,11 @@ int main(int argc, char **argv) {
 
         PlanningAgentType planningAgentType;
         std::string planningAgentStr = configVals["planning_agents"].as<std::string>();
-        if (planningAgentStr == "SimpleUnbiasedAgent")
+        if (planningAgentStr == "None")
+        {
+            planningAgentType = PlanningAgentType::None;
+        }
+        else if (planningAgentStr == "SimpleUnbiasedAgent")
         {
             planningAgentType = PlanningAgentType::SimpleUnbiasedAgent;
         }
@@ -173,6 +178,10 @@ int main(int argc, char **argv) {
         else if (planningAgentStr == "LazyAgent")
         {
             planningAgentType = PlanningAgentType::LazyAgent;
+        }
+        else if (planningAgentStr == "RawNetAgent")
+        {
+            planningAgentType = PlanningAgentType::RawNetworkAgent;
         }
         else
         {

@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include "log_agent.h"
-#include "crazyara_agent.h"
+#include "agents/crazyara_agent.h"
 
 #include "agents.hpp"
 
@@ -67,7 +67,7 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
 {
     std::cout << "------------------------------" << std::endl;
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    float elapsedSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0f;
+    double elapsedSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
     std::cout << "Total episodes: " << episode <<  std::endl;
     std::cout << "Average steps: " << totalEpisodeSteps / episode <<  std::endl;
     std::cout << "Wins: " << std::endl;
@@ -78,7 +78,7 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
 
     std::cout << "Draws: " << nbDraws << " (" << (float)nbDraws * 100 / episode << "%)" << std::endl;
     std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
-    std::cout << "Elapsed time: " << elapsedSeconds << " s (" << elapsedSeconds / episode << " s/episode)" << std::endl;
+    std::cout << "Elapsed time: " << elapsedSeconds << " s (" << elapsedSeconds / episode << " s/episode, " << (elapsedSeconds * 1000) / totalEpisodeSteps << " ms/step)" << std::endl;
     std::cout << "------------------------------" << std::endl;
 }
 

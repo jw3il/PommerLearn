@@ -1,0 +1,173 @@
+#ifndef POMMERCRAZYARAAGENT_H
+#define POMMERCRAZYARAAGENT_H
+
+#include "agents.hpp"
+#include "pommermanstate.h"
+#include "agent.h"
+#include "log_agent.h"
+#include "data_representation.h"
+#include "neuralnetapi.h"
+#include "safe_ptr_queue.h"
+#include "rawnetagent.h"
+#include "mctsagent.h"
+
+#ifdef TENSORRT
+#include "nn/tensorrtapi.h"
+#elif defined (TORCH)
+#include "nn/torchapi.h"
+#endif
+
+/**
+ * @brief Agent types that can be used during planning.
+ */
+enum PlanningAgentType 
+{
+    None,
+    SimpleUnbiasedAgent,
+    SimpleAgent,
+    LazyAgent,
+    RawNetworkAgent  // "RawNetworkAgent" instead of "RawNetAgent" is used to avoid naming conflict
+};
+
+/**
+ * @brief Base class for wrapping CrazyAra agents as Pommerman agents.
+ */
+class CrazyAraAgent : public LogAgent
+{
+protected:
+    std::unique_ptr<PommermanState> pommermanState;
+
+    SearchLimits searchLimits;
+    PlaySettings playSettings;
+    EvalInfo evalInfo;
+
+    std::unique_ptr<float[]> planeBuffer;
+    std::unique_ptr<float[]> policyBuffer;
+    std::unique_ptr<float[]> qBuffer;
+
+    bboard::Environment* env = nullptr;
+
+public:
+    /**
+     * @brief Initializes the Pommermanstate.
+     * 
+     * @param gameMode The gamemode
+     * @param obsParams How this agent observes the state
+     * @param opponentObsParams How opponents observe the state (only relevant for MCTS)
+     * @param valueVersion The value version (only relevant for MCTS)
+     * @param planningAgentType The planning agent type (only relevant for MCTS)
+     */
+    virtual void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion=1, PlanningAgentType planningAgentType=PlanningAgentType::None);
+
+    /**
+     * @brief Use the true state of the given environment instead of the observation in the act method.
+     * Note that the view of this agent is still controlled via the ObservationParameters given in init_state.
+     * 
+     * @param env The environment. Call with nullptr to remove a previously set environment and use regular observations again.
+     */
+    void use_environment_state(bboard::Environment* env);
+
+    /**
+     * @brief Loads a single network
+     * 
+     * @param modelDirectory The model directory
+     * @return A NeuralNetAPI instance for the model
+     */
+    static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
+
+    /**
+     * @brief Get a pointer to the crazyara agent that is used in act (warning: only well-defined within act)
+     * 
+     * @return The acting agent
+     */
+    virtual crazyara::Agent* get_acting_agent() = 0;
+
+    /**
+     * @brief Get a pointer to the crazyara agent that is used in act (warning: only well-defined within act)
+     * 
+     * @return The network of the acting agent
+     */
+    virtual NeuralNetAPI* get_acting_net() = 0;
+
+    /**
+     * @brief Return whether the used model is stateful.
+     * 
+     * @return true iff the model is stateful
+     */
+    virtual bool has_stateful_model() = 0;
+
+    // bboard::Agent
+    bboard::Move act(const bboard::Observation* obs) override;
+    void reset() override;
+
+    virtual ~CrazyAraAgent() {}
+};
+
+struct RawNetAgentContainer {
+    std::unique_ptr<RawNetAgent> agent;
+    std::unique_ptr<NeuralNetAPI> net;
+    std::unique_ptr<PlaySettings> playSettings;
+};
+
+/**
+ * @brief Pommerman agent using a thread-safe queue of RawNetAgents (queue can be shared across threads).
+ */
+class RawCrazyAraAgent : public CrazyAraAgent, public Clonable<bboard::Agent>
+{
+private:
+    std::unique_ptr<RawNetAgentContainer> currentAgent;
+    std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue;
+
+public:
+    RawCrazyAraAgent(std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue);
+    RawCrazyAraAgent(const std::string& modelDirectory);
+
+    bboard::Move act(const bboard::Observation* obs) override;
+
+    /**
+     * @brief Create a queue of raw net agents.
+     * 
+     * @param modelDirectory The model directory
+     * @param count The number of agents in the queue
+     * @return new queue containing size RawNetAgentContainers
+     */
+    static std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> load_raw_net_agent_queue(const std::string& modelDirectory, int count);
+
+    // CrazyAraAgent
+    bool has_stateful_model() override;
+    crazyara::Agent* get_acting_agent() override;
+    NeuralNetAPI* get_acting_net() override;
+
+    // Clonable
+    bboard::Agent* get() override;
+    std::unique_ptr<Clonable<bboard::Agent>> clone() override;
+};
+
+/**
+ * @brief Pommerman agent using a MCTSAgent.
+ */
+class MCTSCrazyAraAgent : public CrazyAraAgent 
+{
+private:
+    std::unique_ptr<MCTSAgent> agent;
+    std::unique_ptr<NeuralNetAPI> singleNet;
+    vector<std::unique_ptr<NeuralNetAPI>> netBatches;
+
+    SearchSettings searchSettings;
+    std::string modelDirectory;
+
+public:
+    MCTSCrazyAraAgent(std::unique_ptr<NeuralNetAPI> singleNet, vector<std::unique_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
+    MCTSCrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
+
+    static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
+    static SearchSettings get_default_search_settings(const bool selfPlay);
+
+    // CrazyAraAgent
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::None) override;
+    bool has_stateful_model() override;
+    crazyara::Agent* get_acting_agent() override;
+    NeuralNetAPI* get_acting_net() override;
+};
+
+#endif // POMMERCRAZYARAAGENT_H
