@@ -7,6 +7,8 @@
 #include "log_agent.h"
 #include "data_representation.h"
 #include "neuralnetapi.h"
+#include "safe_ptr_queue.h"
+#include "rawnetagent.h"
 
 /**
  * @brief Agent types that can be used during planning.
@@ -20,15 +22,24 @@ enum PlanningAgentType
     RawNetworkAgent  // "RawNetworkAgent" instead of "RawNetAgent" is used to avoid naming conflict
 };
 
+struct RawNetAgentContainer {
+    std::unique_ptr<RawNetAgent> agent;
+    std::unique_ptr<NeuralNetAPI> net;
+    std::unique_ptr<PlaySettings> playSettings;
+};
+
 /**
  * @brief Wrapper for any kind of crazyara::Agent (e.g. RawNetAgent, MCTSAgent) used as a bboard::Agent.
  */
 class CrazyAraAgent : public LogAgent, public Clonable<bboard::Agent>
 {
 private:
-    std::shared_ptr<crazyara::Agent> agent;
-    std::shared_ptr<NeuralNetAPI> singleNet;
-    vector<std::shared_ptr<NeuralNetAPI>> netBatches;
+    std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue;
+
+    std::unique_ptr<crazyara::Agent> agent;
+    std::unique_ptr<NeuralNetAPI> singleNet;
+    vector<std::unique_ptr<NeuralNetAPI>> netBatches;
+
     PlaySettings playSettings;
     SearchSettings searchSettings;
     SearchLimits searchLimits;
@@ -41,21 +52,23 @@ private:
     std::unique_ptr<float[]> qBuffer;
     bool isRawNetAgent;
 
+    string modelDirectory;
+
 public:
     // raw net agent constructors
-    CrazyAraAgent(const std::shared_ptr<NeuralNetAPI> singleNet);
-    CrazyAraAgent(const std::shared_ptr<crazyara::Agent> agent);
+    CrazyAraAgent(std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue);
     CrazyAraAgent(const std::string& modelDirectory);
     
     // mcts agent constructors
-    CrazyAraAgent(std::shared_ptr<NeuralNetAPI> singleNet, vector<std::shared_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
+    CrazyAraAgent(std::unique_ptr<NeuralNetAPI> singleNet, vector<std::unique_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
     CrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
     void init_state(bboard::GameMode gameMode, bboard::ObservationParameters observationParameters, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::None);
 
     // helper methods
     static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
-    static vector<shared_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
+    static std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> load_raw_net_agent_queue(const std::string& modelDirectory, int size);
+    static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
     static SearchSettings get_default_search_settings(const bool selfPlay);
 
     crazyara::Agent* get_agent();

@@ -142,13 +142,6 @@ public:
     void planning_agents_reset();
     void planning_agents_act();
 
-    /**
-     * @brief Whether to lock methods executed on planning agents to make them thread-safe.
-     * 
-     * @param planningAgentsLock whether to use locking.
-     */
-    void set_planning_agents_lock(bool planningAgentsLock);
-
     // State interface
     std::vector<Action> legal_actions() const override;
     void set(const std::string &fenStr, bool isChess960, int variant) override;

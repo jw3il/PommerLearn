@@ -11,7 +11,6 @@
 #include <mutex>
 
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
-std::mutex planningAgentMutex;
 
 PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
     agentID(-1),
@@ -93,10 +92,6 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
         throw std::runtime_error("This combination of partial observability & planning agents is not implemented yet!");
     }
 
-    if (planningAgentsLock) {
-        planningAgentMutex.lock();
-    }
-
     hasPlanningAgents = false;
     for (size_t i = 0; i < agents.size(); i++) {
         // skip own id, as we won't use this agent
@@ -112,10 +107,6 @@ void PommermanState::set_planning_agents(const std::array<Clonable<bboard::Agent
             // we have at least one agent
             hasPlanningAgents = true;
         }
-    }
-
-    if (planningAgentsLock) {
-        planningAgentMutex.unlock();
     }
 }
 
@@ -142,10 +133,6 @@ void PommermanState::set_planning_agent(std::unique_ptr<Clonable<bboard::Agent>>
 
 void PommermanState::planning_agents_reset()
 {
-    if (planningAgentsLock) {
-        planningAgentMutex.lock();
-    }
-
     for (size_t i = 0; i < planningAgents.size(); i++) {
         if (i == agentID) {
             continue;
@@ -155,10 +142,6 @@ void PommermanState::planning_agents_reset()
         if (agent != nullptr) {
             agent->get()->reset();
         }
-    }
-
-    if (planningAgentsLock) {
-        planningAgentMutex.unlock();
     }
 
     hasBufferedActions = false;
@@ -184,25 +167,11 @@ void PommermanState::planning_agents_act()
         Clonable<bboard::Agent>* agent = planningAgents[i].get();
         if (agent != nullptr) {
             bboard::Observation::Get(state, i, this->params, obs);
-            
-            if (planningAgentsLock) {
-                planningAgentMutex.lock();
-            }
-
             moves[i] = agent->get()->act(&obs);
-
-            if (planningAgentsLock) {
-                planningAgentMutex.unlock();
-            }
         }
     }
 
     hasBufferedActions = true;
-}
-
-void PommermanState::set_planning_agents_lock(bool planningAgentsLock)
-{
-    this->planningAgentsLock = planningAgentsLock;
 }
 
 // State methods
