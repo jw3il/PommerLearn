@@ -21,7 +21,7 @@
 
 namespace po = boost::program_options;
 
-void tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
+void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -30,12 +30,12 @@ void tourney(std::string modelDir, RunnerConfig config, bool useRawNet, uint sta
     std::unique_ptr<CrazyAraAgent> crazyAraAgent;
     if (useRawNet)
     {
-        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir);
+        crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir, deviceID);
     }
     else {
         SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
         PlaySettings playSettings;
-        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, playSettings, searchSettings, searchLimits);
+        crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
     }
 
     // for now, just use the same observation parameters for opponents
@@ -101,6 +101,7 @@ int main(int argc, char **argv) {
 
             // mcts options
             ("model_dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
+            ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw_net_agent", "If set, uses the raw net agent instead of the mcts agent.")
             // TODO: State size should be detected automatically (?)
             ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
@@ -152,6 +153,8 @@ int main(int argc, char **argv) {
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no_state") == 0;
 
+    int deviceID = configVals["gpu"].as<int>();
+
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {
         setDefaultFFAConfig(config);
@@ -194,7 +197,7 @@ int main(int argc, char **argv) {
         searchLimits.movetime = configVals["movetime"].as<int>();
 
         setDefaultFFAConfig(config);
-        tourney(modelDir, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits);
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;

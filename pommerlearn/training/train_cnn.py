@@ -66,10 +66,17 @@ def create_optimizer(model: nn.Module, train_config: dict):
 
 
 def train_cnn(train_config):
-    use_cuda = torch.cuda.is_available()
-    print(f"CUDA enabled: {use_cuda}")
+    if "device" in train_config:
+        device = train_config["device"]
+        if isinstance(device, str):
+            device = torch.device(device)
+    else:
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    print(f"Run training with device '{device}'")
 
     input_shape, model = create_model(train_config)
+    model = model.to(device)
 
     train_sequence_length = train_config["sequence_length"] if model.is_stateful else None
 
@@ -81,9 +88,6 @@ def train_cnn(train_config):
         num_workers=train_config["num_workers"], only_test_last=train_config["only_test_last"],
         train_sampling_mode=train_config["train_sampling_mode"]
     )
-
-    if use_cuda:
-        model = model.cuda()
 
     optimizer = create_optimizer(model, train_config)
 
@@ -110,7 +114,7 @@ def train_cnn(train_config):
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"],
-                                   train_loader, val_loader, use_cuda, log_dir, global_step=global_step_start)
+                                   train_loader, val_loader, device, log_dir, global_step=global_step_start)
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
@@ -183,7 +187,6 @@ def export_model(model, batch_sizes, input_shape, dir=Path('.'), torch_cpu=True,
     :param model: Pytorch model
     :param batch_sizes: List of batch sizes to use for export
     :param input_shape: Input shape of the model
-    :param use_cuda: Whether cuda is enabled
     :param dir: The base path for all models
     :param torch_cpu: Whether to export as script module with cpu inputs
     :param torch_cuda: Whether to export as script module with cuda inputs
@@ -283,7 +286,7 @@ def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
 
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 value_loss_ratio, train_loader, val_loader, use_cuda, log_dir, global_step=0):
+                 value_loss_ratio, train_loader, val_loader, device, log_dir, global_step=0):
     """
     Trains a given model for a number of epochs
 
@@ -297,7 +300,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param value_loss_ratio: Value loss ratio
     :param train_loader: Training data loader
     :param val_loader: Validation data loader (ignored if None)
-    :param use_cuda: True, when GPU should be used
+    :param device: The device that should be used for training
     :param log_dir: The (base) log dir for the tensorboard writer(s)
     :param global_step: The global step used for logging
     :return: global_step after training
@@ -314,8 +317,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
 
-    device = "cuda:0" if use_cuda else "cpu"
-
     for epoch in range(nb_epochs):
         # training
         for batch_idx, batch in enumerate(train_loader):
@@ -326,11 +327,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 ids = None
                 x_train, yv_train, ya_train, yp_train = batch
 
-            if use_cuda:
-                x_train = x_train.to(device=device)
-                yv_train = yv_train.to(device=device)
-                ya_train = ya_train.to(device=device)
-                yp_train = yp_train.to(device=device)
+            x_train = x_train.to(device)
+            yv_train = yv_train.to(device)
+            ya_train = ya_train.to(device)
+            yp_train = yp_train.to(device)
 
             if global_step == 0:
                 # TODO: move outside training loop
@@ -376,11 +376,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                 if val_loader is not None:
                     model.eval()
                     if model.is_stateful:
-                        m_val = get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss,
-                                                  use_cuda, val_loader)
+                        m_val = get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, device,
+                                                      val_loader)
                     else:
-                        m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda,
-                                             val_loader)
+                        m_val = get_val_loss(model, value_loss_ratio, value_loss, policy_loss, device, val_loader)
 
                     m_val.log_to_tensorboard(writer_val, global_step)
                     msg += f', val value loss: {m_val.value_loss():5f}, val policy loss: {m_val.policy_loss():5f},'\
@@ -405,7 +404,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     return global_step
 
 
-def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, data_loader) -> Metrics:
+def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, device, data_loader) -> Metrics:
     """
     Returns the validation metrics by evaluating it on the full validation dataset
 
@@ -413,7 +412,7 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, dat
     :param value_loss_ratio: Value loss ratio
     :param value_loss: Value loss object
     :param policy_loss: Policy loss object
-    :param use_cuda: Boolean whether GPU is used
+    :param device: The device that is used
     :param data_loader: Data loader object (e.g. val_loader)
     :return: Updated metric object
     """
@@ -421,8 +420,10 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, dat
     m_val = Metrics()
 
     for batch_idx, (x, yv_val, ya_val, yp_val) in enumerate(data_loader):
-        if use_cuda:
-            x, yv_val, ya_val, yp_val = x.cuda(), yv_val.cuda(), ya_val.cuda(), yp_val.cuda()
+        x = x.to(device)
+        yv_val = yv_val.to(device)
+        ya_val = ya_val.to(device)
+        yp_val = yp_val.to(device)
 
         x, ya_val = Variable(x, requires_grad=False), Variable(ya_val, requires_grad=False)
 
@@ -432,7 +433,7 @@ def get_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, dat
     return m_val
 
 
-def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_cuda, data_loader,
+def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, device, data_loader,
                  verbose = False) -> Metrics:
     """
     Returns the validation metrics by evaluating it on the full validation dataset
@@ -441,7 +442,7 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_
     :param value_loss_ratio: Value loss ratio
     :param value_loss: Value loss object
     :param policy_loss: Policy loss object
-    :param use_cuda: Boolean whether GPU is used
+    :param device: The device that is used
     :param data_loader: Data loader object (e.g. val_loader)
     :param verbose: Whether to output debugging info
     :return: Updated metric object
@@ -450,9 +451,6 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_
     m_val = Metrics()
 
     current_episode_id = None
-
-    # for the init state
-    device = "cuda" if use_cuda else "cpu"
 
     for batch_idx, (ids, obs, val, act, pol) in enumerate(data_loader):
         if verbose:
@@ -483,16 +481,10 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, use_
                 # and reset the state after these samples
                 reset_state = True
 
-            obs_part = obs[current_idx:until_idx]
-            val_part = val[current_idx:until_idx]
-            act_part = act[current_idx:until_idx]
-            pol_part = pol[current_idx:until_idx]
-
-            if use_cuda:
-                obs_part = obs_part.cuda()
-                val_part = val_part.cuda()
-                act_part = act_part.cuda()
-                pol_part = pol_part.cuda()
+            obs_part = obs[current_idx:until_idx].to(device)
+            val_part = val[current_idx:until_idx].to(device)
+            act_part = act[current_idx:until_idx].to(device)
+            pol_part = pol[current_idx:until_idx].to(device)
 
             # transform batch to sequence
             obs_part = obs_part.unsqueeze(0)

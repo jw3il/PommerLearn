@@ -73,7 +73,7 @@ public:
      * @param modelDirectory The model directory
      * @return A NeuralNetAPI instance for the model
      */
-    static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory);
+    static std::unique_ptr<NeuralNetAPI> load_network(const std::string& modelDirectory, const int deviceID);
 
     /**
      * @brief Get a pointer to the crazyara agent that is used in act (warning: only well-defined within act)
@@ -120,7 +120,7 @@ private:
 
 public:
     RawCrazyAraAgent(std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue);
-    RawCrazyAraAgent(const std::string& modelDirectory);
+    RawCrazyAraAgent(const std::string& modelDirectory, const int deviceID);
 
     bboard::Move act(const bboard::Observation* obs) override;
 
@@ -131,7 +131,7 @@ public:
      * @param count The number of agents in the queue
      * @return new queue containing size RawNetAgentContainers
      */
-    static std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> load_raw_net_agent_queue(const std::string& modelDirectory, int count);
+    static std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> load_raw_net_agent_queue(const std::string& modelDirectory, int count, const int deviceID);
 
     // CrazyAraAgent
     bool has_stateful_model() override;
@@ -154,13 +154,13 @@ private:
     vector<std::unique_ptr<NeuralNetAPI>> netBatches;
 
     SearchSettings searchSettings;
-    std::string modelDirectory;
+    const std::string modelDirectory;
+    const int deviceID;
 
 public:
-    MCTSCrazyAraAgent(std::unique_ptr<NeuralNetAPI> singleNet, vector<std::unique_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
-    MCTSCrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
+    MCTSCrazyAraAgent(const std::string& modelDirectory, const int deviceID, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
 
-    static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const SearchSettings& searchSettings);
+    static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const int deviceID, const SearchSettings& searchSettings);
     static SearchSettings get_default_search_settings(const bool selfPlay);
 
     // CrazyAraAgent

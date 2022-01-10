@@ -6,8 +6,8 @@ RawCrazyAraAgent::RawCrazyAraAgent(std::shared_ptr<SafePtrQueue<RawNetAgentConta
     this->rawNetAgentQueue = rawNetAgentQueue;
 }
 
-RawCrazyAraAgent::RawCrazyAraAgent(const std::string& modelDirectory): 
-    RawCrazyAraAgent(load_raw_net_agent_queue(modelDirectory, 1)) {}
+RawCrazyAraAgent::RawCrazyAraAgent(const std::string& modelDirectory, const int deviceID): 
+    RawCrazyAraAgent(load_raw_net_agent_queue(modelDirectory, deviceID, 1)) {}
 
 bboard::Move RawCrazyAraAgent::act(const bboard::Observation *obs)
 {
@@ -17,7 +17,7 @@ bboard::Move RawCrazyAraAgent::act(const bboard::Observation *obs)
     return move;
 }
 
-std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> RawCrazyAraAgent::load_raw_net_agent_queue(const std::string& modelDirectory, int count)
+std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> RawCrazyAraAgent::load_raw_net_agent_queue(const std::string& modelDirectory, const int deviceID, int count)
 {
     auto netQueue = std::make_unique<SafePtrQueue<RawNetAgentContainer>>();
 
@@ -26,7 +26,7 @@ std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> RawCrazyAraAgent::load_raw_n
         // agent uses default playsettings, are not used anyway
         container->playSettings = std::make_unique<PlaySettings>();
         // load the network
-        container->net = load_network(modelDirectory);
+        container->net = load_network(modelDirectory, deviceID);
         // .. and create a new agent (this creates a new NeuralNetAPIUser and allocates VRAM)
         container->agent = std::make_unique<RawNetAgent>(container->net.get(), container->playSettings.get(), false);
 

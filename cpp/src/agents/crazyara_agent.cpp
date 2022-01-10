@@ -107,10 +107,10 @@ void CrazyAraAgent::reset() {
     pommermanState->set_agent_id(id);
 }
 
-std::unique_ptr<NeuralNetAPI> CrazyAraAgent::load_network(const std::string& modelDirectory)
+std::unique_ptr<NeuralNetAPI> CrazyAraAgent::load_network(const std::string& modelDirectory, const int deviceID)
 {
 #ifdef TENSORRT
-    return std::make_unique<TensorrtAPI>(0, 1, modelDirectory, "float32");
+    return std::make_unique<TensorrtAPI>(deviceID, 1, modelDirectory, "float32");
 #elif defined (TORCH)
     return std::make_unique<TorchAPI>("cpu", 0, 1, modelDirectory);
 #endif

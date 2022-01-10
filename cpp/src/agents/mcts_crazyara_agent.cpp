@@ -1,22 +1,17 @@
 #include "crazyara_agent.h"
 
-MCTSCrazyAraAgent::MCTSCrazyAraAgent(std::unique_ptr<NeuralNetAPI> singleNet, std::vector<std::unique_ptr<NeuralNetAPI>> netBatches, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits)
+MCTSCrazyAraAgent::MCTSCrazyAraAgent(const std::string& modelDirectory, const int deviceID, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
+    modelDirectory(modelDirectory), deviceID(deviceID)
 {
     this->playSettings = playSettings;
     this->searchSettings = searchSettings;
     this->searchLimits = searchLimits;
-    this->singleNet = std::move(singleNet);
-    this->netBatches = std::move(netBatches);
+    this->singleNet = load_network(modelDirectory, deviceID);
+    this->netBatches = load_network_batches(modelDirectory, deviceID, searchSettings);
     agent = std::make_unique<MCTSAgent>(this->singleNet.get(), this->netBatches, &this->searchSettings, &this->playSettings);
 }
 
-MCTSCrazyAraAgent::MCTSCrazyAraAgent(const std::string& modelDirectory, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
-    MCTSCrazyAraAgent(load_network(modelDirectory), load_network_batches(modelDirectory, searchSettings), playSettings, searchSettings, searchLimits)
-{
-    this->modelDirectory = modelDirectory;
-}
-
-vector<unique_ptr<NeuralNetAPI>> MCTSCrazyAraAgent::load_network_batches(const string& modelDirectory, const SearchSettings& searchSettings)
+vector<unique_ptr<NeuralNetAPI>> MCTSCrazyAraAgent::load_network_batches(const string& modelDirectory, const int deviceID, const SearchSettings& searchSettings)
 {
     vector<unique_ptr<NeuralNetAPI>> netBatches;
 #ifdef MXNET
@@ -26,8 +21,8 @@ vector<unique_ptr<NeuralNetAPI>> MCTSCrazyAraAgent::load_network_batches(const s
         const bool useTensorRT = false;
     #endif
 #endif
-    int First_Device_ID = 0;
-    int Last_Device_ID = 0;
+    int First_Device_ID = deviceID;
+    int Last_Device_ID = deviceID;
     for (int deviceId = First_Device_ID; deviceId <= Last_Device_ID; ++deviceId) {
         for (size_t i = 0; i < searchSettings.threads; ++i) {
     #ifdef MXNET
@@ -83,7 +78,7 @@ void MCTSCrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::Observatio
             throw std::runtime_error("Cannot use planningAgentType RawNetworkAgent with empty model directory.");
         }
 
-        rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDirectory, searchSettings.threads);
+        rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDirectory, deviceID, searchSettings.threads);
     }
 
     for (int i = 0; i < bboard::AGENT_COUNT; i++) {
