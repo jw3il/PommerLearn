@@ -17,8 +17,9 @@ bboard::Move DepthSwitchAgent::act(const bboard::Observation* obs)
 
     int depth = obs->timeStep - timeStepsAfterReset;
 
-    if (depth > agent0Depth) {
+    if (!isAgent1 && depth > agent0Depth) {
         agent = create_agent_1();
+        isAgent1 = true;
     }
 
     return agent->get()->act(obs);
