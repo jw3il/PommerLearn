@@ -13,7 +13,7 @@ class DepthSwitchAgent : public bboard::Agent, public Clonable<bboard::Agent>
 {
 private:
     std::unique_ptr<Clonable<bboard::Agent>> agent;
-    const int agent0Depth;
+    const int switchDepth;
     int timeStepsAfterReset = -1;
     bool isAgent1 = false;
 
@@ -24,10 +24,10 @@ public:
      * @brief Create a new DepthSwitchAgent.
      * 
      * @param agent0 the agent that is used until depth agent0Depth
-     * @param agent0Depth the depth until which agent0 is used 
+     * @param switchDepth the depth at which agent0 is replaced
      * @param seed the seed for the agent that is created for the steps beyond agent0Depth 
      */
-    DepthSwitchAgent(std::unique_ptr<Clonable<bboard::Agent>> agent0, int agent0Depth, long seed);
+    DepthSwitchAgent(std::unique_ptr<Clonable<bboard::Agent>> agent0, int switchDepth, long seed);
 
     /*
         Note: switching between agent0 and agent1 is currently implemented by creating agent1 on the

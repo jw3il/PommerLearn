@@ -1,6 +1,6 @@
 #include "depth_switch_agent.h"
 
-DepthSwitchAgent::DepthSwitchAgent(std::unique_ptr<Clonable<bboard::Agent>> agent0, int agent0Depth, long seed): agent(std::move(agent0)), seed(seed), agent0Depth(agent0Depth) {}
+DepthSwitchAgent::DepthSwitchAgent(std::unique_ptr<Clonable<bboard::Agent>> agent0, int switchDepth, long seed): agent(std::move(agent0)),  switchDepth(switchDepth), seed(seed) {}
 
 std::unique_ptr<Clonable<bboard::Agent>> DepthSwitchAgent::create_agent_1()
 {
@@ -25,7 +25,7 @@ bboard::Move DepthSwitchAgent::act(const bboard::Observation* obs)
 
     int depth = obs->timeStep - timeStepsAfterReset;
 
-    if (!isAgent1 && depth > agent0Depth) {
+    if (!isAgent1 && depth >= switchDepth) {
         agent = create_agent_1();
         // we cannot transfer state between agents => reset agent within the episode
         _reset_agent_with_id(agent->get(), id);
@@ -50,7 +50,7 @@ std::unique_ptr<Clonable<bboard::Agent>> DepthSwitchAgent::clone()
 {
     if (!isAgent1) {
         // just clone the underlying agent0 and remember that we want to switch later
-        auto myClone = std::make_unique<DepthSwitchAgent>(agent->clone(), agent0Depth, seed);
+        auto myClone = std::make_unique<DepthSwitchAgent>(agent->clone(), switchDepth, seed);
         myClone->id = id;
         myClone->timeStepsAfterReset = timeStepsAfterReset;
         myClone->isAgent1 = isAgent1;
