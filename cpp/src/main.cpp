@@ -21,7 +21,8 @@
 
 namespace po = boost::program_options;
 
-void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion, PlanningAgentType planningAgentType, SearchLimits searchLimits)
+void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
+             PlanningAgentType planningAgentType, SearchLimits searchLimits, int switchDepth)
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -40,7 +41,11 @@ void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool
 
     // for now, just use the same observation parameters for opponents
     bboard::ObservationParameters opponentObsParams = config.observationParameters;
-    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, valueVersion, planningAgentType);
+    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, valueVersion);
+
+    if (!useRawNet) {
+        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
+    }
 
     srand(config.seed);
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
@@ -109,6 +114,7 @@ int main(int argc, char **argv) {
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
+            ("switch_depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
             ("value_version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
             ("no_state", "Whether to use (partial) observations instead of the true state for mcts.")
     ;
@@ -154,6 +160,7 @@ int main(int argc, char **argv) {
     config.useStateInSearch = configVals.count("no_state") == 0;
 
     int deviceID = configVals["gpu"].as<int>();
+    int switchDepth = configVals["switch_depth"].as<int>();
 
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {
@@ -197,7 +204,7 @@ int main(int argc, char **argv) {
         searchLimits.movetime = configVals["movetime"].as<int>();
 
         setDefaultFFAConfig(config);
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits);
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits, switchDepth);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
