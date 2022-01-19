@@ -1,4 +1,5 @@
 #include "crazyara_agent.h"
+#include "depth_switch_agent.h"
 
 MCTSCrazyAraAgent::MCTSCrazyAraAgent(const std::string& modelDirectory, const int deviceID, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits):
     modelDirectory(modelDirectory), deviceID(deviceID)
@@ -67,9 +68,15 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
     return searchSettings;
 }
 
-void MCTSCrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion, PlanningAgentType planningAgentType)
+void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType, int switchDepth)
 {
-    CrazyAraAgent::init_state(gameMode, obsParams, opponentObsParams, valueVersion, planningAgentType);
+    if (planningAgentType == PlanningAgentType::None) {
+        return;
+    }
+
+    if (!pommermanState) {
+        throw std::runtime_error("The state has to be created before planning agents can be assigned to it.");
+    }
 
     // create raw net agent queue that is shared by all planning raw net agents
     std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue;
@@ -112,12 +119,16 @@ void MCTSCrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::Observatio
         {
             std::unique_ptr<RawCrazyAraAgent> crazyAraAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
             crazyAraAgent->id = i;
-            crazyAraAgent->init_state(gameMode, opponentObsParams, opponentObsParams, valueVersion);
+            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams, pommermanState->valueVersion);
             agent = std::move(crazyAraAgent);
             break;
         }
         default:
             break;
+        }
+
+        if (switchDepth >= 0) {
+            agent = std::make_unique<DepthSwitchAgent>(std::move(agent), switchDepth, rand());
         }
 
         pommermanState->set_planning_agent(std::move(agent), i);

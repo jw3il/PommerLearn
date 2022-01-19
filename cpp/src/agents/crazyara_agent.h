@@ -55,9 +55,8 @@ public:
      * @param obsParams How this agent observes the state
      * @param opponentObsParams How opponents observe the state (only relevant for MCTS)
      * @param valueVersion The value version (only relevant for MCTS)
-     * @param planningAgentType The planning agent type (only relevant for MCTS)
      */
-    virtual void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion=1, PlanningAgentType planningAgentType=PlanningAgentType::None);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion=1);
 
     /**
      * @brief Use the true state of the given environment instead of the observation in the act method.
@@ -163,8 +162,15 @@ public:
     static vector<unique_ptr<NeuralNetAPI>> load_network_batches(const std::string& modelDirectory, const int deviceID, const SearchSettings& searchSettings);
     static SearchSettings get_default_search_settings(const bool selfPlay);
 
+    /**
+     * @brief Initializes the planning agents (note that the state has to be initialized first).
+     *
+     * @param planningAgentType The (primary) planning agent type
+     * @param switchDepth Switch from planningAgentType to SimpleUnbiasedAgents at switchDepth if >= 0
+     */
+    void init_planning_agents(PlanningAgentType planningAgentType, int switchDepth=-1);
+
     // CrazyAraAgent
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion, PlanningAgentType planningAgentType=PlanningAgentType::None) override;
     bool has_stateful_model() override;
     crazyara::Agent* get_acting_agent() override;
     NeuralNetAPI* get_acting_net() override;

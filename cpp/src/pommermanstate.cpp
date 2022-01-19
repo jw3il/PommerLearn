@@ -163,12 +163,10 @@ std::vector<Action> PommermanState::legal_actions() const
 
     // it's always possible to idle
     legalActions.push_back(Action(bboard::Move::IDLE));
-
     // agents can only place bombs when max bomb count is not reached yet and they don't already stand on a bomb
     if (self.bombCount < self.maxBombCount && !state.HasBomb(self.x, self.y)) {
         legalActions.push_back(Action(bboard::Move::BOMB));
     }
-
     // check if movement is possible
     static const bboard::Move directions[4] = {bboard::Move::UP, bboard::Move::DOWN, bboard::Move::RIGHT, bboard::Move::LEFT};
     for (bboard::Move dir : directions) {

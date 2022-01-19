@@ -29,7 +29,12 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
     obsParams.exposePowerUps = false;
 
     uint valueVersion = 1;
-    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams, valueVersion, PlanningAgentType::SimpleAgent);
+    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams, valueVersion);
+
+    if(!rawNetAgent)
+    {
+        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(PlanningAgentType::SimpleAgent);
+    }
 
     return crazyAraAgent;
 }
