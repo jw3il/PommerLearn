@@ -408,6 +408,67 @@ def get_working_dirs(base_dir: Path):
     return [base_dir / "log"]
 
 
+def parse_extra_args(args_str: str):
+    """
+    Parses extra args and returns a dictionary with argument keys and string values (value can be None if not given).
+
+    :param args_str: String of additional arguments of the form "--param1 --param2=value" or "param1 param2=value"
+    :returns: exec arg dict
+    """
+    exec_args = dict()
+    for arg_str in args_str.split(' '):
+        if len(arg_str) == 0:
+            continue
+
+        if arg_str.startswith("--"):
+            arg_str = arg_str[2:]
+
+        key_value = arg_str.split('=')
+        if len(key_value) == 1:
+            # argument without value
+            exec_args[key_value[0]] = None
+        elif len(key_value) == 2:
+            # key-value pair
+            exec_args[key_value[0]] = key_value[1]
+        else:
+            raise ValueError(f"Illegal argument '{arg_str}'!")
+
+    return exec_args
+
+
+def get_and_remove(d: dict, key, default):
+    """
+    Get an element from a dictionary and automatically remove it if it exists.
+
+    :param d: the dictionary
+    :param key: the key
+    :param default: default value if d[key] does not exists
+    """
+    if key in d:
+        val = d[key]
+        del d[key]
+        return val
+
+    return default
+
+
+def arg_dict_to_arg_list(d: dict):
+    """
+    Converts a dictionary to a program argument list.
+
+    :param d: a dictionary of form {"param1": None, "param2": "value"}
+    :returns: program argument list of the form ["--param1", "--param2=value"]
+    """
+    arg_list = []
+    for key in d:
+        val = d[key]
+        if val is None:
+            arg_list.append(f"--{key}")
+        else:
+            arg_list.append(f"--{key}={val}")
+    return arg_list
+
+
 def main():
     global stop_rl
 
@@ -416,6 +477,9 @@ def main():
                         help='The main training directory that is used to store all intermediate and archived results')
     parser.add_argument('--exec', default='./PommerLearn', type=check_file,
                         help='The path to the PommerLearn executable')
+    parser.add_argument('--exec-args', default='', type=str,
+                        help='Allows to forward arguments to the executable (and replaces default values). Provide'
+                             'them as a string of the form "param1 param2=value" or "--param1 --param2=value"')
     parser.add_argument('--it', default=100, type=int,
                         help='Maximum number of iterations (-1 for endless run that has to be stopped manually)')
     parser.add_argument('--num-latest', default=4, type=int,
@@ -430,6 +494,7 @@ def main():
                         help='The device index for cuda (also passed to the executable for sample generation).')
 
     parsed_args = parser.parse_args()
+    parsed_exec_args = parse_extra_args(parsed_args.exec_args)
 
     if torch.cuda.is_available() and parsed_args.gpu is not None:
         device_str = f"cuda:{parsed_args.gpu}"
@@ -483,13 +548,14 @@ def main():
         "--mode=ffa_mcts",
         "--env_gen_seed_eps=2",
         "--max_games=-1",
-        "--targeted_samples=50000",
+        f"--targeted_samples={get_and_remove(parsed_exec_args, 'targeted_samples', '50000')}",
         "--state_size=0",
-        "--planning_agents=SimpleUnbiasedAgent",  # LazyAgent
-        "--simulations=100",
-        "--movetime=100",
+        f"--planning_agents={get_and_remove(parsed_exec_args, 'planning_agents', 'SimpleUnbiasedAgent')}",
+        f"--simulations={get_and_remove(parsed_exec_args, 'simulations', '100')}",
+        f"--movetime={get_and_remove(parsed_exec_args, 'movetime', '100')}",
         f"--value_version={value_version}",
     ]
+    dataset_args.extend(arg_dict_to_arg_list(parsed_exec_args))
 
     if torch.cuda.is_available() and parsed_args.gpu is not None:
         dataset_args += [f"--gpu={parsed_args.gpu}"]
