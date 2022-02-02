@@ -16,15 +16,18 @@ The simplest way to get started and execute runs is to build a docker image and 
 
     a) Run in interactive mode
     ```
-    docker run --gpus 0 -v $POMMER_DATA_DIR:/data --rm -it pommer-tensorrt
+    docker run --gpus device=0 -v $POMMER_DATA_DIR:/data --rm -it pommer-tensorrt
     ```
 
     b) Directly start training
     ```
-    docker run --gpus 0 -v $POMMER_DATA_DIR:/data --ipc=host --rm pommer-tensorrt \
+    docker run --gpus device=0 -v $POMMER_DATA_DIR:/data --rm pommer-tensorrt \
         conda run --no-capture-output -n pommer \
         python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec /PommerLearn/build/PommerLearn
     ```
+
+    **Warning**: If you use rootless docker, the above commands will probably run out of memory. 
+    Adding `--ipc=host` or `--shm-size=32g` to the `docker run` command helps. 
 
 If there are changes in the repository, you can rebuild the docker image with `--no-cache`.
 
