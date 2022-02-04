@@ -10,8 +10,10 @@ The simplest way to get started and execute runs is to build a docker image and 
 1. Clone the repository (optional, you can also just download the dockerfile)
 2. Build the image
     ```
-    docker build -t pommer-tensorrt docker/tensorrt/
+    docker build --build-arg BUILD_TIMESTAMMP=$(date +%Y%m%d-%H%M%S) -t pommer-tensorrt docker/tensorrt/
     ```
+    The build arg is optional and accelerates rebuilding by invalidating only the code pull & build layers.
+
 3. You can now run your image as a container and mount a data directory (`$POMMER_DATA_DIR`) to log the results
 
     a) Run in interactive mode
