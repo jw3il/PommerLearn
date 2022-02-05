@@ -1,4 +1,5 @@
 import argparse
+import re
 import subprocess
 import sys
 import os
@@ -73,25 +74,20 @@ def rename_datasets_id(dir: Path, id: str):
             dir_count += 1
 
 
-def create_dataset(exec_path, log_dir, arguments, model_dir: Path, model_subdir: str):
+def create_dataset(exec_path, file_prefix: str, arguments, model_dir: Path, model_subdir: str):
     """
     Create a dataset by executing the C++ program.
 
     :param exec_path: The path to the executable that generates training data
-    :param log_dir: Where to place the generated dataset
+    :param file_prefix: Prefix of the generated dataset(s)
     :param arguments: The program arguments (excluding log and file dirs)
     :param model_dir: The main directory of the model
     :param model_subdir: The relevant subdirectory inside model_dir
     """
-    # clear the log dir if it already exists
-    rm_dir(log_dir, keep_empty_dir=True)
-    # make sure it exists
-    log_dir.mkdir(exist_ok=True)
-
     local_args = copy.deepcopy(arguments)
     local_args.extend([
         "--log",
-        f"--file_prefix={str(log_dir / Path('data'))}",
+        f"--file_prefix={file_prefix}",
         f"--model_dir={str(model_dir / model_subdir)}",
     ])
 
@@ -224,15 +220,15 @@ def choose_tail_and_random_from_end(li: List, num_tail: int, num_rand: int, rand
     return li[-num_tail:]
 
 
-def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_args: list, train_config: dict,
+def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list, train_config: dict,
             model_subdir: str, num_datasets_latest: int, num_datasets_recent: int, datasets_recent_include: float,
-            rtpt: RTPT):
+            rtpt: RTPT, model_init_dir: Optional[Path] = None):
     """
     The main RL loop which alternates between data generation and training:
 
     generation 0 -> training 0 & generation 1 -> training 1 & generation 2 -> ...
 
-    :param run_id: The (unique) id of the run, all data will be archived in ARCHIVE_DIR / run_id
+    :param data_dir: The directory of the run, all data and models will be saved there.
     :param max_iterations: Max number of iterations (-1 for endless loop)
     :param base_dir: The base directory where all generated files will be placed
     :param exec_path: The path to the executable that generates training data
@@ -245,21 +241,14 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
         that we prefer to select datasets from the most recent 10% of all datasets).
     (WARNING: This causes a delay of 1 iteration between sample generation and training)
     :param rtpt: RTPT object
+    :param model_init_dir: Directory of the model to be used in the first iteration. If None, a new model is created.
     """
-
     global stop_rl
-
-    archive_dir = base_dir / "archive"
-    archive_dir.mkdir(exist_ok=True)
-
-    log_dir = base_dir / "log"
-    log_dir.mkdir(exist_ok=True)
-
-    model_init_dir = base_dir / "model-init"
+    data_dir.mkdir(exist_ok=True)
 
     # copy the executable and rename this copy according to rtpt (to be removed after the rl loop)
     # => if this process is killed, we don't have to manually rename the original executable again
-    exec_copy_path = exec_path.parent.absolute() / (exec_path.stem + "WorkingCopy")
+    exec_copy_path = data_dir / exec_path.name
     if exec_copy_path.exists():
         exec_copy_path.unlink()
     shutil.copy2(exec_path, exec_copy_path)
@@ -270,18 +259,16 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
     def print_it(msg: str):
         print(f"{datetime.now()} > It. {it}: {msg}")
 
-    run_archive_dir = archive_dir / run_id
-    run_archive_dir.mkdir(exist_ok=True)
-
     last_model_dir = None
-    model_dir = run_archive_dir / (str(it - 1) + "_model")
+    model_dir = data_dir / (str(it - 1) + "_model")
 
     # Before we can create a dataset, we need an initial model
-    if is_empty(model_init_dir):
+    if model_init_dir is None:
         model_dir.mkdir(exist_ok=True)
         training.train_cnn.export_initial_model(train_config, model_dir)
         print("No initial model provided. Using new model.")
     else:
+        assert model_init_dir.exists() and not is_empty(model_init_dir), f"Could not find model in '{model_init_dir}'!"
         shutil.copytree(str(model_init_dir), model_dir)
         print("Using existing model.")
 
@@ -289,7 +276,7 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
     train_future_res = None
     # The first iteration does not count, as we only generate a dataset
     while max_iterations < 0 or it <= max_iterations:
-        model_dir = run_archive_dir / (str(it - 1) + "_model")
+        model_dir = data_dir / (str(it - 1) + "_model")
 
         with stop_rl_lock:
             last_iteration = it == max_iterations or stop_rl
@@ -297,9 +284,8 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
         if last_iteration:
             print_it("Entering the last iteration")
 
-        datasets = get_datatsets(run_archive_dir)
-
         # Start training if training data exists
+        datasets = get_datatsets(data_dir)
         if len(datasets) > 0:
             print_it("Start training")
 
@@ -323,14 +309,11 @@ def rl_loop(run_id, max_iterations, base_dir: Path, exec_path: Path, dataset_arg
             print_it("Create dataset")
 
             exec_copy_path = adjust_exec_path(exec_copy_path, rtpt._get_title(), train_config["iteration"])
-            sproc_create_dataset = create_dataset(exec_copy_path, log_dir, dataset_args, model_dir, model_subdir)
+            file_prefix = str(data_dir / f"{it}_data")
+            sproc_create_dataset = create_dataset(exec_copy_path, file_prefix, dataset_args, model_dir, model_subdir)
             subprocess_verbose_wait(sproc_create_dataset)
 
             print_it("Dataset done")
-
-            # rename the dataset according to the iteration and move it into the archive
-            rename_datasets_id(log_dir, str(it))
-            move_content(log_dir, run_archive_dir)
 
         last_model_dir = model_dir
         it += 1
@@ -361,51 +344,6 @@ def adjust_exec_path(exec_path: Path, rtpt_title: str, iteration: int) -> Path:
     new_binary_name = change_binary_name(binary_dir, current_binary_name, rtpt_title, iteration, True)
     exec_path = Path(binary_dir + new_binary_name)
     return exec_path
-
-
-def check_clean_working_dirs(working_dirs: List[Path]):
-    """
-    Ensures that all working directories are empty.
-
-    :param working_dirs: List of working directories
-    """
-
-    all_empty = all(is_empty(d) for d in working_dirs)
-    if not all_empty:
-        print("The working directories are not empty!")
-        print("Before you continue, please inspect the directories and back up all valuable data.")
-        print("After that, type 'clean' to clean up the working directories.")
-        while True:
-            cmd = input()
-            if cmd == 'clean':
-                print("Cleaning all working directories")
-                for d in working_dirs:
-                    rm_dir(d, keep_empty_dir=True)
-                print("Done.")
-                return
-            else:
-                print("Unknown command")
-
-
-def clean_working_dirs(working_dirs: List[Path]):
-    """
-    Removes all empty working directories.
-
-    :param working_dirs: List of working directories
-    """
-
-    for d in working_dirs:
-        if is_empty(d):
-            rm_dir(d, keep_empty_dir=False)
-
-
-def get_working_dirs(base_dir: Path):
-    """
-    Get the working directories for the given base directory.
-
-    :param base_dir: The base directory
-    """
-    return [base_dir / "log"]
 
 
 def parse_extra_args(args_str: str):
@@ -492,6 +430,12 @@ def main():
                         help='The name initials that are used to specify the user for the RTPT library.')
     parser.add_argument('--gpu', default=0 if torch.cuda.is_available() else None, type=str,
                         help='The device index for cuda (also passed to the executable for sample generation).')
+    parser.add_argument('--model-init-dir', default=None, type=str,
+                        help='Directory of the model to be used in the first iteration. '
+                             'Creates new model if not specified.')
+    parser.add_argument('--comment', default='', type=str,
+                        help='Add a comment for easier run identification. Is appended to the run id and visible '
+                             'in the archive and on tensorboard. Allowed characters: alphanumeric, underscore, dash')
 
     parsed_args = parser.parse_args()
     parsed_exec_args = parse_extra_args(parsed_args.exec_args)
@@ -510,19 +454,16 @@ def main():
 
     print(f"Using device '{device_str}'")
 
-    base_dir = Path(parsed_args.dir)
-    exec_path = Path(parsed_args.exec)
-
-    working_dirs = get_working_dirs(base_dir)
-
-    check_clean_working_dirs(working_dirs)
-
-    # What is the purpose of the current run?
-    run_comment = ""
-
     run_id = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-    if len(run_comment) > 0:
-        run_id = run_id + f"-{run_comment}"
+    if len(parsed_args.comment) > 0:
+        # create safe run id (=> filename) from the comment
+        run_comment_name = re.sub(r'[^\w\-]+', '_', parsed_args.comment)
+        run_id = f"{run_id}_{run_comment_name}"
+
+    base_dir = Path(os.path.expanduser(parsed_args.dir))
+    exec_path = Path(os.path.expanduser(parsed_args.exec))
+    data_dir = base_dir / "archive" / run_id
+    model_init_dir = Path(os.path.expanduser(parsed_args.model_init_dir)) if parsed_args.model_init_dir else None
 
     # Info: All path-related arguments should be set inside the rl loop
 
@@ -567,8 +508,8 @@ def main():
     rtpt.start()
 
     # Start the rl loop
-    rl_args = (run_id, parsed_args.it, base_dir, exec_path, dataset_args, train_config, model_subdir,
-               parsed_args.num_latest, parsed_args.num_recent, parsed_args.recent_include, rtpt)
+    rl_args = (data_dir, parsed_args.it, exec_path, dataset_args, train_config, model_subdir, parsed_args.num_latest,
+               parsed_args.num_recent, parsed_args.recent_include, rtpt, model_init_dir)
     rl_thread = threading.Thread(target=rl_loop, args=rl_args)
     rl_thread.start()
 
@@ -584,8 +525,6 @@ def main():
             break
 
     rl_thread.join()
-
-    clean_working_dirs(working_dirs)
 
 
 if __name__ == "__main__":
