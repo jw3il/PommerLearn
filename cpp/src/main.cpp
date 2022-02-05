@@ -82,41 +82,41 @@ int main(int argc, char **argv) {
             // general options
             ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
             ("print", "If set, print the current state of the environment in every step.")
-            ("print_first_last", "If set, print the first and last environment state of each episode.")
+            ("print-first-last", "If set, print the first and last environment state of each episode.")
 
             // seeds and environment generation
-            ("env_seed", po::value<long>()->default_value(-1), "The seed used for environment generation (= fixed environment in all episodes, ignored if -1)")
-            ("env_gen_seed_eps", po::value<long>()->default_value(1), "The number of episodes a single environment generation seed is reused (= new environment every x episodes).")
+            ("env-seed", po::value<long>()->default_value(-1), "The seed used for environment generation (= fixed environment in all episodes, ignored if -1)")
+            ("env-gen-seed-eps", po::value<long>()->default_value(1), "The number of episodes a single environment generation seed is reused (= new environment every x episodes).")
             ("seed", po::value<long>()->default_value(-1), "The seed used for the complete run (ignored if -1)")
-            ("fix_agent_positions", "If set, the agent starting positions will be fixed across all episodes.")
+            ("fix-agent-positions", "If set, the agent starting positions will be fixed across all episodes.")
 
             // termination options, stop if:
-            //   num_games > max_games
-            ("max_games", po::value<int>()->default_value(10), "The max. number of generated games (ignored if -1)")
-            //   || num_samples >= max_samples (hard cut)
-            ("max_samples", po::value<int>()->default_value(-1), "The max. number of logged samples (ignored if -1)")
-            //   || num_samples >= targeted_samples (soft cut, episode will still be added as long as num_samples < max_samples)
-            ("targeted_samples", po::value<int>()->default_value(-1), "The targeted number of logged samples, fully includes the last episode (ignored if -1). ")
+            //   num_games > max-games
+            ("max-games", po::value<int>()->default_value(10), "The max. number of generated games (ignored if -1)")
+            //   || num_samples >= max-samples (hard cut)
+            ("max-samples", po::value<int>()->default_value(-1), "The max. number of logged samples (ignored if -1)")
+            //   || num_samples >= targeted-samples (soft cut, episode will still be added as long as num_samples < max-samples)
+            ("targeted-samples", po::value<int>()->default_value(-1), "The targeted number of logged samples, fully includes the last episode (ignored if -1). ")
 
             // log options
-            ("log", "If set, generate enough samples to fill a whole dataset (chunk_size * chunk_count samples)")
-            ("file_prefix", po::value<std::string>()->default_value("./data"), "Set the filename prefix for the new datasets")
-            ("chunk_size", po::value<int>()->default_value(1000), "Max. number of samples in a single file inside the dataset")
-            ("chunk_count", po::value<int>()->default_value(100), "Max. number of chunks in a dataset")
+            ("log", "If set, generate enough samples to fill a whole dataset (chunk-size * chunk-count samples)")
+            ("file-prefix", po::value<std::string>()->default_value("./data"), "Set the filename prefix for the new datasets")
+            ("chunk-size", po::value<int>()->default_value(1000), "Max. number of samples in a single file inside the dataset")
+            ("chunk-count", po::value<int>()->default_value(100), "Max. number of chunks in a dataset")
 
             // mcts options
-            ("model_dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
+            ("model-dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
-            ("raw_net_agent", "If set, uses the raw net agent instead of the mcts agent.")
+            ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
             // TODO: State size should be detected automatically (?)
-            ("state_size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
+            ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
-            ("planning_agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
+            ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
-            ("switch_depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
-            ("value_version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
-            ("no_state", "Whether to use (partial) observations instead of the true state for mcts.")
+            ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
+            ("value-version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
+            ("no-state", "Whether to use (partial) observations instead of the true state for mcts.")
     ;
 
     po::variables_map configVals;
@@ -136,31 +136,31 @@ int main(int argc, char **argv) {
 
     // check whether we want to log the games
     std::unique_ptr<FileBasedIPCManager> ipcManager;
-    int maxSamples = configVals["max_samples"].as<int>();
+    int maxSamples = configVals["max-samples"].as<int>();
     if (configVals.count("log")) {
-        ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file_prefix"].as<std::string>(), configVals["chunk_size"].as<int>(), configVals["chunk_count"].as<int>());
+        ipcManager = std::make_unique<FileBasedIPCManager>(configVals["file-prefix"].as<std::string>(), configVals["chunk-size"].as<int>(), configVals["chunk-count"].as<int>());
 
         // fill at most one dataset
-        int oneDataSet = configVals["chunk_size"].as<int>() * configVals["chunk_count"].as<int>();
+        int oneDataSet = configVals["chunk-size"].as<int>() * configVals["chunk-count"].as<int>();
         maxSamples = maxSamples == -1 ? oneDataSet : min(maxSamples, oneDataSet);
     }
 
     RunnerConfig config;
     config.maxEpisodeSteps = 800;
-    config.maxEpisodes = configVals["max_games"].as<int>();
-    config.targetedLoggedSteps = configVals["targeted_samples"].as<int>();;
+    config.maxEpisodes = configVals["max-games"].as<int>();
+    config.targetedLoggedSteps = configVals["targeted-samples"].as<int>();;
     config.maxLoggedSteps = maxSamples;
     config.seed = seed;
-    config.envSeed = configVals["env_seed"].as<long>();
-    config.envGenSeedEps = configVals["env_gen_seed_eps"].as<long>();
-    config.randomAgentPositions = configVals.count("fix_agent_positions") == 0;
+    config.envSeed = configVals["env-seed"].as<long>();
+    config.envGenSeedEps = configVals["env-gen-seed-eps"].as<long>();
+    config.randomAgentPositions = configVals.count("fix-agent-positions") == 0;
     config.printSteps = configVals.count("print") > 0;
-    config.printFirstLast = configVals.count("print_first_last") > 0;
+    config.printFirstLast = configVals.count("print-first-last") > 0;
     config.ipcManager = ipcManager.get();
-    config.useStateInSearch = configVals.count("no_state") == 0;
+    config.useStateInSearch = configVals.count("no-state") == 0;
 
     int deviceID = configVals["gpu"].as<int>();
-    int switchDepth = configVals["switch_depth"].as<int>();
+    int switchDepth = configVals["switch-depth"].as<int>();
 
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {
@@ -168,11 +168,11 @@ int main(int argc, char **argv) {
         Runner::run_simple_agents(config);
     }
     else if (mode == "ffa_mcts") {
-        bool useRawNetAgent = configVals.count("raw_net_agent") > 0;
-        std::string modelDir = configVals["model_dir"].as<std::string>();
+        bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
+        std::string modelDir = configVals["model-dir"].as<std::string>();
 
         PlanningAgentType planningAgentType;
-        std::string planningAgentStr = configVals["planning_agents"].as<std::string>();
+        std::string planningAgentStr = configVals["planning-agents"].as<std::string>();
         if (planningAgentStr == "None")
         {
             planningAgentType = PlanningAgentType::None;
@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
         searchLimits.movetime = configVals["movetime"].as<int>();
 
         setDefaultFFAConfig(config);
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state_size"].as<uint>(), configVals["value_version"].as<uint>(), planningAgentType, searchLimits, switchDepth);
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, searchLimits, switchDepth);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;

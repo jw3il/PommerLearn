@@ -87,8 +87,8 @@ def create_dataset(exec_path, file_prefix: str, arguments, model_dir: Path, mode
     local_args = copy.deepcopy(arguments)
     local_args.extend([
         "--log",
-        f"--file_prefix={file_prefix}",
-        f"--model_dir={str(model_dir / model_subdir)}",
+        f"--file-prefix={file_prefix}",
+        f"--model-dir={str(model_dir / model_subdir)}",
     ])
 
     print("Args: ", " ".join(local_args))
@@ -487,14 +487,14 @@ def main():
 
     dataset_args = [
         "--mode=ffa_mcts",
-        "--env_gen_seed_eps=2",
-        "--max_games=-1",
-        f"--targeted_samples={get_and_remove(parsed_exec_args, 'targeted_samples', '50000')}",
-        "--state_size=0",
-        f"--planning_agents={get_and_remove(parsed_exec_args, 'planning_agents', 'SimpleUnbiasedAgent')}",
+        "--env-gen-seed-eps=2",
+        "--max-games=-1",
+        f"--targeted-samples={get_and_remove(parsed_exec_args, 'targeted_samples', '50000')}",
+        "--state-size=0",
+        f"--planning-agents={get_and_remove(parsed_exec_args, 'planning_agents', 'SimpleUnbiasedAgent')}",
         f"--simulations={get_and_remove(parsed_exec_args, 'simulations', '100')}",
         f"--movetime={get_and_remove(parsed_exec_args, 'movetime', '100')}",
-        f"--value_version={value_version}",
+        f"--value-version={value_version}",
     ]
     dataset_args.extend(arg_dict_to_arg_list(parsed_exec_args))
 
