@@ -5,7 +5,7 @@ import pommerman.envs.v0 as v0
 from pommerman import utility, constants, agents
 from pommerman.constants import *
 
-from dataset_util import get_agent_actions
+from dataset_util import get_agent_actions, get_agent_episode_slice
 
 
 class PommeReplay(v0.Pomme):
@@ -128,9 +128,22 @@ class PommeReplay(v0.Pomme):
         # then get all actions from the zarr dataset
         actions = get_agent_actions(z, episode)
 
+        agent_id = z.attrs['AgentIds'][episode]
+        episode_slice = get_agent_episode_slice(z, episode)
+        policy = z['pol'][episode_slice]
+        q = z['q'][episode_slice]
+
+        def print_policy_at(step):
+            print(f"Step {step}")
+            for a in constants.Action:
+                print(f"> {policy[step][a.value]:.2f} {q[step][a.value]:.2f}  "
+                      f"{a} {' CHOSEN' if actions[step, agent_id] == a.value else ''}")
+            print(f"[Can kick: {replay._agents[agent_id]._character.can_kick}]")
+
         if render:
             replay.render(do_sleep=False)
             if render_pause is None:
+                print_policy_at(0)
                 input()
             else:
                 time.sleep(render_pause)
@@ -142,6 +155,8 @@ class PommeReplay(v0.Pomme):
             if render:
                 replay.render(do_sleep=False)
                 if render_pause is None:
+                    if step < len(policy) - 1:
+                        print_policy_at(step + 1)
                     input()
                 else:
                     time.sleep(render_pause)
