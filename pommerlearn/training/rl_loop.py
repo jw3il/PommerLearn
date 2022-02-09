@@ -251,7 +251,7 @@ def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list,
     exec_copy_path = data_dir / exec_path.name
     if exec_copy_path.exists():
         exec_copy_path.unlink()
-    shutil.copy2(exec_path, exec_copy_path)
+    shutil.copy2(str(exec_path.absolute()), str(exec_copy_path.absolute()))
 
     # The current iteration
     it = 0
@@ -265,6 +265,7 @@ def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list,
     # Before we can create a dataset, we need an initial model
     if model_init_dir is None:
         model_dir.mkdir(exist_ok=True)
+        training.train_cnn.set_default_cuda_device(train_config)
         training.train_cnn.export_initial_model(train_config, model_dir)
         print("No initial model provided. Using new model.")
     else:
