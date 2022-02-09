@@ -66,6 +66,7 @@ def create_optimizer(model: nn.Module, train_config: dict):
 
 
 def train_cnn(train_config):
+    set_default_cuda_device(train_config)
     if "device" in train_config:
         device = train_config["device"]
         if isinstance(device, str):
@@ -511,6 +512,16 @@ def get_stateful_val_loss(model, value_loss_ratio, value_loss, policy_loss, devi
                     print("Use next state")
 
     return m_val
+
+
+def set_default_cuda_device(train_config):
+    """
+    Sets the default cuda device for pytorch according to the config.
+
+    :param train_config: The train config dictionary
+    """
+    if torch.cuda.is_available() and "device" in train_config and train_config["device"]:
+        torch.cuda.set_device(train_config["device"])
 
 
 def log_config(train_config, log_dir, iteration):

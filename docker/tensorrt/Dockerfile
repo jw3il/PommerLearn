@@ -33,11 +33,27 @@ ENV CUDA_PATH="/usr/local/cuda"
 
 # clone repository
 WORKDIR /
-RUN git clone https://gitlab.com/jweil/PommerLearn.git && \
-    cd PommerLearn && \
-    git submodule update --init deps/playground && \
-    git submodule update --init deps/pomcpp && \
-    git submodule update --init deps/CrazyAra
+RUN git clone https://gitlab.com/jweil/PommerLearn.git
+
+
+# initial submodule checkout (not recursive) + install python runtime dependencies
+WORKDIR /PommerLearn
+ENV PYTHONPATH=/PommerLearn/pommerlearn
+RUN git submodule update --init && \
+    source /opt/miniconda3/bin/activate pommer && \
+    pip install --no-cache-dir -r requirements.txt
+
+# trick from https://stackoverflow.com/questions/35154219/rebuild-docker-image-from-specific-step
+# use 
+#   --build-arg BUILD_TIMESTAMMP=$(date +%Y%m%d-%H%M%S)
+# to invalidate the cache and only rebuild the important part.
+# note that you have to invalidate the cache if the requirements change.
+ARG BUILD_TIMESTAMMP=unknown
+
+# update repository
+WORKDIR /PommerLearn
+RUN git pull && \
+    git submodule update
 
 # build the binary
 WORKDIR /PommerLearn/build
@@ -45,12 +61,6 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSE_TENSORRT8=ON -DCMAKE_CXX_COMPILER="$(
     make VERBOSE=1 all -j$(nproc) && \
     # clear the cache
     rm -r CMakeFiles
-
-# install python runtime dependencies
-WORKDIR /PommerLearn
-ENV PYTHONPATH=/PommerLearn/pommerlearn
-RUN source /opt/miniconda3/bin/activate pommer && \
-    pip install -r requirements.txt
 
 # start environment
 CMD ["conda", "run", "--no-capture-output", "-n", "pommer", "/bin/bash"]
