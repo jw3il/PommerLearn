@@ -1,4 +1,4 @@
-# #!/bin/bash
+#!/bin/bash
 
 # First get the base dir of this script
 # see https://stackoverflow.com/questions/242538/unix-shell-script-find-out-which-directory-the-script-file-resides

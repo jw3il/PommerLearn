@@ -1,4 +1,4 @@
-# #!/bin/bash
+#!/bin/bash
 
 if [[ -z "${POMMER_DATA_DIR}" ]]; then
     echo "Please set environment variable \$POMMER_DATA_DIR before calling this script."
