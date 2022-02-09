@@ -412,6 +412,7 @@ def main():
     global stop_rl
 
     parser = argparse.ArgumentParser(description='PommerLearn RL Loop')
+    parser.formatter_class = argparse.ArgumentDefaultsHelpFormatter
     parser.add_argument('--dir', default='.', type=check_dir,
                         help='The main training directory that is used to store all intermediate and archived results')
     parser.add_argument('--exec', default='./PommerLearn', type=check_file,
@@ -426,10 +427,10 @@ def main():
     parser.add_argument('--num-recent', default=4, type=int,
                         help='The number of "recent" datasets that will be used in addition to --num-latest')
     parser.add_argument('--recent-include', default=0.1, type=float,
-                        help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%)')
+                        help='Defines the meaning of "recent" as a proportion of all datasets (e.g. 0.1 for last 10%%)')
     parser.add_argument('--name-initials', default='XX', type=str,
                         help='The name initials that are used to specify the user for the RTPT library.')
-    parser.add_argument('--gpu', default=0 if torch.cuda.is_available() else None, type=str,
+    parser.add_argument('--gpu', default=0 if torch.cuda.is_available() else None, type=int,
                         help='The device index for cuda (also passed to the executable for sample generation).')
     parser.add_argument('--model-init-dir', default=None, type=str,
                         help='Directory of the model to be used in the first iteration. '
