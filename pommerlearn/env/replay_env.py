@@ -111,7 +111,7 @@ class PommeReplay(v0.Pomme):
             agent.reset()
 
     @staticmethod
-    def play(z, episode, render=False, render_pause=0.1, verbose_result_check=True):
+    def play(z, episode, render=False, render_pause=0.1, verbose_result_check=True, verbose_policy=False):
         """
         Plays an episode from the given zarr dataset. Also checks whether the results are consistent.
 
@@ -119,6 +119,7 @@ class PommeReplay(v0.Pomme):
         :param episode: The episode index
         :param render: Whether to render the playback. Waits for keyboard input when None.
         :param verbose_result_check: Whether to display verbose information about the result inconsistencies
+        :param verbose_policy: Whether to print verbose policy information for each step
         :return Whether the expected result is equal to the result of the replay.
         """
 
@@ -134,16 +135,18 @@ class PommeReplay(v0.Pomme):
         q = z['q'][episode_slice]
 
         def print_policy_at(step):
+            if not verbose_policy:
+                return
             print(f"Step {step}")
             for a in constants.Action:
                 print(f"> {policy[step][a.value]:.2f} {q[step][a.value]:.2f}  "
                       f"{a} {' CHOSEN' if actions[step, agent_id] == a.value else ''}")
             print(f"[Can kick: {replay._agents[agent_id]._character.can_kick}]")
 
+        print_policy_at(0)
         if render:
             replay.render(do_sleep=False)
             if render_pause is None:
-                print_policy_at(0)
                 input()
             else:
                 time.sleep(render_pause)
@@ -152,11 +155,11 @@ class PommeReplay(v0.Pomme):
         for step in range(0, len(actions)):
             # execute the actions step by step
             state, reward, done, info = replay.step(actions[step, :])
+            if step < len(policy) - 1:
+                print_policy_at(step + 1)
             if render:
                 replay.render(do_sleep=False)
                 if render_pause is None:
-                    if step < len(policy) - 1:
-                        print_policy_at(step + 1)
                     input()
                 else:
                     time.sleep(render_pause)
