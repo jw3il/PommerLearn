@@ -1,3 +1,6 @@
+"""
+Tests whether the results in a given dataset are reproducible with the Python environment
+"""
 import zarr
 
 from env.replay_env import PommeReplay
@@ -31,6 +34,7 @@ def main():
 
     print("Total: {}/{} ({:.2f}%) were correct".format(correct_results, full_episodes, correct_results/full_episodes * 100))
 
+    # Start replay of shortest incorrect episode
     if shortest_incorrect is not None:
         print("Ep {}, steps {}".format(shortest_incorrect, shortest_incorrect_steps))
         PommeReplay.play(z, shortest_incorrect, render=True, render_pause=None)
