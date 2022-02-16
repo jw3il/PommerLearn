@@ -100,6 +100,26 @@ public:
     void reset() override;
 
     virtual ~CrazyAraAgent() {}
+
+    /**
+     * @brief set_pommerman_state Sets the current pommerman state object according to the environment or given observation.
+     * @param obs Given observation
+     */
+    void set_pommerman_state(const bboard::Observation *obs);
+
+    /**
+     * @brief print_pv_line Prints the PV line of the mcts agent. This function is supposed to be called after the search.
+     * @param mctsAgent MCTS Agent object
+     * @param obs Current observation
+     */
+    void print_pv_line(MCTSAgent* mctsAgent, const bboard::Observation *obs);
+
+    /**
+     * @brief add_results_to_buffer Stores the search result in a buffer for later look-up
+     * @param net Neural net object
+     * @param bestAction Best found action after the search
+     */
+    void add_results_to_buffer(const NeuralNetAPI* net, bboard::Move bestAction);
 };
 
 struct RawNetAgentContainer {

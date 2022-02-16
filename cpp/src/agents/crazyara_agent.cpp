@@ -38,11 +38,11 @@ void _get_q(EvalInfo* info, float* q) {
     }
 }
 
-bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
+void CrazyAraAgent::set_pommerman_state(const bboard::Observation *obs)
 {
     if (env) {
         bboard::State& state = env->GetState();
-        // sanity check: the given observation should originate from the 
+        // sanity check: the given observation should originate from the
         // same environment and therefore have the same time step
         assert(state.timeStep == obs->timeStep);
         pommermanState->set_state(&state);
@@ -50,42 +50,28 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     else {
         pommermanState->set_observation(obs);
     }
+}
 
-    pommermanState->set_observation(obs);
-
-    crazyara::Agent* agent = get_acting_agent();
-    NeuralNetAPI* net = get_acting_net();
-
-    agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
-    agent->perform_action();
-
-    bboard::Move bestAction = bboard::Move(agent->get_best_action());
-
-    #ifndef DISABLE_UCI_INFO
-        MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent);
-        if (mctsAgent != nullptr) {
-            mctsAgent->print_root_node();
-        }
-    #endif
-
-    #ifdef CRAZYARA_AGENT_PV
-        MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent);
-        if (mctsAgent != nullptr) {
-            if (evalInfo.pv.size() > 0) {
-                std::cout << "BEGIN ========== Principal Variation" << std::endl;
-                pommermanState->set_state(state);
-                std::cout << "(" << pommermanState->state.timeStep << "): Initial state" << std::endl;
-                bboard::PrintState(&pommermanState->state, false);
-                for (Action a : evalInfo.pv[0]) {
-                    pommermanState->do_action(a);
-                    std::cout << "(" << pommermanState->state.timeStep << "): after " << StateConstantsPommerman::action_to_uci(a, false) << std::endl;
-                    bboard::PrintState(&pommermanState->state, false);
-                }
-                std::cout << "END ========== " << std::endl;
+void CrazyAraAgent::print_pv_line(MCTSAgent* mctsAgent, const bboard::Observation *obs)
+{
+    if (mctsAgent != nullptr) {
+        if (evalInfo.pv.size() > 0) {
+            std::cout << "BEGIN ========== Principal Variation" << std::endl;
+            set_pommerman_state(obs);
+            std::cout << "(" << pommermanState->state.timeStep << "): Initial state" << std::endl;
+            pommermanState->state.Print(false);
+            for (Action a : evalInfo.pv[0]) {
+                pommermanState->do_action(a);
+                std::cout << "(" << pommermanState->state.timeStep << "): after " << StateConstantsPommerman::action_to_uci(a, false) << std::endl;
+                pommermanState->state.Print(false);
             }
+            std::cout << "END ========== " << std::endl;
         }
-    #endif
+    }
+}
 
+void CrazyAraAgent::add_results_to_buffer(const NeuralNetAPI* net, bboard::Move bestAction)
+{
     if (has_buffer()) {
         if (!planeBuffer) {
             // create buffers on the fly
@@ -99,6 +85,37 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
 
         sampleBuffer->addSample(planeBuffer.get(), bestAction, policyBuffer.get(), evalInfo.bestMoveQ.at(0), qBuffer.get());
     }
+}
+
+bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
+{
+    set_pommerman_state(obs);
+
+    pommermanState->set_observation(obs);
+
+    crazyara::Agent* agent = get_acting_agent();
+    NeuralNetAPI* net = get_acting_net();
+
+    agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
+    agent->perform_action();
+
+    bboard::Move bestAction = bboard::Move(agent->get_best_action());
+
+    #if ! defined(DISABLE_UCI_INFO) || defined(CRAZYARA_AGENT_PV)
+        MCTSAgent* mctsAgent = dynamic_cast<MCTSAgent*>(agent);
+    #endif
+
+    #ifndef DISABLE_UCI_INFO
+        if (mctsAgent != nullptr) {
+            mctsAgent->print_root_node();
+        }
+    #endif
+
+    #ifdef CRAZYARA_AGENT_PV
+        print_pv_line(mctsAgent, obs);
+    #endif
+
+    add_results_to_buffer(net, bestAction);
     return bestAction;
 }
 
