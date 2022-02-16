@@ -30,29 +30,31 @@ stop_rl = False
 stop_rl_lock = threading.Lock()
 
 
-def change_binary_name(binary_dir: str, current_binary_name: str, process_name: str, nn_update_idx: int,
-                       overwrite: bool):
+def rename_file(file_path: Path, new_filename: str, overwrite: bool):
     """
-    Change the name of the binary to the process' name (which includes initials,
-    binary name and remaining time) & additionally add the current epoch.
-    (based on implementation by maxalexger (GitHub))
-    :return: the new binary name
-    """
-    idx = process_name.find(f'#')
-    new_binary_name = f'{process_name[:idx]}_UP={nn_update_idx}{process_name[idx:]}'
+    Renames a file with explicit overwrite check.
 
-    if os.path.exists(binary_dir + new_binary_name) and new_binary_name != current_binary_name:
+    :param file_path: Complete path to the file
+    :param new_filename: New filename (only the name without the path)
+    :param overwrite: Whether to overwrite existing files.
+    :return: The path to the new file
+    """
+    destination_path = file_path.parent / new_filename
+    if destination_path.exists() and destination_path.name != file_path.name:
         if overwrite:
-            logging.info(f'Binary with target name {new_binary_name} already exists. Removing old binary.')
-            os.remove(binary_dir + new_binary_name)
+            logging.info(f'File with target name {new_filename} already exists. Removing old file.')
+            destination_path.unlink()
         else:
-            raise ValueError(f"Binary with target name {new_binary_name} already exists.")
+            raise ValueError(f"File with target name {new_filename} already exists.")
 
-    if new_binary_name != current_binary_name:
-        os.rename(binary_dir + current_binary_name, binary_dir + new_binary_name)
-        logging.info(f'Changed binary name to: {new_binary_name}')
+    if destination_path.name != file_path.name:
+        file_path.rename(destination_path)
+        new_path = destination_path
+        logging.info(f'Changed binary name to: {new_filename}')
+    else:
+        new_path = file_path
 
-    return new_binary_name
+    return new_path
 
 
 def rename_datasets_id(dir: Path, id: str):
@@ -302,14 +304,14 @@ def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list,
             print_it("Training done")
             
             # Update the RTPT (subtitle is optional)
-            rtpt.step(subtitle=f"global_step={train_config['global_step']:d}")
+            rtpt.step(subtitle=f"it={it:d}_of_{max_iterations:d}")
 
         # Create a new dataset using the current model
         if not last_iteration:
             # Create a new dataset
             print_it("Create dataset")
 
-            exec_copy_path = adjust_exec_path(exec_copy_path, rtpt._get_title(), train_config["iteration"])
+            exec_copy_path = rename_file(exec_copy_path, rtpt._get_title(), True)
             file_prefix = str(data_dir / f"{it}_data")
             sproc_create_dataset = create_dataset(exec_copy_path, file_prefix, dataset_args, model_dir, model_subdir)
             subprocess_verbose_wait(sproc_create_dataset)
@@ -330,21 +332,6 @@ def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list,
 
     print("RL loop done")
     exec_copy_path.unlink()
-
-
-def adjust_exec_path(exec_path: Path, rtpt_title: str, iteration: int) -> Path:
-    """
-    Changes the binary name and returns an adjusted version of the exec path based on iteration number and rtpt title.
-    :param exec_path: Execution path / binary file path
-    :param rtpt_title: Title of the rtpt object
-    :param iteration: Iteration index
-    :return: Adjusted rtpt title
-    """
-    current_binary_name = str(exec_path).split(os.sep)[-1]
-    binary_dir = str(exec_path)[:-len(current_binary_name)]
-    new_binary_name = change_binary_name(binary_dir, current_binary_name, rtpt_title, iteration, True)
-    exec_path = Path(binary_dir + new_binary_name)
-    return exec_path
 
 
 def parse_extra_args(args_str: str):
@@ -418,7 +405,7 @@ def main():
     parser.add_argument('--exec', default='./PommerLearn', type=check_file,
                         help='The path to the PommerLearn executable')
     parser.add_argument('--exec-args', default='', type=str,
-                        help='Allows to forward arguments to the executable (and replaces default values). Provide'
+                        help='Allows to forward arguments to the executable (and replaces default values). Provide '
                              'them as a string of the form "param1 param2=value" or "--param1 --param2=value"')
     parser.add_argument('--it', default=100, type=int,
                         help='Maximum number of iterations (-1 for endless run that has to be stopped manually)')
