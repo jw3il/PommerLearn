@@ -32,7 +32,7 @@ enum PlanningAgentType
 /**
  * @brief Base class for wrapping CrazyAra agents as Pommerman agents.
  */
-class CrazyAraAgent : public LogAgent
+class CrazyAraAgent : public LogAgent, public Clonable<bboard::Agent>
 {
 protected:
     std::unique_ptr<PommermanState> pommermanState;
@@ -131,7 +131,7 @@ struct RawNetAgentContainer {
 /**
  * @brief Pommerman agent using a thread-safe queue of RawNetAgents (queue can be shared across threads).
  */
-class RawCrazyAraAgent : public CrazyAraAgent, public Clonable<bboard::Agent>
+class RawCrazyAraAgent : public CrazyAraAgent
 {
 private:
     std::unique_ptr<RawNetAgentContainer> currentAgent;
@@ -159,6 +159,11 @@ public:
 
     // Clonable
     bboard::Agent* get() override;
+
+    /**
+     * @brief Clone this agent by creating a new agent that shares it's network queue with this agent.
+     * @return the cloned agent
+     */
     std::unique_ptr<Clonable<bboard::Agent>> clone() override;
 };
 
@@ -175,6 +180,8 @@ private:
     SearchSettings searchSettings;
     const std::string modelDirectory;
     const int deviceID;
+    PlanningAgentType planningAgentType = PlanningAgentType::None;
+    int switchDepth = -1;
 
 public:
     MCTSCrazyAraAgent(const std::string& modelDirectory, const int deviceID, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
@@ -194,6 +201,15 @@ public:
     bool has_stateful_model() override;
     crazyara::Agent* get_acting_agent() override;
     NeuralNetAPI* get_acting_net() override;
+
+    // Clonable
+    bboard::Agent* get() override;
+
+    /**
+     * @brief Clone this agent by creating a new agent with the same configuration.
+     * @return the cloned agent
+     */
+    std::unique_ptr<Clonable<bboard::Agent>> clone() override;
 };
 
 #endif // POMMERCRAZYARAAGENT_H

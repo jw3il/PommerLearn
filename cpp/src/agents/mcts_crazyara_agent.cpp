@@ -70,6 +70,9 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
 
 void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType, int switchDepth)
 {
+    this->planningAgentType = planningAgentType;
+    this->switchDepth = switchDepth;
+
     if (planningAgentType == PlanningAgentType::None) {
         return;
     }
@@ -148,4 +151,25 @@ crazyara::Agent* MCTSCrazyAraAgent::get_acting_agent()
 NeuralNetAPI* MCTSCrazyAraAgent::get_acting_net()
 {
     return singleNet.get();
+}
+
+bboard::Agent* MCTSCrazyAraAgent::get()
+{
+    return this;
+}
+
+std::unique_ptr<Clonable<bboard::Agent>> MCTSCrazyAraAgent::clone()
+{
+    if (!pommermanState.get()) {
+        throw std::runtime_error("Cannot clone agent with uninitialized state!");
+    }
+
+    std::unique_ptr<MCTSCrazyAraAgent> clonedAgent = std::make_unique<MCTSCrazyAraAgent>(modelDirectory, deviceID, playSettings, searchSettings, searchLimits);
+
+    clonedAgent->id = id;
+    clonedAgent->pommermanState = std::unique_ptr<PommermanState>(pommermanState->clone());
+    // we have to reset the planning agents to disconnect the clones if they use shared networks
+    clonedAgent->init_planning_agents(planningAgentType, switchDepth);
+
+    return clonedAgent;
 }

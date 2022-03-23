@@ -22,8 +22,9 @@
 namespace po = boost::program_options;
 
 void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
-             PlanningAgentType planningAgentType, SearchLimits searchLimits, int switchDepth)
+             PlanningAgentType planningAgentType, std::string opponents, SearchLimits searchLimits, int switchDepth)
 {
+    srand(config.seed);
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
 
@@ -47,13 +48,29 @@ void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool
         ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
     }
 
-    srand(config.seed);
-    std::array<bboard::Agent*, bboard::AGENT_COUNT> agents = {
-        crazyAraAgent.get(),
-        new agents::SimpleUnbiasedAgent(rand()),
-        new agents::SimpleUnbiasedAgent(rand()),
-        new agents::SimpleUnbiasedAgent(rand()),
-    };
+    std::array<bboard::Agent*, bboard::AGENT_COUNT> agents;
+    // main agent
+    agents[0] = crazyAraAgent.get();
+
+    // opponents
+    std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
+    for(int i = 1; i < bboard::AGENT_COUNT; i++) {
+        if(opponents == "SimpleUnbiasedAgent")
+        {
+            agents[i] = new agents::SimpleUnbiasedAgent(rand());
+        }
+        else if(opponents == "Clone")
+        {
+            auto clone = crazyAraAgent->clone();
+            agents[i] = clone->get();
+            // store the clone so it does not run out of scope when we exit the loop
+            clones.push_back(std::move(clone));
+        }
+        else
+        {
+            throw std::runtime_error("Opponent type '" + opponents + "' is not supported.");
+        }
+    }
 
     std::cout << "Agents loaded. Starting the runner.." << std::endl;
     Runner::run(agents, config);
@@ -112,6 +129,9 @@ int main(int argc, char **argv) {
             ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
+            ("opponents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used as opponents. "
+                                                                                          "Available options [SimpleUnbiasedAgent, Clone]. "
+                                                                                          "Clone uses clones of the MCTS agent as opponents and logs their samples.")
             ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
@@ -199,12 +219,14 @@ int main(int argc, char **argv) {
             return 1;
         }
 
+        std::string opponents = configVals["opponents"].as<std::string>();
+
         SearchLimits searchLimits;
         searchLimits.simulations = configVals["simulations"].as<int>();
         searchLimits.movetime = configVals["movetime"].as<int>();
 
         setDefaultFFAConfig(config);
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, searchLimits, switchDepth);
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, opponents, searchLimits, switchDepth);
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
