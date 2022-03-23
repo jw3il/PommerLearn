@@ -45,7 +45,7 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
 
     searchSettings.virtualLoss = 1;
     searchSettings.batchSize = 8;
-    searchSettings.threads = 2;
+    searchSettings.threads = 4;
     searchSettings.useMCGS = false;
     searchSettings.multiPV = 1;
     searchSettings.nodePolicyTemperature = 1.0f;
