@@ -63,17 +63,18 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
     return info;
 }
 
-void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins)
+void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins, std::array<int, bboard::AGENT_COUNT> nbAlive)
 {
     std::cout << "------------------------------" << std::endl;
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     double elapsedSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
     std::cout << "Total episodes: " << episode <<  std::endl;
     std::cout << "Average steps: " << totalEpisodeSteps / episode <<  std::endl;
-    std::cout << "Wins: " << std::endl;
+    std::cout << "Wins | Alive: " << std::endl;
     for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
         int wins = nbWins[agentIdx];
-        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%)" << std::endl;
+        int alive = nbAlive[agentIdx];
+        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%) | " << alive << " (" << (float)alive * 100 / episode << "%)" << std::endl;
     }
 
     std::cout << "Draws: " << nbDraws << " (" << (float)nbDraws * 100 / episode << "%)" << std::endl;
@@ -114,6 +115,8 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
     int nbDraws = 0;
     std::array<int, bboard::AGENT_COUNT> nbWins;
     std::fill(nbWins.begin(), nbWins.end(), 0);
+    std::array<int, bboard::AGENT_COUNT> nbAlive;
+    std::fill(nbAlive.begin(), nbAlive.end(), 0);
 
     auto boardRNG = std::mt19937_64(config.seed);
     auto agentPositionRNG = std::mt19937_64(config.seed);
@@ -177,12 +180,15 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
         else if (result.isDraw) {
             nbDraws++;
         }
-        else {
-            // add winning agents, this also works for teams
-            for (int i = 0; i < bboard::AGENT_COUNT; i++) {
-                if (env.GetState().IsWinner(i)) {
-                    nbWins[i] += 1;
-                }
+
+        // count winning & alive agents, this also works for teams
+        for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+            const bboard::State& state = env.GetState();
+            if (state.IsWinner(i)) {
+                nbWins[i] += 1;
+            }
+            if (!state.agents[i].dead) {
+                nbAlive[i] += 1;
             }
         }
 
@@ -205,12 +211,12 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
 
         if ((episode + 1) % 20 == 0)
         {
-            _print_stats(begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins);
+            _print_stats(begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive);
         }
     }
 
     // display aggregated statistics
-    _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins);
+    _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive);
 }
 
 void Runner::run_simple_agents(RunnerConfig config) {

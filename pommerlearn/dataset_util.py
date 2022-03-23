@@ -686,6 +686,7 @@ def log_dataset_stats(path, log_dir, iteration):
     z_steps = z.attrs['Steps']
     steps = np.array(z.attrs["EpisodeSteps"])
     winners = np.array(z.attrs["EpisodeWinner"])
+    dead = np.array(z.attrs["EpisodeDead"])
     done = np.array(z.attrs["EpisodeDone"])
     actions = z.attrs["EpisodeActions"]
 
@@ -704,6 +705,8 @@ def log_dataset_stats(path, log_dir, iteration):
     for a in range(0, 4):
         winner_a = np.sum(winners[:] == a)
         writer.add_scalar(f"Dataset/Win ratio {a}", winner_a / num_episodes, iteration)
+        alive_a = num_episodes - np.sum(dead[:, a])
+        writer.add_scalar(f"Dataset/Alive ratio {a}", alive_a / num_episodes, iteration)
 
         actions_a = []
         episode_steps = np.empty(len(actions))
