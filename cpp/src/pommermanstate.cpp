@@ -361,19 +361,19 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
         if(state.IsWinner(pommerState->agentID))
         {
             customTerminalValue = 1.0f;
-            return TERMINAL_CUSTOM;
+            return TERMINAL_WIN;
         }
         else
         {
             if(state.isDraw || state.timeStep > 800)
             {
                 customTerminalValue = 0.0f;
-                return TERMINAL_CUSTOM;
+                return TERMINAL_DRAW;
             }
             else
             {
                 customTerminalValue = -1.0f;
-                return TERMINAL_CUSTOM;
+                return TERMINAL_LOSS;
             }
         }
     }
@@ -383,7 +383,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     {
         if (pommerState->gameMode == bboard::GameMode::FreeForAll) {
             customTerminalValue = -1.0f;
-            return TERMINAL_CUSTOM;
+            return TERMINAL_LOSS;
         }
         // Partner is still alive
         // TODO: Add evaluation from NN

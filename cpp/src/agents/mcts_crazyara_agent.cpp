@@ -63,7 +63,7 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
     searchSettings.qVetoDelta = 0.4;
     searchSettings.qValueWeight = 1.0f;
     searchSettings.reuseTree = false;
-    searchSettings.mctsSolver = false;
+    searchSettings.mctsSolver = true;
 
     return searchSettings;
 }

@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
     std::string mode = configVals["mode"].as<std::string>();
     if (mode == "ffa_sl") {
         setDefaultFFAConfig(config);
-        Runner::run_simple_agents(config);
+        Runner::run_simple_unbiased_agents(config);
     }
     else if (mode == "ffa_mcts") {
         bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
