@@ -108,10 +108,10 @@ public:
     static void run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerConfig config);
 
     /**
-     * @brief run_simple_agents Run the environment with simple agents and optionally collect logs.
+     * @brief run_simple_unbiased_agents Run the environment with simple unbiased agents and optionally collect logs.
      * @param config The configuration for this run.
      */
-    static void run_simple_agents(RunnerConfig config);
+    static void run_simple_unbiased_agents(RunnerConfig config);
 
 private:
 

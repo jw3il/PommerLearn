@@ -219,14 +219,14 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
     _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive);
 }
 
-void Runner::run_simple_agents(RunnerConfig config) {
+void Runner::run_simple_unbiased_agents(RunnerConfig config) {
     // create wrappers to log the actions of some agents
     WrappedLogAgent agentWrappers[4];
     std::array<bboard::Agent*, 4> agents = {&agentWrappers[0], &agentWrappers[1], &agentWrappers[2], &agentWrappers[3]};
 
     // make the wrappers act like simple agents
     for (int i = 0; i < 4; i++) {
-        agentWrappers[i].set_agent(std::make_unique<agents::SimpleAgent>(config.seed + i));
+        agentWrappers[i].set_agent(std::make_unique<agents::SimpleUnbiasedAgent>(config.seed + i));
     }
 
     Runner::run(agents, config);
