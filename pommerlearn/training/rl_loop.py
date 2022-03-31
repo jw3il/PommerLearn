@@ -460,8 +460,8 @@ def main():
     train_config = {
         "device": device_str,
         "nb_epochs": 2,
-        "only_test_last": True,
-        "test_size": 0.5,
+        "only_test_last": False,
+        "test_size": 0.1,
         "tensorboard_dir": str(base_dir / "runs" / run_id),
         "discount_factor": 0.97,
         "mcts_val_weight": 0.3,
@@ -476,7 +476,7 @@ def main():
 
     dataset_args = [
         "--mode=ffa_mcts",
-        "--env-gen-seed-eps=2",
+        f"--env-gen-seed-eps={get_and_remove(parsed_exec_args, 'env-gen-seed-eps', '2')}",
         "--max-games=-1",
         f"--targeted-samples={get_and_remove(parsed_exec_args, 'targeted-samples', '50000')}",
         "--state-size=0",
