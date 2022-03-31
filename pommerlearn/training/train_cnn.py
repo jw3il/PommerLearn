@@ -566,7 +566,7 @@ def fill_default_config(train_config):
         "value_version": 1,
         "discount_factor": 0.9,
         "mcts_val_weight": 0.5,  # None or in [0, 1]
-        "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end"
+        "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end", "weighted_actions"
         "min_lr": 0.0001,
         "max_lr": 0.05,
         "min_momentum": 0.8,

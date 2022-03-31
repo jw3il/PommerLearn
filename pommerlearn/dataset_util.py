@@ -1,3 +1,4 @@
+import gc
 from collections import namedtuple
 from pathlib import Path
 from typing import List, Union, Tuple, Optional, NamedTuple
@@ -95,10 +96,10 @@ class PommerDataset(Dataset):
         assert len(obs) == len(val) == len(act) == len(pol), \
             f"Sample array lengths are not the same! Got: {len(obs)}, {len(val)}, {len(act)}, {len(pol)}"
 
-        if not isinstance(obs, np.ndarray)\
-                or not isinstance(val, np.ndarray)\
-                or not isinstance(act, np.ndarray)\
-                or not isinstance(pol, np.ndarray):
+        def is_np_or_zarr(data):
+            return isinstance(data, np.ndarray) or isinstance(obs, zarr.core.Array)
+
+        if not is_np_or_zarr(obs) or not is_np_or_zarr(val) or not is_np_or_zarr(act) or not is_np_or_zarr(pol):
             assert False, "Invalid data type!"
 
         self.sequence_length = sequence_length
@@ -136,10 +137,10 @@ class PommerDataset(Dataset):
         z_steps = z.attrs['Steps']
 
         return PommerDataset(
-            obs=z['obs'][:z_steps],
+            obs=z['obs'],
             val=get_value_target(z, value_version, discount_factor, mcts_val_weight),
-            act=z['act'][:z_steps],
-            pol=z['pol'][:z_steps],
+            act=z['act'],
+            pol=z['pol'],
             ids=get_unique_agent_episode_id(z),
             transform=transform,
             return_ids=return_ids,
@@ -155,18 +156,18 @@ class PommerDataset(Dataset):
         """
 
         return PommerDataset(
-            obs=np.empty((count, 18, 11, 11), dtype=float),
-            val=np.empty(count, dtype=float),
-            act=np.empty(count, dtype=int),
-            pol=np.empty((count, 6), dtype=float),
-            ids=np.empty(count, dtype=int),
-            steps_to_end=np.empty(count, dtype=int),
+            obs=np.empty((count, 18, 11, 11), dtype=np.single),
+            val=np.empty(count, dtype=np.single),
+            act=np.empty(count, dtype=np.byte),
+            pol=np.empty((count, 6), dtype=np.single),
+            ids=np.empty(count, dtype=np.int32),
+            steps_to_end=np.empty(count, dtype=np.int16),
             transform=transform,
             sequence_length=sequence_length,
             return_ids=return_ids
         )
 
-    def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None):
+    def set(self, other_samples, to_index, from_index=0, count: Optional[int] = None, batch_size: Optional[int] = None):
         """
         Sets own_samples[to_index:to_index + count] = other_samples[from_index:from_index + count].
 
@@ -174,15 +175,30 @@ class PommerDataset(Dataset):
         :param to_index: The destination index
         :param from_index: The source index
         :param count: The number of elements which will be copied. If None, all samples will be copied.
+        :param batch_size: The maximal number of batch_size elements that are copied simultaneously
         """
 
-        count = len(other_samples) if count is None else count
-        self.obs[to_index:to_index + count] = other_samples.obs[from_index:from_index + count]
-        self.val[to_index:to_index + count] = other_samples.val[from_index:from_index + count]
-        self.act[to_index:to_index + count] = other_samples.act[from_index:from_index + count]
-        self.pol[to_index:to_index + count] = other_samples.pol[from_index:from_index + count]
-        self.ids[to_index:to_index + count] = other_samples.ids[from_index:from_index + count]
-        self.steps_to_end[to_index:to_index + count] = other_samples.steps_to_end[from_index:from_index + count]
+        count = len(other_samples) - from_index if count is None else count
+        copy_tuples = []
+        if batch_size is None:
+            copy_tuples.append((to_index, to_index + count, from_index, from_index + count))
+        else:
+            offset = 0
+            while offset < count:
+                copy_tuples.append((to_index + offset, to_index + offset + batch_size, from_index + offset, from_index + offset + batch_size))
+                offset += batch_size
+
+        for t in copy_tuples:
+            self.obs[t[0]:t[1]] = other_samples.obs[t[2]:t[3]]
+            self.val[t[0]:t[1]] = other_samples.val[t[2]:t[3]]
+            self.act[t[0]:t[1]] = other_samples.act[t[2]:t[3]]
+            self.pol[t[0]:t[1]] = other_samples.pol[t[2]:t[3]]
+            self.ids[t[0]:t[1]] = other_samples.ids[t[2]:t[3]]
+            self.steps_to_end[t[0]:t[1]] = other_samples.steps_to_end[t[2]:t[3]]
+
+            # explicity collect garbage in batch_wise transfer
+            if len(copy_tuples) > 1:
+                gc.collect()
 
     def __len__(self):
         return len(self.obs)
@@ -281,7 +297,7 @@ def get_unique_agent_episode_id(z) -> np.ndarray:
     total_steps = z.attrs.get('Steps')
     agent_steps = np.array(z.attrs.get('AgentSteps'))
 
-    ids = np.empty(total_steps, dtype=np.int)
+    ids = np.empty(total_steps, dtype=np.int32)
     current_id = 0
     current_step = 0
 
@@ -304,16 +320,16 @@ def get_steps_until_end(z) -> np.ndarray:
     total_steps = z.attrs.get('Steps')
     agent_steps = np.array(z.attrs.get('AgentSteps'))
 
-    ids = np.empty(total_steps, dtype=np.int)
+    steps_until_end = np.empty(total_steps, dtype=np.int16)
     current_step = 0
 
     for steps in agent_steps:
         end = min(current_step + steps, total_steps)
         # we always end at step 1 as the final state is not in the datasets
-        ids[current_step:end] = np.arange(end - current_step, 0, -1)
+        steps_until_end[current_step:end] = np.arange(end - current_step, 0, -1)
         current_step += steps
 
-    return ids
+    return steps_until_end
 
 
 def get_agent_died_in_step(single_episode_actions, single_episode_dead):
@@ -612,9 +628,10 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         test_nb = int(elem_samples_nb * get_test_size(i))
         train_nb = elem_samples_nb - test_nb
 
-        data_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb)
-        data_test.set(elem_samples, buffer_test_idx, elem_samples_from + train_nb, test_nb)
+        data_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb, batch_size=10000)
+        data_test.set(elem_samples, buffer_test_idx, elem_samples_from + train_nb, test_nb, batch_size=10000)
         del elem_samples
+        gc.collect()
 
         # copy first num_samples samples
         if verbose:
@@ -635,6 +652,17 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         train_loader = DataLoader(data_train, shuffle=True, batch_size=batch_size, num_workers=num_workers)
     elif train_sampling_mode == 'weighted_steps_to_end':
         train_weights = np.clip(np.power(0.97, data_train.steps_to_end - 1), 0.05, 1)
+        sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
+        train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
+    elif train_sampling_mode == 'weighted_actions':
+        train_weights = np.zeros_like(data_train.val, dtype=float)
+        action_counts = np.array([np.sum(data_train.act == a) for a in range(0, 6)])
+        non_zero_actions = (action_counts > 0).sum()
+
+        for a in range(0, 6):
+            if action_counts[a] > 0:
+                train_weights[data_train.act == a] = 100000.0 / (non_zero_actions * action_counts[a])
+
         sampler = WeightedRandomSampler(train_weights, len(data_train), replacement=True)
         train_loader = DataLoader(data_train, batch_size=batch_size, num_workers=num_workers, sampler=sampler)
     elif train_sampling_mode == 'weighted_value_class':
