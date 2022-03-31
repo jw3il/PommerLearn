@@ -137,10 +137,10 @@ class PommerDataset(Dataset):
         z_steps = z.attrs['Steps']
 
         return PommerDataset(
-            obs=z['obs'],
+            obs=z['obs'][:z_steps],
             val=get_value_target(z, value_version, discount_factor, mcts_val_weight),
-            act=z['act'],
-            pol=z['pol'],
+            act=z['act'][:z_steps],
+            pol=z['pol'][:z_steps],
             ids=get_unique_agent_episode_id(z),
             transform=transform,
             return_ids=return_ids,
