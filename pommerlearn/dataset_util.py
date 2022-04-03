@@ -1,4 +1,5 @@
 import gc
+import logging
 from collections import namedtuple
 from pathlib import Path
 from typing import List, Union, Tuple, Optional, NamedTuple
@@ -178,23 +179,39 @@ class PommerDataset(Dataset):
         :param batch_size: The maximal number of batch_size elements that are copied simultaneously
         """
 
+        max_count = len(other_samples) - from_index
+        if count is None:
+            count = max_count
+        elif count > max_count:
+            logging.warning(f"Source dataset holds {len(other_samples)} samples. Cannot copy {count} elements starting "
+                            f"at {from_index}. Changed this to {max_count}.")
+            count = max_count
         count = len(other_samples) - from_index if count is None else count
+        # tuples that define what has to be copied (to_start, to_end, from_start, from_end)
         copy_tuples = []
         if batch_size is None:
+            # just copy everything at once
             copy_tuples.append((to_index, to_index + count, from_index, from_index + count))
         else:
+            # split whole interval with "count" elements into multiple copy instructions that copy at most
+            # "batch_size" elements at once
             offset = 0
             while offset < count:
-                copy_tuples.append((to_index + offset, to_index + offset + batch_size, from_index + offset, from_index + offset + batch_size))
-                offset += batch_size
+                num_el = min(batch_size, count - offset)
+                idx_to = to_index + offset
+                idx_from = from_index + offset
 
-        for t in copy_tuples:
-            self.obs[t[0]:t[1]] = other_samples.obs[t[2]:t[3]]
-            self.val[t[0]:t[1]] = other_samples.val[t[2]:t[3]]
-            self.act[t[0]:t[1]] = other_samples.act[t[2]:t[3]]
-            self.pol[t[0]:t[1]] = other_samples.pol[t[2]:t[3]]
-            self.ids[t[0]:t[1]] = other_samples.ids[t[2]:t[3]]
-            self.steps_to_end[t[0]:t[1]] = other_samples.steps_to_end[t[2]:t[3]]
+                copy_tuples.append((idx_to, idx_to + num_el, idx_from, idx_from + num_el))
+
+                offset += num_el
+
+        for (to_start, to_end, from_start, from_end) in copy_tuples:
+            self.obs[to_start:to_end] = other_samples.obs[from_start:from_end]
+            self.val[to_start:to_end] = other_samples.val[from_start:from_end]
+            self.act[to_start:to_end] = other_samples.act[from_start:from_end]
+            self.pol[to_start:to_end] = other_samples.pol[from_start:from_end]
+            self.ids[to_start:to_end] = other_samples.ids[from_start:from_end]
+            self.steps_to_end[to_start:to_end] = other_samples.steps_to_end[from_start:from_end]
 
             # explicity collect garbage in batch_wise transfer
             if len(copy_tuples) > 1:
@@ -391,6 +408,13 @@ def get_value_target(z, value_version: int, discount_factor: float, mcts_val_wei
     def get_combined_target(mcts_val, target_val, discounting_factors):
         if mcts_val_weight is None:
             return discounting_factors * target_val
+
+        if not np.isfinite(mcts_val).all():
+            total_len = np.prod(mcts_val.shape)
+            logging.warning(f"Warning: mcts_val_weight is {mcts_val_weight} but "
+                            f"{total_len - np.isfinite(mcts_val).sum()} of {total_len} values in your mcts_val are not "
+                            f"finite {{inf, -inf, nan}}. This destroys your target value. Could it be that your dataset"
+                            f" was not created with mcts?")
 
         return (
             # static weight for the values from mcts
