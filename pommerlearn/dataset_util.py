@@ -136,12 +136,35 @@ class PommerDataset(Dataset):
             )
 
         z_steps = z.attrs['Steps']
+        pol = z['pol'][:z_steps]
+
+        if not np.isfinite(pol).all():
+            non_finite = ~np.isfinite(pol)
+            non_finite_steps = non_finite.sum(axis=-1) > 0
+            logging.warning(
+                f"Your zarr dataset contains non-finite policy values.\n"
+                f"Found {np.unique(pol[non_finite])}, total {non_finite_steps.sum()} "
+                f"({non_finite_steps.sum() / pol.shape[0] * 100} %) of steps contain non-finite values.\n"
+                f"Replaced them with (1 - sum(finite_vals)) / num_of_non_finite_vals."
+            )
+
+            # remember positions of finite values
+            pol_steps_finite_mask = np.isfinite(pol[non_finite_steps])
+            # remove infinite values from policy
+            new_pol = np.nan_to_num(pol[non_finite_steps], copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+            # calculate sum of finite values (policy has to sum up to 1) and number of non-finite values
+            sum_finite = (new_pol * pol_steps_finite_mask).sum(axis=-1)
+            num_non_finite = (~pol_steps_finite_mask).sum(axis=-1)
+            # replace infinite values with equal distribution
+            new_pol += ~pol_steps_finite_mask * ((1 - sum_finite) / num_non_finite)[:, np.newaxis]
+            # update policy
+            pol[non_finite_steps] = new_pol
 
         return PommerDataset(
             obs=z['obs'][:z_steps],
             val=get_value_target(z, value_version, discount_factor, mcts_val_weight),
             act=z['act'][:z_steps],
-            pol=z['pol'][:z_steps],
+            pol=pol,
             ids=get_unique_agent_episode_id(z),
             transform=transform,
             return_ids=return_ids,
