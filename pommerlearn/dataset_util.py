@@ -151,7 +151,7 @@ class PommerDataset(Dataset):
             # remember positions of finite values
             pol_steps_finite_mask = np.isfinite(pol[non_finite_steps])
             # remove infinite values from policy
-            new_pol = np.nan_to_num(pol[non_finite_steps], copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+            new_pol = np.nan_to_num(pol[non_finite_steps], nan=0.0, posinf=0.0, neginf=0.0)
             # calculate sum of finite values (policy has to sum up to 1) and number of non-finite values
             sum_finite = (new_pol * pol_steps_finite_mask).sum(axis=-1)
             num_non_finite = (~pol_steps_finite_mask).sum(axis=-1)
@@ -372,7 +372,7 @@ def get_steps_until_end(z) -> np.ndarray:
     return steps_until_end
 
 
-def get_agent_died_in_step(single_episode_actions, single_episode_dead):
+def get_agent_died_in_step(single_episode_actions, single_episode_dead) -> np.ndarray:
     """
     For each agent, get the step in which it died. 0 if it is still alive.
 
@@ -419,14 +419,13 @@ def get_value_target(z, value_version: int, discount_factor: float, mcts_val_wei
     # episode_draw = np.array(z.attrs.get('EpisodeDraw'))
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
 
-    all_mcts_q = np.array(z["q"])
-    # replace nans of invalid actions
-    all_mcts_q[all_mcts_q != all_mcts_q] = float('-inf')
-    # get mcts values (= max q)
-    all_mcts_val = np.max(all_mcts_q, axis=-1)
+    # Warning: this is not the true value of the state but instead the Q-value of the "best" (= most selected) move.
+    # Alternatively, one could use z.q and get the best Q-value (max over non-nan values), but the selected Q-values
+    # will probably better represent the value of the state for the actual policy (= select action according to visits).
+    all_mcts_val = z.val
 
     if mcts_val_weight == 1:
-        return all_mcts_val
+        return all_mcts_val[:total_steps]
 
     def get_combined_target(mcts_val, target_val, discounting_factors):
         if mcts_val_weight is None:
