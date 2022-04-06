@@ -21,7 +21,7 @@ import torch.cuda
 from rtpt.rtpt import RTPT
 
 import training.train_cnn
-from training.train_util import is_empty, rm_dir, move_content, natural_keys
+from training.train_util import is_empty, rm_dir, move_content, natural_keys, rm_files_with_type
 from training.util_argparse import check_dir, check_file
 import warnings
 
@@ -273,6 +273,7 @@ def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list,
     else:
         assert model_init_dir.exists() and not is_empty(model_init_dir), f"Could not find model in '{model_init_dir}'!"
         shutil.copytree(str(model_init_dir), model_dir)
+        rm_files_with_type(model_dir, ".trt")
         print("Using existing model.")
 
     # Loop: Train & Create -> Archive -> Train & Create -> ...

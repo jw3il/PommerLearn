@@ -26,6 +26,24 @@ def rm_dir(dir: Path, keep_empty_dir=True):
         dir.rmdir()
 
 
+def rm_files_with_type(dir: Path, file_suffix: str):
+    """
+    Removes all files from the given directory that end with the given suffix.
+
+    :param dir: A directory
+    :param file_suffix: A suffix, e.g. ".txt"
+    """
+    if not dir.exists() or not dir.is_dir():
+        return
+
+    # recursively for every child
+    for child in dir.iterdir():
+        if child.is_dir():
+            rm_files_with_type(child, file_suffix)
+        elif child.is_file() and child.suffix == file_suffix:
+            child.unlink()
+
+
 def move_content(source: Path, dest: Path):
     """
     Move all content from the source to the destination directory.
