@@ -302,6 +302,23 @@ class PommerDataset(Dataset):
             else:
                 return sequence
 
+    def shuffle(self):
+        """
+        Shuffles the dataset in-place.
+        """
+        rng_state = np.random.get_state()
+
+        def shuffle_array(a: np.ndarray):
+            np.random.set_state(rng_state)
+            np.random.shuffle(a)
+
+        shuffle_array(self.obs)
+        shuffle_array(self.val)
+        shuffle_array(self.act)
+        shuffle_array(self.pol)
+        shuffle_array(self.ids)
+        shuffle_array(self.steps_to_end)
+
 
 def get_agent_actions(z, episode):
     episode_steps = z.attrs['EpisodeSteps'][episode]
@@ -565,8 +582,9 @@ def get_last_dataset_path(path_infos: List[Union[str, Tuple[str, float]]]) -> st
 
 def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]]]], value_version: int,
                         discount_factor: float, mcts_val_weight: Optional[float], test_size: float, batch_size: int,
-                        batch_size_test: int, train_transform = None,verbose: bool = True, sequence_length=None,
-                        num_workers=2, only_test_last=False, train_sampling_mode: str = 'complete'
+                        batch_size_test: int, train_transform = None, verbose: bool = True, sequence_length=None,
+                        num_workers=2, only_test_last=False, train_sampling_mode: str = 'complete',
+                        test_split_mode='simple'
                         ) -> [DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
@@ -590,7 +608,17 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         <li>'complete' to load all samples in random order.</li>
         <li>'weighted_steps_to_end' to assign exponentially decreasing weights to each sample based on the
         number of steps until the individual episode ends. Samples are chosen with replacement using the
-        the normalized weights as probabilities.
+        the normalized weights as probabilities.</li>
+        <li>'weighted_actions' to sample all actions with equal probability</li>
+        <li>'weighted_value_class' to sample all values with equal probability (warning: not recommended when used with
+        discounting & mcts as there will be too many different value classes</li>
+        </list>
+    :param test_split_mode: Defines how the test samples are chosen. Possible values: <br>
+        <list>
+        <li>'simple' to split train & test set as they are. This means the test set will contain sequential samples
+            from the last episodes in the data set. </li>
+        <li>'random' to shuffle the dataset before splitting. The test set will contain random samples from different
+            episodes in the data set.</li>
         </list>
     :return: Training loader, validation loader
     """
@@ -636,7 +664,8 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
     if verbose:
         print(f"Loading {total_train_samples + total_test_samples} samples from {len(path_infos)} dataset(s) with "
-              f"test size {test_size}{' only last' if only_test_last else ''} ({total_test_samples} samples)")
+              f"test size {test_size}{' only last' if only_test_last else ''} ({total_test_samples} samples) and "
+              f"split mode '{test_split_mode}'")
 
     data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform,
                                             sequence_length=sequence_length, return_ids=(sequence_length is not None))
@@ -659,9 +688,16 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
         assert 0 <= proportion <= 1, f"Invalid proportion {proportion}"
 
+        if test_split_mode == 'random':
+            elem_samples.shuffle()
+        elif test_split_mode == 'simple':
+            # nothing to do
+            pass
+        else:
+            raise ValueError(f"Unknown test split mode '{test_split_mode}'.")
+
         if proportion < 1:
             elem_samples_nb = int(len(elem_samples) * proportion)
-            # TODO: Replace with uniform random sampling. Problem: Shuffling destroys train/test split
             elem_samples_from = np.random.randint(0, len(elem_samples) - elem_samples_nb)
 
             if verbose:
@@ -740,7 +776,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     test_loader = DataLoader(data_test, batch_size=batch_size_test, num_workers=num_workers) if total_test_samples > 0 else None
 
     if verbose:
-        print(" done.")
+        print("done.")
 
     return train_loader, test_loader
 
