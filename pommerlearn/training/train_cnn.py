@@ -6,6 +6,7 @@ Created on 16.06.20
 
 Basic training script to replicate behaviour of baseline agent
 """
+from typing import Optional
 
 import torch.nn as nn
 from torch.autograd import Variable
@@ -115,7 +116,8 @@ def train_cnn(train_config):
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"],
-                                   train_loader, val_loader, device, log_dir, global_step=global_step_start)
+                                   train_loader, val_loader, device, log_dir, global_step=global_step_start,
+                                   batches_until_eval=train_config["batches_until_eval"])
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
@@ -287,7 +289,8 @@ def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
 
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 value_loss_ratio, train_loader, val_loader, device, log_dir, global_step=0):
+                 value_loss_ratio, train_loader, val_loader, device, log_dir, global_step=0,
+                 batches_until_eval: Optional[int] = 100):
     """
     Trains a given model for a number of epochs
 
@@ -304,6 +307,8 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param device: The device that should be used for training
     :param log_dir: The (base) log dir for the tensorboard writer(s)
     :param global_step: The global step used for logging
+    :param batches_until_eval: Number of batches between evaluations of the current model. The model will also be
+                               evaluated at the end.
     :return: global_step after training
     """
 
@@ -356,21 +361,26 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                                            ya_train, yp_train, ids=ids, device=device)
 
             combined_loss.backward()
+            lr, momentum = 0, 0
             for param_group in optimizer.param_groups:
                 lr = lr_schedule(local_step)
-                writer_train.add_scalar('Hyperparameter/Learning Rate', lr, global_step)
                 param_group['lr'] = lr
 
                 momentum = momentum_schedule(local_step)
-                writer_train.add_scalar('Hyperparameter/Momentum', momentum, global_step)
                 param_group['momentum'] = momentum
 
             optimizer.step()
 
-            if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) == len(train_loader):
+            if (batches_until_eval is not None and (batch_idx + 1) % batches_until_eval == 0) \
+                    or (batch_idx + 1) == len(train_loader):
                 msg = f' epoch: {epoch}, batch index: {batch_idx + 1}, train value loss: {m_train.value_loss():5f},'\
                       f' train policy loss: {m_train.policy_loss():5f}, train policy acc: {m_train.policy_acc():5f}'
 
+                # log last lr and momentum
+                writer_train.add_scalar('Hyperparameter/Learning Rate', lr, global_step)
+                writer_train.add_scalar('Hyperparameter/Momentum', momentum, global_step)
+
+                # log aggregated train stats
                 m_train.log_to_tensorboard(writer_train, global_step)
                 m_train.reset()
 
@@ -598,6 +608,7 @@ def fill_default_config(train_config):
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
         "iteration": 0,
         "global_step": 0,
+        "batches_until_eval": 100,
         # training
         "num_workers": 4
     }
