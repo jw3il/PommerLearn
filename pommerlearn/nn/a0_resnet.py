@@ -66,8 +66,10 @@ from nn.builder_util import get_act, _Stem, _PolicyHead, _ValueHead
 
 
 def init_weights(m):
-    if isinstance(m, nn.Linear):
+    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
         nn.init.kaiming_normal_(m.weight.data, nonlinearity="relu")
+        if isinstance(m, nn.Linear):
+            m.bias.data.fill_(0.01)
 
 
 class ResidualBlock(torch.nn.Module):
