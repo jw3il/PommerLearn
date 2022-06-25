@@ -65,7 +65,7 @@ For the C++ side:
     You can directly install these libraries with conda in the pommer env:
 
     ```
-    conda install -c conda-forge z5py xtensor boost nlohmann_json blosc catch2
+    conda install -c conda-forge z5py xtensor boost nlohmann_json blosc
     ```
 
 * [blaze](https://bitbucket.org/blaze-lib/blaze/src/master/)

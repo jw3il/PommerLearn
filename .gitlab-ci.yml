@@ -14,7 +14,7 @@ default:
     - conda create -n pommer_build python=3.7
     - source $PWD/miniconda3/bin/activate pommer_build
     # install (some) dependencies via conda-forge
-    - conda install -y -c conda-forge z5py xtensor boost nlohmann_json blosc catch2
+    - conda install -y -c conda-forge z5py xtensor boost nlohmann_json blosc
     # now get libraries that are not in conda-forge
     - mkdir lib
     - cd lib

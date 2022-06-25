@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.12)
 
 set (CMAKE_CXX_STANDARD 17)
 project(PommerLearn CXX)
@@ -101,6 +101,13 @@ file(GLOB CrazyAra_source_files
     "deps/CrazyAra/engine/3rdparty/Stockfish/src/*.cpp"
 )
 
+# ignore most library warnings
+set_source_files_properties(
+  "deps/CrazyAra" "$ENV{CONDA_ENV_PATH}/include" "$ENV{BLAZE_PATH}"
+  PROPERTIES
+  COMPILE_FLAGS "-w"
+)
+
 if (USE_TENSORRT)
     # add additional source file
     set(CrazyAra_source_files
@@ -195,15 +202,3 @@ file(GLOB lib_files
 )
 add_library(${lib_name} SHARED ${source_files_nomain} ${lib_files})
 target_link_libraries(${lib_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp)
-
-# Testing
-
-set(test_name ${PROJECT_NAME}Test)
-
-file(GLOB test_files
-    "cpp/test/*.cpp"
-)
-
-add_executable(${test_name} ${source_files_nomain} ${test_files})
-target_link_libraries(${test_name} ${CMAKE_THREAD_LIBS_INIT} ${BLOSC} CrazyAra pomcpp Boost::program_options)
-
