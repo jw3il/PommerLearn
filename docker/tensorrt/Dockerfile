@@ -1,9 +1,15 @@
 # syntax=docker/dockerfile:1
 FROM nvcr.io/nvidia/tensorrt:21.07-py3
 
-# get blaze and install its dependencies + libx11-dev as runtime requirement
+# install dependencies and get blaze
 ENV BLAZE_PATH="/usr/local/include/blaze"
-RUN apt-get update && apt-get -y install libblas-dev liblapack-dev libx11-dev && apt-get -y clean && \
+RUN apt-get update && \
+    # general dependencies
+    apt-get -y install git wget libx11-dev \
+    # blaze dependencies
+    libblas-dev liblapack-dev && \
+    apt-get -y clean && \
+    # get and unpack blaze
     wget -nv https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz && \
     tar -xf blaze-3.8.tar.gz && \
     cp -r ./blaze-3.8/blaze /usr/local/include && \
@@ -21,11 +27,10 @@ RUN wget -nv https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.
     # required for training
     conda install -y pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch && \
     # required for cpp build
-    conda install -y z5py xtensor boost nlohmann_json blosc catch2 -c conda-forge && \
+    conda install -y z5py xtensor boost nlohmann_json blosc -c conda-forge && \
     # main runtime dependencies
     pip install --no-input --no-cache-dir numpy matplotlib imageio zarr numcodecs tqdm sklearn tensorboard && \
     conda clean --all --yes
-
 
 # set environment variables from parent image
 ENV TENSORRT_PATH="/opt/tensorrt"
@@ -34,7 +39,6 @@ ENV CUDA_PATH="/usr/local/cuda"
 # clone repository
 WORKDIR /
 RUN git clone https://gitlab.com/jweil/PommerLearn.git
-
 
 # initial submodule checkout (not recursive) + install python runtime dependencies
 WORKDIR /PommerLearn
@@ -58,7 +62,7 @@ RUN git pull && \
 # build the binary
 WORKDIR /PommerLearn/build
 RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSE_TENSORRT8=ON -DCMAKE_CXX_COMPILER="$(which g++)" .. && \
-    make VERBOSE=1 all -j$(nproc) && \
+    make VERBOSE=1 all -j8 && \
     # clear the cache
     rm -r CMakeFiles
 

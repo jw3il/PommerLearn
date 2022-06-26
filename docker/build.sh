@@ -8,9 +8,15 @@ SCRIPT=$(readlink -f "$0")
 # Absolute path this script is in, thus /home/user/bin
 SCRIPTPATH=$(dirname "$SCRIPT")
 
-# The image we want to build
-IMAGE=tensorrt
+# The tag we want to build
+if [[ -z "${TAG}" ]]; then
+  TAG=tensorrt
+  echo "Using default TAG='${TAG}'. Available:"
+  find ${SCRIPTPATH}/* -type d | sed -r 's/.*\/(.*)$/- \1/'
+fi
 
-# Build our image with the current timestamp
+echo "Building pommer image with tag '${TAG}'."
+
 # Trick: Insert additional build args before the path using "$@" (e.g. --no-cache)
-docker build --build-arg BUILD_TIMESTAMMP=$(date +%Y%m%d-%H%M%S) -t "pommer-${IMAGE}" "$@" "${SCRIPTPATH}/${IMAGE}/"
+# Build our image with the current timestamp
+docker build --build-arg BUILD_TIMESTAMMP=$(date +%Y%m%d-%H%M%S) -t "pommer:${TAG}" "$@" "${SCRIPTPATH}/${TAG}/"

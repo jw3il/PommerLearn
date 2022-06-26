@@ -49,7 +49,6 @@ build:
   artifacts:
     paths:
       - ./build/PommerLearn
-      - ./build/PommerLearnTest
       - ./build/libCrazyAra.so
       - ./build/libpomcpp.so
       - ./build/libPommerLearnPy.so

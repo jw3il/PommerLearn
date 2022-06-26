@@ -10,9 +10,11 @@ if [[ -z "${POMMER_SHM_SIZE}" ]]; then
     echo "Environment variable \$POMMER_SHM_SIZE is not set. Using default ${POMMER_SHM_SIZE}"
 fi
 
-IMG=tensorrt
+if [[ -z "${TAG}" ]]; then
+  TAG=tensorrt
+fi
 
 # Run the image and pass additional args with "$@"
-docker run --gpus all -v "${POMMER_DATA_DIR}":/data --rm --shm-size="${POMMER_SHM_SIZE}" "pommer-${IMG}" \
+docker run --gpus all -v "${POMMER_DATA_DIR}":/data --rm --shm-size="${POMMER_SHM_SIZE}" "pommer:${TAG}" \
     conda run --no-capture-output -n pommer \
     python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec /PommerLearn/build/PommerLearn "$@"

@@ -10,6 +10,8 @@ if [[ -z "${POMMER_SHM_SIZE}" ]]; then
     echo "Environment variable \$POMMER_SHM_SIZE is not set. Using default ${POMMER_SHM_SIZE}"
 fi
 
-IMG=tensorrt
+if [[ -z "${TAG}" ]]; then
+  TAG=tensorrt
+fi
 
-docker run --gpus all -v "${POMMER_DATA_DIR}":/data --rm --shm-size="${POMMER_SHM_SIZE}" -it "pommer-${IMG}"
+docker run --gpus all -v "${POMMER_DATA_DIR}":/data --rm --shm-size="${POMMER_SHM_SIZE}" -it "pommer:${TAG}"

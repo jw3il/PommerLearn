@@ -7,7 +7,11 @@ Idea: Combine Multi-Agent Reinforcement Learning and Monte-Carlo Tree Search (MC
 The simplest way to get started and execute runs is to build a docker image and run it as a container.
 
 Available backends:
-- TensorRT (NVIDIA GPU required)
+- TensorRT (**NVIDIA GPU required**)
+
+### Prerequisites
+
+To use NVIDIA GPUs in docker containers, you have to install docker and nvidia-docker2. Have a look at the installation guide https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html.
 
 ### Build Scripts
 
@@ -15,7 +19,7 @@ We provide small scripts to facilitate building the image and running experiment
 
 1. Build the image
     ```
-    bash docker/build.sh
+    $ bash docker/build.sh
     ```
     This automatically caches the dependencies. If you run it again, only the code is rebuilt. If you want to rebuild the whole image, just call `bash docker/build.sh --no-cache`.
 
@@ -23,102 +27,118 @@ We provide small scripts to facilitate building the image and running experiment
 
 3. Create a container and run the training loop (replace `--help` with the arguments of your choice)
     ```
-    bash docker/run.sh --help
+    $ bash docker/run.sh --help
     ```
     * Note that `--dir` and `--exec` are already specified correctly by `docker/run.sh`.
     * All GPUs are visible in the container and gpu 0 is used by default. You can specify the gpu to be used like `--gpu 4`.
 
-### Manual Build
+### Manual Docker Build
 
 Of course, you can also build and run the image manually. Have a closer look at the scripts from the previous section for details.
 
 Additional notes:
-* You can limit the gpu access of a container like `--gpus device=4`.
+* You can limit the gpu access of a container like `--gpus device=4`. However, PommerLearn has a `--gpu` argument that can be used instead.
 * **Warning**: If you use rootless docker, the container will probably run out of memory. 
     Adding `--ipc=host` or `--shm-size=32g` to the `docker run` command helps.
     This is also done by default in `docker/run.sh`.
 
 ## Development
 
-### Prerequisites
+### Manual Installation of Dependencies
 
 For the python side:
 
-* `python 3.7`
+* `python 3.7` and `pip`
 
     It is recommend to use virtual environments. This guide will use [Anaconda](https://www.anaconda.com/). Create an environment named `pommer` with
 
     ```
-    conda create -n pommer python=3.7
+    $ conda create -n pommer python=3.7
     ```
-
-* `pip`
 
 For the C++ side:
 
-* `gcc`
-
-* `make`
-
-* [z5](https://github.com/constantinpape/z5), [xtensor](https://github.com/xtensor-stack/xtensor), [boost](boost.org), [json by nlohmann](https://github.com/nlohmann/json/), [catch2](https://github.com/catchorg/Catch2)
-
-    You can directly install these libraries with conda in the pommer env:
+* Essential build tools: `gcc`, `make`, `cmake`
 
     ```
-    conda install -c conda-forge z5py xtensor boost nlohmann_json blosc
+    $ sudo apt install build-essential cmake
     ```
 
-* [blaze](https://bitbucket.org/blaze-lib/blaze/src/master/)
+* The dependencies [z5](https://github.com/constantinpape/z5), [xtensor](https://github.com/xtensor-stack/xtensor), [boost](boost.org) and [json by nlohmann](https://github.com/nlohmann/json/) can directly be installed with conda in the pommer environment:
 
-    Blaze needs to be installed manually.
+    ```
+    (pommer) $ conda install -c conda-forge z5py xtensor boost nlohmann_json blosc
+    ```
 
-    * https://bitbucket.org/blaze-lib/blaze/downloads/
-
-    * https://bitbucket.org/blaze-lib/blaze/wiki/Configuration%20and%20Installation#!manual-installation-on-linuxmacos
+* [Blaze](https://bitbucket.org/blaze-lib/blaze/src/master/) needs to be installed manually. Note that it can be unpacked anywhere, it does not have to be `/usr/local`. For further information, you can refer to the [installation guide](https://bitbucket.org/blaze-lib/blaze/wiki/Configuration%20and%20Installation#!manual-installation-on-linuxmacos) or the Dockerfiles in this repository.
 
     ```
     cmake -DCMAKE_INSTALL_PREFIX=/usr/local/
     sudo make install
     export BLAZE_PATH=/usr/local/include/
     ```
+* Manual installation of **TensorRT** (not Torch-TensorRT), including CUDA and cuDNN. Please refer to the installation guide by NVIDIA https://developer.nvidia.com/tensorrt-getting-started. We recommend a version >= 8
 
 (Tested on Ubuntu 20.04 LTS)
 
-### Setup
-
-#### Download
+### Clone Repository
 
 This repository depends on submodules. Clone it and initialize all submodules with
 
 ```
-git clone git@gitlab.com:jweil/PommerLearn.git && \
-cd PommerLearn && \
-git submodule update --init
+$ git clone git@gitlab.com:jweil/PommerLearn.git && \
+$ cd PommerLearn && \
+$ git submodule update --init
 ```
 
-#### Build and Installation
+### How to build
 
-* Build the C++ environment with the provided `CMakeLists.txt`.
-
-    The current version requires you to set the env variables
+1. The current version requires you to set the env variables
 
     * `CONDA_ENV_PATH`: path of your conda environment (e.g. `~/conda/envs/pommer`)
     * `BLAZE_PATH`: blaze installation path (e.g. `/usr/local/include`)
     * `CUDA_PATH`: cuda installation path (e.g. `/usr/local/cuda`)
     * `TENSORRT_PATH` (when using the CrazyAra TensorRT backend, e.g. `/usr/src/tensorrt`)
-    * `Torch_DIR` (when using the CrazyAra Torch backend)
+    * [`Torch_DIR`] (when using the CrazyAra Torch backend, currently untested)
 
-* The python dependencies can be installed with
+2. Build the C++ environment with the provided `CMakeLists.txt`. To use TensorRT >= 8 (recommended), you have to specify `-DUSE_TENSORRT8=ON`.
 
-    ```
-    pip install -r requirements.txt
-    ```
+```
+/PommerLearn/build $ cmake -DCMAKE_BUILD_TYPE=Release -DUSE_TENSORRT8=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
+/PommerLearn/build $ make VERBOSE=1 all -j8
+```
 
-#### Troubleshooting Notes
+### How to run
+
+The remaining python runtime dependencies can be installed with
+```
+(pommer) $ pip install -r requirements.txt
+```
+
+Before starting the RL loop, you can check whether everything is set up correctly by creating a dummy model and loading it in the cpp executable:
+
+```
+(pommer) /PommerLearn/build $ python ../pommerlearn/debug/create_dummy_model.py
+(pommer) /PommerLearn/build $ ./PommerLearn --mode=ffa_mcts --model=./model/onnx
+```
+
+You can then start training by running
+
+```
+(pommer) /PommerLearn/build $ python ../pommerlearn/training/rl_loop.py
+```
+
+### Troubleshooting
+
+Prerequisites and Building
+* Make sure that you've pulled all submodules recursively
 * In older versions of TensorRT, you have to manually comment out `using namespace sample;` in `deps/CrazyAra/engine/src/nn/tensorrtapi.cpp`
-* Make sure that you've pulled all submodules recursively (including Stockfish for CrazyAra)
 
-## Performance Profiling
+Running
+* For runtime issues like `libstdc++.so.6: version 'GLIBCXX_3.4.30' not found`, try loading your system libraries with `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/`.
+* If you encounter errors like `ModuleNotFoundError: No module named 'training'`, set your `PYTHONPATH` to the `pommerlearn` directory. For example, `export PYTHONPATH=/PommerLearn/pommerlearn`.
+
+### Performance Profiling
 
 Install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html):
 * https://github.com/jrfonseca/gprof2dot
