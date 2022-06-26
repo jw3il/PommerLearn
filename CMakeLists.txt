@@ -27,7 +27,7 @@ endfunction()
 # conda-forge headers
 
 check_env_defined("CONDA_ENV_PATH")
-include_directories("$ENV{CONDA_ENV_PATH}/include")
+include_directories(SYSTEM "$ENV{CONDA_ENV_PATH}/include")
 
 # xtensor and gcc > 5.1 https://xtensor.readthedocs.io/en/latest/compilers.html
 # add_definitions(-DXTENSOR_GLIBCXX_USE_CXX11_ABI)
@@ -47,7 +47,7 @@ add_definitions(-DMCTS_SINGLE_PLAYER)
 add_definitions(-DYNAMIC_NN_ARCH)
 
 check_env_defined("BLAZE_PATH")
-include_directories("$ENV{BLAZE_PATH}")
+include_directories(SYSTEM "$ENV{BLAZE_PATH}")
 
 if (USE_TENSORRT)
     # build CrazyAra with TensorRT support
@@ -88,22 +88,11 @@ file(GLOB CrazyAra_source_files
     "deps/CrazyAra/engine/src/manager/*.h"
     "deps/CrazyAra/engine/src/rl/*.cpp"
     "deps/CrazyAra/engine/src/rl/*.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/syzygy/tbprobe.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/syzygy/tbprobe.cpp"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/types.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/types.cpp"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/position.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/position.cpp"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/uci.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/uci.cpp"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/bitboard.h"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/bitboard.cpp"
-    "deps/CrazyAra/engine/3rdparty/Stockfish/src/*.cpp"
 )
 
 # ignore most library warnings
 set_source_files_properties(
-  "deps/CrazyAra" "$ENV{CONDA_ENV_PATH}/include" "$ENV{BLAZE_PATH}"
+  "$ENV{CONDA_ENV_PATH}/include" "$ENV{BLAZE_PATH}"
   PROPERTIES
   COMPILE_FLAGS "-w"
 )
@@ -120,9 +109,9 @@ include_directories("deps/CrazyAra/engine/src")
 include_directories("deps/CrazyAra/engine/src/nn/")
 include_directories("deps/CrazyAra/engine/src/agents/")
 
-include_directories("deps/CrazyAra/engine/3rdparty/Stockfish/src")
-
 add_library(CrazyAra SHARED ${CrazyAra_source_files})
+# ignore warnings in CrazyAra
+target_compile_options(CrazyAra PRIVATE "-w")
 
 if (USE_TORCH)
     target_link_libraries(CrazyAra "${TORCH_LIBRARIES}")
