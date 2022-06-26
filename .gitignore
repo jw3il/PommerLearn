@@ -1,3 +1,8 @@
 .idea/
+.vscode/
+.editorconfig/
 *__pycache__*
 CMakeLists.txt.user
+
+build/
+lib/
