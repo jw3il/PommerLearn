@@ -246,7 +246,7 @@ def rl_loop(data_dir: Path, max_iterations, exec_path: Path, dataset_args: list,
     :param model_init_dir: Directory of the model to be used in the first iteration. If None, a new model is created.
     """
     global stop_rl
-    data_dir.mkdir(exist_ok=True)
+    data_dir.mkdir(exist_ok=True, parents=True)
 
     # copy the executable and rename this copy according to rtpt (to be removed after the rl loop)
     # => if this process is killed, we don't have to manually rename the original executable again
