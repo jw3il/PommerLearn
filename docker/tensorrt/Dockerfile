@@ -22,10 +22,12 @@ ENV CONDA_ENV_PATH="/opt/miniconda3/envs/pommer"
 RUN wget -nv https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda3.sh && \
     bash miniconda3.sh -b -p /opt/miniconda3 && \
     rm miniconda3.sh && \
+    # the latest release does not always contain the latest version
+    conda update -n base -c defaults conda && \
     conda create -n pommer python=3.7 && \
     source /opt/miniconda3/bin/activate pommer && \
     # required for training
-    conda install -y pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch && \
+    conda install -y pytorch==1.9.0 torchvision==0.10.0 torchaudio==0.9.0 cudatoolkit=11.1 -c conda-forge -c pytorch && \
     # required for cpp build
     conda install -y z5py xtensor boost nlohmann_json blosc -c conda-forge && \
     # main runtime dependencies

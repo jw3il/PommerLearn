@@ -7,7 +7,7 @@ Idea: Combine Multi-Agent Reinforcement Learning and Monte-Carlo Tree Search (MC
 The simplest way to get started and execute runs is to build a docker image and run it as a container.
 
 Available backends:
-- TensorRT (**NVIDIA GPU required**)
+- TensorRT (**NVIDIA GPU required**): Tested with TensorRT 8.0.1 and PyTorch 1.9.0.
 
 ### Prerequisites
 
@@ -77,9 +77,7 @@ For the C++ side:
     sudo make install
     export BLAZE_PATH=/usr/local/include/
     ```
-* Manual installation of **TensorRT** (not Torch-TensorRT), including CUDA and cuDNN. Please refer to the installation guide by NVIDIA https://developer.nvidia.com/tensorrt-getting-started. We recommend a version >= 8
-
-(Tested on Ubuntu 20.04 LTS)
+* Manual installation of **TensorRT** (not Torch-TensorRT), including CUDA and cuDNN. Please refer to the installation guide by NVIDIA https://developer.nvidia.com/tensorrt-getting-started.
 
 ### Clone Repository
 
@@ -109,6 +107,12 @@ $ git submodule update --init
 ```
 
 ### How to run
+
+Optional: You can install PyTorch 1.9.0 with GPU support via
+
+```
+conda install -y pytorch==1.9.0 torchvision==0.10.0 torchaudio==0.9.0 cudatoolkit=11.1 -c conda-forge -c pytorch
+```
 
 The remaining python runtime dependencies can be installed with
 ```
