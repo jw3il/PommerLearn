@@ -38,7 +38,6 @@ class _EfficientChannelAttentionModule(torch.nn.Module):
         """
         ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks - Wang et al. - https://arxiv.org/pdf/1910.03151.pdf
         :param channels: Number of channels for 1st conv operation
-        :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
         :param nb_input_channels: Number of input channels of the board representation
         """
@@ -112,7 +111,6 @@ class MixConv(Module):
         Mix depth-wise convolution layers, Mingxing Tan, Quoc V. Le, https://arxiv.org/abs/1907.09595
         :param in_channels: Number of input channels
         :param out_channels: Number of convolutional channels
-        :param bn_mom: Batch normalization momentum
         :param kernels: List of kernel sizes to use
         :return: symbol
         """
@@ -145,11 +143,10 @@ class MixConv(Module):
 
 
 class _Stem(torch.nn.Module):
-    def __init__(self, channels, bn_mom=0.9, act_type="relu", nb_input_channels=34):
+    def __init__(self, channels, act_type="relu", nb_input_channels=34):
         """
         Definition of the stem proposed by the alpha zero authors
         :param channels: Number of channels for 1st conv operation
-        :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
         :param nb_input_channels: Number of input channels of the board representation
         """
@@ -159,7 +156,7 @@ class _Stem(torch.nn.Module):
         self.body = Sequential(
             Conv2d(in_channels=nb_input_channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1),
                    bias=False),
-            BatchNorm2d(momentum=bn_mom, num_features=channels),
+            BatchNorm2d(num_features=channels),
             get_act(act_type))
 
     def forward(self, x):
@@ -173,16 +170,16 @@ class _Stem(torch.nn.Module):
 
 
 class _DepthWiseStem(Module):
-    def __init__(self, channels, bn_mom=0.9, act_type="relu", nb_input_channels=34):
+    def __init__(self, channels, act_type="relu", nb_input_channels=34):
         """
         Sames as _Stem() but with group depthwise convolutions
         """
         super(_DepthWiseStem, self).__init__()
         self.body = Sequential(Conv2d(in_channels=nb_input_channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               BatchNorm2d(num_features=channels),
                                get_act(act_type),
                                Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False, groups=channels),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               BatchNorm2d(num_features=channels),
                                get_act(act_type),
                                Conv2d(in_channels=channels, out_channels=channels, kernel_size=(1, 1), padding=(0, 0), bias=True),
                                )
@@ -198,12 +195,11 @@ class _DepthWiseStem(Module):
 
 
 class _PolicyHead(Module):
-    def __init__(self, board_height=11, board_width=11, channels=256, policy_channels=2, n_labels=4992, bn_mom=0.9, act_type="relu",
+    def __init__(self, board_height=11, board_width=11, channels=256, policy_channels=2, n_labels=4992, act_type="relu",
                  select_policy_from_plane=False):
         """
         Definition of the value head proposed by the alpha zero authors
         :param policy_channels: Number of channels for 1st conv operation in branch 0
-        :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
         channelwise squeeze excitation, channel-spatial-squeeze-excitation, respectively
         """
@@ -215,14 +211,14 @@ class _PolicyHead(Module):
 
         if self.select_policy_from_plane:
             self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels, padding=1, kernel_size=(3, 3), bias=False),
-                                   BatchNorm2d(momentum=bn_mom, num_features=channels),
+                                   BatchNorm2d(num_features=channels),
                                    get_act(act_type),
                                    Conv2d(in_channels=channels, out_channels=policy_channels, padding=1, kernel_size=(3, 3), bias=False))
             self.nb_flatten = policy_channels*board_width*policy_channels
 
         else:
             self.body = Sequential(Conv2d(in_channels=channels, out_channels=policy_channels, kernel_size=(1, 1), bias=False),
-                                   BatchNorm2d(momentum=bn_mom, num_features=policy_channels),
+                                   BatchNorm2d(num_features=policy_channels),
                                    get_act(act_type))
 
             self.nb_flatten = board_height*board_width*policy_channels
@@ -242,7 +238,7 @@ class _PolicyHead(Module):
 
 
 class _ValueHead(Module):
-    def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, bn_mom=0.9, act_type="relu", use_raw_features=False, nb_input_channels=18):
+    def __init__(self, board_height=11, board_width=11, channels=256, channels_value_head=1, fc0=256, act_type="relu", use_raw_features=False, nb_input_channels=18):
         """
         Definition of the value head proposed by the alpha zero authors
         :param board_height: Height of the board
@@ -250,14 +246,13 @@ class _ValueHead(Module):
         :param channels: Number of channels as input
         :param channels_value_head: Number of channels for 1st conv operation in branch 0
         :param fc0: Number of units in Dense/Fully-Connected layer
-        :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
         """
 
         super(_ValueHead, self).__init__()
 
         self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_value_head, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_value_head),
+                               BatchNorm2d(num_features=channels_value_head),
                                get_act(act_type))
 
         self.use_raw_features = use_raw_features
@@ -320,19 +315,18 @@ class TimeDistributed(Module):
 
 
 class _ValueHeadFlat(Module):
-    def __init__(self, in_features=512, fc0=256, bn_mom=0.9, act_type="relu"):
+    def __init__(self, in_features=512, fc0=256, act_type="relu"):
         """
         Value head which uses flattened features as input
         :param in_features: Number of input features
         :param fc0: Number of units in Dense/Fully-Connected layer
-        :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
         """
 
         super(_ValueHeadFlat, self).__init__()
 
         self.body = Sequential(Linear(in_features=in_features, out_features=fc0),
-                               BatchNorm1d(momentum=bn_mom, num_features=fc0),
+                               BatchNorm1d(num_features=fc0),
                                get_act(act_type),
                                Linear(in_features=fc0, out_features=1),
                                get_act("tanh")
@@ -348,11 +342,10 @@ class _ValueHeadFlat(Module):
 
 
 class _PolicyHeadFlat(Module):
-    def __init__(self, in_features=512, fc0=256, bn_mom=0.9, act_type="relu", n_labels=4992):
+    def __init__(self, in_features=512, fc0=256, act_type="relu", n_labels=4992):
         """
         Definition of the value head proposed by the alpha zero authors
         :param policy_channels: Number of channels for 1st conv operation in branch 0
-        :param bn_mom: Batch normalization momentum parameter
         :param act_type: Activation type to use
         channelwise squeeze excitation, channel-spatial-squeeze-excitation, respectively
         """
@@ -363,7 +356,7 @@ class _PolicyHeadFlat(Module):
         # self.select_policy_from_plane = select_policy_from_plane
 
         self.body = Sequential(Linear(in_features=in_features, out_features=fc0),
-                               BatchNorm1d(momentum=bn_mom, num_features=fc0),
+                               BatchNorm1d(num_features=fc0),
                                get_act(act_type),
                                Linear(in_features=fc0, out_features=n_labels),
                                )

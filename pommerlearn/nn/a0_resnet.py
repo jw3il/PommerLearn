@@ -75,20 +75,19 @@ class ResidualBlock(torch.nn.Module):
     Definition of a residual block without any pooling operation
     """
 
-    def __init__(self, channels, bn_mom, act_type):
+    def __init__(self, channels, act_type):
         """
         :param channels: Number of channels used in the conv-operations
-        :param bn_mom: Batch normalization momentum
         :param act_type: Activation function to use
         """
         super(ResidualBlock, self).__init__()
         self.act_type = act_type
 
         self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               BatchNorm2d(num_features=channels),
                                get_act(act_type),
                                Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), padding=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels),
+                               BatchNorm2d(num_features=channels),
                                get_act(act_type))
 
     def forward(self, x):
@@ -115,7 +114,6 @@ class AlphaZeroResnet(PommerModel):
         channels_policy_head=2,
         num_res_blocks=19,
         value_fc_size=256,
-        bn_mom=0.9,
         act_type="relu",
         select_policy_from_plane=False,
     ):
@@ -126,7 +124,6 @@ class AlphaZeroResnet(PommerModel):
         :param channels_value_head: Number of channels in the bottle neck for the value head
         :param num_res_blocks: Number of residual blocks to stack. In the paper they used 19 or 39 residual blocks
         :param value_fc_size: Fully Connected layer size. Used for the value output
-        :param bn_mom: Batch normalization momentum
         :return: net description
         """
 
@@ -135,16 +132,16 @@ class AlphaZeroResnet(PommerModel):
 
         res_blocks = []
         for i in range(num_res_blocks):
-            res_blocks.append(ResidualBlock(channels, bn_mom, act_type))
+            res_blocks.append(ResidualBlock(channels, act_type))
 
-        self.body = Sequential(_Stem(channels=channels, bn_mom=bn_mom, act_type=act_type,
+        self.body = Sequential(_Stem(channels=channels, act_type=act_type,
                                      nb_input_channels=nb_input_channels),
                                *res_blocks)
 
         # create the two heads which will be used in the hybrid fwd pass
-        self.value_head = _ValueHead(board_height, board_width, channels, channels_value_head, value_fc_size, bn_mom, act_type)
+        self.value_head = _ValueHead(board_height, board_width, channels, channels_value_head, value_fc_size, act_type)
         self.policy_head = _PolicyHead(board_height, board_width, channels, channels_policy_head, n_labels,
-                                       bn_mom, act_type, select_policy_from_plane)
+                                       act_type, select_policy_from_plane)
 
     def forward(self, flat_input):
         """

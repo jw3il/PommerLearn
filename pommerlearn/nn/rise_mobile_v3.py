@@ -32,7 +32,7 @@ from nn.builder_util import get_act, MixConv, _ValueHead, _PolicyHead, _Stem, ge
 
 class _PreactResidualMixConvBlock(Module):
 
-    def __init__(self, channels, channels_operating, kernels=None, act_type='relu', se_ratio=4, se_type="se", bn_mom=0.9):
+    def __init__(self, channels, channels_operating, kernels=None, act_type='relu', se_ratio=4, se_type="se"):
         """
         Returns a residual block without any max pooling operation
         :param channels: Number of filters for all CNN-layers
@@ -45,12 +45,12 @@ class _PreactResidualMixConvBlock(Module):
         """
         super(_PreactResidualMixConvBlock, self).__init__()
 
-        self.body = Sequential(BatchNorm2d(momentum=bn_mom, num_features=channels),
+        self.body = Sequential(BatchNorm2d(num_features=channels),
                                Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               BatchNorm2d(num_features=channels_operating),
                                get_act(act_type),
                                MixConv(in_channels=channels_operating, out_channels=channels_operating, kernels=kernels),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               BatchNorm2d(num_features=channels_operating),
                                get_act(act_type),
                                Conv2d(in_channels=channels_operating, out_channels=channels, kernel_size=(1, 1), bias=False),
                                )
@@ -66,7 +66,7 @@ class _PreactResidualMixConvBlock(Module):
 
 class _BottlekneckResidualBlock(Module):
 
-    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', se_type=None, bn_mom=0.9):
+    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', se_type=None):
         """
         Returns a residual block without any max pooling operation
         :param channels: Number of filters for all CNN-layers
@@ -81,13 +81,13 @@ class _BottlekneckResidualBlock(Module):
         if se_type:
             self.se = get_se(se_type=se_type, channels=channels, use_hard_sigmoid=False)
         self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               BatchNorm2d(num_features=channels_operating),
                                get_act(act_type),
                                Conv2d(in_channels=channels_operating, out_channels=channels_operating, kernel_size=(kernel, kernel), padding=(kernel // 2, kernel // 2), bias=False, groups=channels_operating),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               BatchNorm2d(num_features=channels_operating),
                                get_act(act_type),
                                Conv2d(in_channels=channels_operating, out_channels=channels, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels))
+                               BatchNorm2d(num_features=channels))
 
     def forward(self, x):
         """
@@ -102,7 +102,7 @@ class _BottlekneckResidualBlock(Module):
 
 class _StridedBottlekneckBlock(Module):
 
-    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', se_type=None, bn_mom=0.9):
+    def __init__(self, channels, channels_operating, kernel=3, act_type='relu', se_type=None):
         """
         Returns a residual block without any max pooling operation
         :param channels: Number of filters for all CNN-layers
@@ -116,14 +116,14 @@ class _StridedBottlekneckBlock(Module):
         if se_type:
             self.se = get_se(se_type=se_type, channels=channels, use_hard_sigmoid=False)
         self.body = Sequential(Conv2d(in_channels=channels, out_channels=channels_operating, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               BatchNorm2d(num_features=channels_operating),
                                get_act(act_type),
                                Conv2d(in_channels=channels_operating, out_channels=channels_operating,
                                       kernel_size=(kernel, kernel), stride=(2, 2), padding=(kernel // 2, kernel // 2), bias=False, groups=channels_operating),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels_operating),
+                               BatchNorm2d(num_features=channels_operating),
                                get_act(act_type),
                                Conv2d(in_channels=channels_operating, out_channels=channels*2, kernel_size=(1, 1), bias=False),
-                               BatchNorm2d(momentum=bn_mom, num_features=channels*2))
+                               BatchNorm2d(num_features=channels*2))
 
     def forward(self, x):
         """
@@ -137,11 +137,10 @@ class _StridedBottlekneckBlock(Module):
 
 
 class MLPBlock(Module):
-    def __init__(self, act_type='relu', bn_mom=0.9, in_features=256, out_features=256):
+    def __init__(self, act_type='relu', in_features=256, out_features=256):
         """
         Simple multi layer perceptron block
         :param act_type: Activation type
-        :param bn_mom: Batch momentum
         :param in_features: Number of input features
         :param out_features: Nubmer of output features
         """
@@ -149,7 +148,7 @@ class MLPBlock(Module):
 
         self.body = Sequential(
             Linear(in_features=in_features, out_features=out_features),
-            BatchNorm1d(momentum=bn_mom, num_features=out_features),
+            BatchNorm1d(num_features=out_features),
             get_act(act_type))
 
     def forward(self, x):
@@ -162,7 +161,7 @@ class MLPBlock(Module):
         return self.body(x)
 
 
-def _get_res_blocks(act_type, bn_mom, channels, channels_operating, kernels,
+def _get_res_blocks(act_type, channels, channels_operating, kernels,
                     se_types, use_downsampling):
     """Helper function which generates the residual blocks for Risev3"""
     res_blocks = []
@@ -172,13 +171,13 @@ def _get_res_blocks(act_type, bn_mom, channels, channels_operating, kernels,
             use_downsampling = False
             res_blocks.append(_StridedBottlekneckBlock(channels=channels, channels_operating=channels_operating * 2,
                                                        kernel=cur_kernel, act_type=act_type,
-                                                       se_type=se_types[idx], bn_mom=bn_mom))
+                                                       se_type=se_types[idx]))
             expansion_factor = 2
         else:
             res_blocks.append(_BottlekneckResidualBlock(channels=channels * expansion_factor,
                                                         channels_operating=channels_operating * expansion_factor,
                                                         kernel=cur_kernel, act_type=act_type,
-                                                        se_type=se_types[idx], bn_mom=bn_mom))
+                                                        se_type=se_types[idx]))
     return res_blocks
 
 
@@ -188,7 +187,7 @@ class RiseV3(PommerModel):
                  channels_value_head=1, channels_policy_head=81, value_fc_size=256,
                  select_policy_from_plane=False, kernels=None, n_labels=6, se_ratio=4,
                  se_types=None, use_avg_features=False, use_raw_features=False, value_nb_hidden=7,
-                 value_dropout=0.15, use_more_features=False, bn_mom=0.9,
+                 value_dropout=0.15, use_more_features=False,
                  board_height=11, board_width=11, use_downsampling=True, slice_scalars=False, nb_scalar_features=4,
                  use_flat_core=True, core_hidden=512, value_hidden=128, policy_hidden=128, use_lstm=False, lstm_layers=1
                  ):
@@ -244,8 +243,8 @@ class RiseV3(PommerModel):
             if se_type not in valid_se_types:
                 raise Exception(f"Unavailable se_type: {se_type}. Available se_types include {se_types}")
 
-        res_blocks = _get_res_blocks(act_type, bn_mom, channels, channels_operating,
-                                          kernels, se_types, use_downsampling)
+        res_blocks = _get_res_blocks(act_type, channels, channels_operating,
+                                     kernels, se_types, use_downsampling)
         expansion_factor = 2 if use_downsampling else 1
         if use_downsampling:
             out_board_width = round(board_width * 0.5)
@@ -258,16 +257,16 @@ class RiseV3(PommerModel):
             nb_input_channels -= self.nb_scalar_features
 
         self.body_spatial = TimeDistributed(Sequential(
-            _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
+            _Stem(channels=channels, act_type=act_type, nb_input_channels=nb_input_channels),
             *res_blocks,
         ), 4)
         self.nb_body_spatial_out = channels * out_board_width * out_board_height * expansion_factor
 
         if slice_scalars:
-            mlp_blocks = [MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=channels_operating,
+            mlp_blocks = [MLPBlock(act_type=act_type, in_features=channels_operating,
                                    out_features=channels_operating)] * len(res_blocks)
             self.body_scalars = TimeDistributed(Sequential(
-                MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_scalar_features,
+                MLPBlock(act_type=act_type, in_features=nb_scalar_features,
                          out_features=channels_operating),
                 *mlp_blocks,
             ), 2)
@@ -275,19 +274,19 @@ class RiseV3(PommerModel):
         # create the two heads which will be used in the hybrid fwd pass
         if self.use_flat_core:
             nb_merged_features = self.nb_body_spatial_out + (channels_operating if self.slice_scalars else 0)
-            self.body_merged = TimeDistributed(MLPBlock(act_type=act_type, bn_mom=bn_mom, in_features=nb_merged_features,
+            self.body_merged = TimeDistributed(MLPBlock(act_type=act_type, in_features=nb_merged_features,
                                         out_features=core_hidden), 2)
 
             if self.use_lstm:
                 self.lstm = LSTM(input_size=core_hidden, hidden_size=core_hidden, batch_first=True,
                                  num_layers=lstm_layers)
 
-            self.value_head = TimeDistributed(_ValueHeadFlat(in_features=core_hidden, fc0=value_hidden, bn_mom=bn_mom, act_type=act_type), 2)
-            self.policy_head = TimeDistributed(_PolicyHeadFlat(in_features=core_hidden, fc0=policy_hidden, bn_mom=bn_mom, act_type=act_type, n_labels=n_labels), 2)
+            self.value_head = TimeDistributed(_ValueHeadFlat(in_features=core_hidden, fc0=value_hidden, act_type=act_type), 2)
+            self.policy_head = TimeDistributed(_PolicyHeadFlat(in_features=core_hidden, fc0=policy_hidden, act_type=act_type, n_labels=n_labels), 2)
         else:
-            self.value_head = _ValueHead(out_board_height, out_board_width, channels*expansion_factor, channels_value_head, value_fc_size, bn_mom, act_type)
+            self.value_head = _ValueHead(out_board_height, out_board_width, channels*expansion_factor, channels_value_head, value_fc_size, act_type)
             self.policy_head = _PolicyHead(out_board_height, out_board_width, channels*expansion_factor, channels_policy_head, n_labels,
-                                                bn_mom, act_type, select_policy_from_plane)
+                                           act_type, select_policy_from_plane)
 
     def get_state_shape(self, batch_size: int):
         # expected size by LSTM: 2 x (num_layers * num_directions, batch, hidden_size)
