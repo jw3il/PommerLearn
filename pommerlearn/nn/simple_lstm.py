@@ -11,7 +11,7 @@ class SimpleLSTM(PommerModel):
     A simple test architecture using lstm.
     """
     def __init__(self, channels=64, nb_input_channels=18, num_res_blocks=2, act_type='relu', embedding_size=256,
-                 hidden_size=128, value_hidden_size=128, policy_hidden_size=128, n_labels=6, bn_mom=0.9,
+                 hidden_size=128, value_hidden_size=128, policy_hidden_size=128, n_labels=6,
                  board_height=11, board_width=11, lstm_num_layers=1):
 
         super().__init__(is_stateful=True)
@@ -19,8 +19,8 @@ class SimpleLSTM(PommerModel):
         self.nb_flatten = board_height * board_width * channels
 
         self.body = TimeDistributed(nn.Sequential(
-            _Stem(channels=channels, bn_mom=bn_mom, act_type=act_type, nb_input_channels=nb_input_channels),
-            *[ResidualBlock(channels, bn_mom, act_type) for _ in range(0, num_res_blocks)],
+            _Stem(channels=channels, act_type=act_type, nb_input_channels=nb_input_channels),
+            *[ResidualBlock(channels, act_type) for _ in range(0, num_res_blocks)],
             nn.Flatten(),
             nn.Linear(self.nb_flatten, embedding_size),
             # Batch norm?
