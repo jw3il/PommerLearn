@@ -3,7 +3,7 @@ from torch import Tensor
 import torch
 import torch.nn.functional as F
 
-from training.loss.masked_continious_cross_entropy import MaskedContiniousCrossEntropyLoss
+from training.loss.masked_continuous_cross_entropy import MaskedContinuousCrossEntropyLoss
 
 
 class MaskedKLDivergenceLoss(_Loss):
@@ -12,7 +12,7 @@ class MaskedKLDivergenceLoss(_Loss):
     """
     def __init__(self) -> None:
         super(MaskedKLDivergenceLoss, self).__init__()
-        self.masked_cross_entropy = MaskedContiniousCrossEntropyLoss()
+        self.masked_cross_entropy = MaskedContinuousCrossEntropyLoss()
 
     def forward(self, log_input: Tensor, target: Tensor, mask: Tensor = None) -> Tensor:
         if mask is None:

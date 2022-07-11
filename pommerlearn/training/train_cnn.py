@@ -24,7 +24,7 @@ from pathlib import Path
 from torch.optim.optimizer import Optimizer
 
 from nn.simple_lstm import SimpleLSTM
-from training.loss.masked_continious_cross_entropy import MaskedContiniousCrossEntropyLoss
+from training.loss.masked_continuous_cross_entropy import MaskedContinuousCrossEntropyLoss
 from training.loss.masked_mse import MaskedMSELoss
 from training.lr_schedules.lr_schedules import CosineAnnealingSchedule, LinearWarmUp,\
     MomentumSchedule, OneCycleSchedule, ConstantSchedule
@@ -98,7 +98,7 @@ def train_cnn(train_config):
         print(f"Loading torch state from {str(model_input_dir)}")
         load_torch_state(model, optimizer, str(get_torch_state_path(model_input_dir)))
 
-    policy_loss = MaskedContiniousCrossEntropyLoss()
+    policy_loss = MaskedContinuousCrossEntropyLoss(train_config["policy_loss_argmax_target"])
     value_loss = MaskedMSELoss()
 
     total_it = len(train_loader) * train_config["nb_epochs"]
@@ -577,6 +577,7 @@ def fill_default_config(train_config):
         "discount_factor": 0.9,
         "mcts_val_weight": 0.5,  # None or in [0, 1]
         "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end", "weighted_actions"
+        "policy_loss_argmax_target": False,
         "min_lr": 0.0001,
         "max_lr": 0.05,
         "min_momentum": 0.8,
