@@ -105,18 +105,19 @@ def train_cnn(train_config):
     lr_schedule, momentum_schedule = get_schedules(total_it, train_config)
 
     log_dir = train_config["tensorboard_dir"]
+    comment = train_config["tensorboard_comment"]
     iteration = train_config["iteration"]
 
     log_config(train_config, log_dir, iteration)
 
     # TODO: Maybe log data sets during RL loop instead?
     last_dataset_path = get_last_dataset_path(train_config["dataset_path"])
-    log_dataset_stats(last_dataset_path, log_dir, iteration)
+    log_dataset_stats(last_dataset_path, log_dir, comment, iteration)
 
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"],
-                                   train_loader, val_loader, device, log_dir, global_step=global_step_start,
+                                   train_loader, val_loader, device, log_dir, comment, global_step=global_step_start,
                                    batches_until_eval=train_config["batches_until_eval"])
 
     base_dir = Path(train_config["output_dir"])
@@ -289,7 +290,7 @@ def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
 
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 value_loss_ratio, train_loader, val_loader, device, log_dir, global_step=0,
+                 value_loss_ratio, train_loader, val_loader, device, log_dir, comment, global_step=0,
                  batches_until_eval: Optional[int] = 100):
     """
     Trains a given model for a number of epochs
@@ -305,7 +306,8 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param train_loader: Training data loader
     :param val_loader: Validation data loader (ignored if None)
     :param device: The device that should be used for training
-    :param log_dir: The (base) log dir for the tensorboard writer(s)
+    :param log_dir: Tensorboard log_dir
+    :param comment: Tensorboard comment
     :param global_step: The global step used for logging
     :param batches_until_eval: Number of batches between evaluations of the current model. The model will also be
                                evaluated at the end.
@@ -315,10 +317,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     m_train = Metrics()
     local_step = 0
 
-    writer_train = SummaryWriter(log_dir=log_dir)
+    writer_train = SummaryWriter(log_dir=log_dir, comment=comment)
     if val_loader is not None:
         log_dir_val = None if log_dir is None else log_dir + "-val"
-        writer_val = SummaryWriter(log_dir=log_dir_val, comment='-val')
+        writer_val = SummaryWriter(log_dir=log_dir_val, comment=f"{comment}-val")
 
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
@@ -607,6 +609,7 @@ def fill_default_config(train_config):
         "use_lstm": False,  # only with flat core
         # logging
         "tensorboard_dir": None,  # None means tensorboard will create a unique path for the run
+        "tensorboard_comment": '',  # Tensorboard comment argument
         "iteration": 0,
         "global_step": 0,
         "batches_until_eval": 100,

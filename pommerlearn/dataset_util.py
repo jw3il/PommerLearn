@@ -781,17 +781,18 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
     return train_loader, test_loader
 
 
-def log_dataset_stats(path, log_dir, iteration):
+def log_dataset_stats(path, log_dir, comment, iteration):
     """
     Log dataset stats to tensorboard.
 
     :param path: The path of a zarr dataset
-    :param log_dir: The logdir of the summary writer
+    :param log_dir: Tensorboard log_dir
+    :param comment: Tensorboard comment
     :param iteration: The iteration this dataset belongs to
     """
     z = zarr.open(str(path), 'r')
 
-    writer = SummaryWriter(log_dir=log_dir)
+    writer = SummaryWriter(log_dir=log_dir, comment=comment)
 
     z_steps = z.attrs['Steps']
     steps = np.array(z.attrs["EpisodeSteps"])
