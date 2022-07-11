@@ -1,4 +1,5 @@
 import argparse
+import pprint
 import re
 import subprocess
 import sys
@@ -363,6 +364,32 @@ def parse_extra_args(args_str: str):
     return exec_args
 
 
+def try_cast(d: dict):
+    """
+    Casts elements of type string in a dictionary to boolean and float if they appear to be of these types.
+
+    :param d: dictionary of strings
+    :returns: the updated dictionary
+    """
+    d = d.copy()
+    for key in d:
+        val = d[key]
+        if not isinstance(val, str):
+            continue
+        if val.isnumeric():
+            d[key] = float(val)
+            continue
+        val_strip_lower = val.strip().lower()
+        if val_strip_lower == 'true':
+            d[key] = True
+            continue
+        if val_strip_lower == 'false':
+            d[key] = False
+            continue
+
+    return d
+
+
 def get_and_remove(d: dict, key, default):
     """
     Get an element from a dictionary and automatically remove it if it exists.
@@ -408,6 +435,9 @@ def main():
     parser.add_argument('--exec-args', default='', type=str,
                         help='Allows to forward arguments to the executable (and replaces default values). Provide '
                              'them as a string of the form "param1 param2=value" or "--param1 --param2=value"')
+    parser.add_argument('--train-args', default='', type=str,
+                        help='Allows to forward arguments to the trainer (and replaces default values). Provide '
+                             'them as a string of the form "param1 param2=value" or "--param1 --param2=value"')
     parser.add_argument('--it', default=100, type=int,
                         help='Maximum number of iterations (-1 for endless run that has to be stopped manually)')
     parser.add_argument('--num-latest', default=4, type=int,
@@ -429,6 +459,7 @@ def main():
 
     parsed_args = parser.parse_args()
     parsed_exec_args = parse_extra_args(parsed_args.exec_args)
+    parsed_train_args = try_cast(parse_extra_args(parsed_args.train_args))
 
     if torch.cuda.is_available() and parsed_args.gpu is not None:
         device_str = f"cuda:{parsed_args.gpu}"
@@ -476,6 +507,11 @@ def main():
         "use_lstm": False,
         "sequence_length": 8,
     }
+    # make sure we don't overwrite some important settings
+    parsed_train_args.pop("tensorboard_dir", None)
+    parsed_train_args.pop("device", None)
+    parsed_train_args.pop("value_version", None)
+    train_config.update(parsed_train_args)
     train_config = training.train_cnn.fill_default_config(train_config)
 
     dataset_args = [
@@ -490,6 +526,12 @@ def main():
         f"--value-version={value_version}",
     ]
     dataset_args.extend(arg_dict_to_arg_list(parsed_exec_args))
+
+    pp = pprint.PrettyPrinter(indent=4)
+    print("Train Config")
+    pp.pprint(train_config)
+    print("Dataset Args")
+    pp.pprint(dataset_args)
 
     if torch.cuda.is_available() and parsed_args.gpu is not None:
         dataset_args += [f"--gpu={parsed_args.gpu}"]
