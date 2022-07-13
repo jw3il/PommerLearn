@@ -11,6 +11,8 @@ from typing import Optional
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
+import onnx
+from onnxsim import simplify
 
 from data_augmentation import *
 from nn import PommerModel
@@ -268,8 +270,15 @@ def export_to_onnx(model, batch_size, dummy_input, dir) -> None:
         input_names = ["data"]
         output_names = ["value_out", "policy_out"]
 
-    torch.onnx.export(model, dummy_input, str(dir / Path(f"model-bsize-{batch_size}.onnx")), input_names=input_names,
+    model_filepath = str(dir / Path(f"model-bsize-{batch_size}.onnx"))
+    torch.onnx.export(model, dummy_input, model_filepath, input_names=input_names,
                       output_names=output_names)
+    # simplify ONNX model
+    # https://github.com/daquexian/onnx-simplifier
+    model = onnx.load(model_filepath)
+    model_simp, check = simplify(model)
+    onnx.save(model, model_filepath)
+    assert check, "Simplified ONNX model could not be validated"
 
 
 def export_as_script_module(model, batch_size, dummy_input, dir) -> None:

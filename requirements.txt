@@ -10,3 +10,5 @@ tqdm
 sklearn
 tensorboard
 rtpt
+onnx
+onnxsim
