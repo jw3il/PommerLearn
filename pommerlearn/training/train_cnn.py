@@ -277,8 +277,9 @@ def export_to_onnx(model, batch_size, dummy_input, dir) -> None:
     # https://github.com/daquexian/onnx-simplifier
     model = onnx.load(model_filepath)
     model_simp, check = simplify(model)
-    onnx.save(model, model_filepath)
-    assert check, "Simplified ONNX model could not be validated"
+    onnx.save(model_simp, model_filepath)
+    if not check:
+        raise Exception("Simplified ONNX model could not be validated")
 
 
 def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
