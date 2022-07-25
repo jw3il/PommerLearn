@@ -364,6 +364,20 @@ def parse_extra_args(args_str: str):
     return exec_args
 
 
+def can_cast_float(a) -> bool:
+    """
+    Checks if the given argument can be cast to float.
+
+    :param a: any element, e.g. string, float, int..
+    :returns: whether the given element a can be cast to float
+    """
+    try:
+        float(a)
+        return True
+    except ValueError:
+        return False
+
+
 def try_cast(d: dict):
     """
     Casts elements of type string in a dictionary to boolean and float if they appear to be of these types.
@@ -376,7 +390,7 @@ def try_cast(d: dict):
         val = d[key]
         if not isinstance(val, str):
             continue
-        if val.isnumeric():
+        if can_cast_float(val):
             d[key] = float(val)
             continue
         val_strip_lower = val.strip().lower()
