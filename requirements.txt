@@ -12,3 +12,4 @@ tensorboard
 rtpt
 onnx
 onnxsim
+onnxruntime
