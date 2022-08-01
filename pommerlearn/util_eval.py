@@ -26,7 +26,7 @@ def ffa_eval_pooled(agent_classes, episodes, verbose):
     )
 
     if verbose:
-        ffa_print_stats(results, episodes)
+        ffa_print_stats(results, None, episodes)
 
     return results
 
@@ -101,7 +101,8 @@ def ffa_print_stats(results, steps, episodes):
     num_won, num_ties = ffa_get_stats(results, episodes)
 
     print("Evaluated {} episodes".format(episodes))
-    print("Average steps: {}".format(steps[:episodes].mean()))
+    if steps is not None:
+        print("Average steps: {}".format(steps[:episodes].mean()))
 
     total_won = np.sum(num_won)
     print("Wins: {} ({:.2f}%)".format(total_won, total_won / episodes * 100))
