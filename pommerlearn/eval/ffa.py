@@ -3,7 +3,7 @@ import pommerman.agents as agents
 from pommerman.agents.simple_agent import SimpleAgent
 import pypomcpp
 from pypomcpp.cppagent import CppAgent
-from pypomcpp.util import ffa_evaluate
+from pypomcpp.util import evaluate
 import pathlib
 from shutil import copyfile
 
@@ -23,7 +23,7 @@ agent_list = [
     CppAgent(create_lib_copy(), "CrazyAra100:./model/torch_cpu", seed=14, print_json=False),
     CppAgent(create_lib_copy(), "SimpleUnbiasedAgent", seed=15),
     CppAgent(create_lib_copy(), "SimpleAgent", seed=16),
-    agents.SimpleAgent()
+    agents.SimpleAgent(),
 ]
 
 # Make the "Free-For-All" environment using the agent list
@@ -36,4 +36,4 @@ if use_env_state:
         if isinstance(a, CppAgent):
             a.use_env_state(env)
 
-ffa_evaluate(env, 10, True, False)
+evaluate(env, 10, True, False)

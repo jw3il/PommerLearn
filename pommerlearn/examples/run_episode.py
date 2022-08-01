@@ -1,5 +1,5 @@
 import pommerman.agents as agents
-import util_eval
+import pypomcpp.eval_ffa as util_eval
 
 
 def main():
