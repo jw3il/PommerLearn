@@ -98,7 +98,7 @@ def train_cnn(train_config):
     model_input_dir = None if train_config["torch_input_dir"] is None else Path(train_config["torch_input_dir"])
     if model_input_dir is not None:
         print(f"Loading torch state from {str(model_input_dir)}")
-        load_torch_state(model, optimizer, str(get_torch_state_path(model_input_dir)))
+        load_torch_state(model, optimizer, str(get_torch_state_path(model_input_dir)), device)
 
     policy_loss = MaskedContinuousCrossEntropyLoss(train_config["policy_loss_argmax_target"])
     value_loss = MaskedMSELoss()
@@ -163,8 +163,8 @@ def get_torch_state_path(base_dir: Path) -> Path:
     return base_dir / "torch_state.tar"
 
 
-def load_torch_state(model: nn.Module, optimizer: Optimizer, path: str):
-    checkpoint = torch.load(path)
+def load_torch_state(model: nn.Module, optimizer: Optimizer, path: str, device):
+    checkpoint = torch.load(path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
