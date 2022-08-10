@@ -6,6 +6,7 @@ Created on 16.06.20
 
 Basic training script to replicate behaviour of baseline agent
 """
+import os
 from typing import Optional
 
 import torch.nn as nn
@@ -110,16 +111,18 @@ def train_cnn(train_config):
     comment = train_config["tensorboard_comment"]
     iteration = train_config["iteration"]
 
+    log_dir = get_logdir(log_dir, comment)
+
     log_config(train_config, log_dir, iteration)
 
     # TODO: Maybe log data sets during RL loop instead?
     last_dataset_path = get_last_dataset_path(train_config["dataset_path"])
-    log_dataset_stats(last_dataset_path, log_dir, comment, iteration)
+    log_dataset_stats(last_dataset_path, log_dir, iteration)
 
     global_step_start = train_config["global_step"]
     global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"],
-                                   train_loader, val_loader, device, log_dir, comment, global_step=global_step_start,
+                                   train_loader, val_loader, device, log_dir, global_step=global_step_start,
                                    batches_until_eval=train_config["batches_until_eval"])
 
     base_dir = Path(train_config["output_dir"])
@@ -132,6 +135,17 @@ def train_cnn(train_config):
     }
 
     return result_dict
+
+
+def get_logdir(log_dir, comment):
+    if log_dir is not None:
+        return log_dir
+
+    # create new log_dir and append comment like in SummaryWriter
+    import socket
+    from datetime import datetime
+    current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+    return os.path.join('runs', current_time + '_' + socket.gethostname() + comment)
 
 
 def get_schedules(total_it, train_config):
@@ -300,7 +314,7 @@ def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
 
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
-                 value_loss_ratio, train_loader, val_loader, device, log_dir, comment, global_step=0,
+                 value_loss_ratio, train_loader, val_loader, device, log_dir, global_step=0,
                  batches_until_eval: Optional[int] = 100):
     """
     Trains a given model for a number of epochs
@@ -317,7 +331,6 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param val_loader: Validation data loader (ignored if None)
     :param device: The device that should be used for training
     :param log_dir: Tensorboard log_dir
-    :param comment: Tensorboard comment
     :param global_step: The global step used for logging
     :param batches_until_eval: Number of batches between evaluations of the current model. The model will also be
                                evaluated at the end.
@@ -327,10 +340,9 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     m_train = Metrics()
     local_step = 0
 
-    writer_train = SummaryWriter(log_dir=log_dir, comment=comment)
+    writer_train = SummaryWriter(log_dir=log_dir)
     if val_loader is not None:
-        log_dir_val = None if log_dir is None else log_dir + "-val"
-        writer_val = SummaryWriter(log_dir=log_dir_val, comment=f"{comment}-val")
+        writer_val = SummaryWriter(log_dir=log_dir + "-val")
 
     # TODO: Nested progress bars would be ideal
     progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
