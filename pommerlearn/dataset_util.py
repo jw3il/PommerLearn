@@ -433,7 +433,8 @@ def get_value_target(z, value_version: int, discount_factor: float, mcts_val_wei
     episode_winner = np.array(z.attrs.get('EpisodeWinner'))
     episode_dead = np.array(z.attrs.get('EpisodeDead'))
     episode_actions = z.attrs.get('EpisodeActions')
-    # episode_draw = np.array(z.attrs.get('EpisodeDraw'))
+    episode_steps = np.array(z.attrs.get('EpisodeSteps'))
+    episode_draw = np.array(z.attrs.get('EpisodeDraw'))
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
 
     # Warning: this is not the true value of the state but instead the Q-value of the "best" (= most selected) move.
@@ -476,6 +477,9 @@ def get_value_target(z, value_version: int, discount_factor: float, mcts_val_wei
         winner = episode_winner[ep]
         dead = episode_dead[ep][agent_id]
 
+        e_draw = episode_draw[ep]
+        e_steps = episode_steps[ep]
+
         died_in_step = get_agent_died_in_step(episode_actions[ep], episode_dead[ep])
 
         # min to handle cut datasets
@@ -490,10 +494,13 @@ def get_value_target(z, value_version: int, discount_factor: float, mcts_val_wei
             # only distribute rewards when the (agent) episode is done
             if winner == agent_id:
                 episode_value = 1
+            elif e_draw and e_steps == steps:
+                # agent is part of the draw
+                episode_value = 0
             elif dead:
                 episode_value = -1
             else:
-                # episode not done
+                # episode not done and agent not dead
                 episode_value = 0
 
             episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
