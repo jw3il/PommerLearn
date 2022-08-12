@@ -6,6 +6,7 @@ import sys
 import os
 import logging
 import threading
+from math import floor
 from pathlib import Path
 import time
 from datetime import datetime
@@ -380,7 +381,7 @@ def can_cast_float(a) -> bool:
 
 def try_cast(d: dict):
     """
-    Casts elements of type string in a dictionary to boolean and float if they appear to be of these types.
+    Casts elements of type string in a dictionary to boolean, float and int if they appear to be of these types.
 
     :param d: dictionary of strings
     :returns: the updated dictionary
@@ -390,9 +391,19 @@ def try_cast(d: dict):
         val = d[key]
         if not isinstance(val, str):
             continue
+
+        # check for float and int
         if can_cast_float(val):
-            d[key] = float(val)
+            float_val = float(val)
+            if float_val == int(float_val):
+                # further cast it if this value is an integer
+                d[key] = int(float_val)
+            else:
+                # otherwise, assign the float
+                d[key] = float_val
             continue
+
+        # check for boolean
         val_strip_lower = val.strip().lower()
         if val_strip_lower == 'true':
             d[key] = True

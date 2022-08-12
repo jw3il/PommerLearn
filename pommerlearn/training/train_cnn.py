@@ -120,7 +120,7 @@ def train_cnn(train_config):
     log_dataset_stats(last_dataset_path, log_dir, iteration)
 
     global_step_start = train_config["global_step"]
-    global_step_end = run_training(model, train_config["nb_epochs"], optimizer, lr_schedule, momentum_schedule,
+    global_step_end = run_training(model, int(train_config["nb_epochs"]), optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"],
                                    train_loader, val_loader, device, log_dir, global_step=global_step_start,
                                    batches_until_eval=train_config["batches_until_eval"])
