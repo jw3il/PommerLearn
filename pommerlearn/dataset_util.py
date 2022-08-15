@@ -650,9 +650,11 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
         else:
             return test_size
 
-    def get_total_sample_count():
+    def get_total_sample_data():
         all_train_samples = 0
         all_test_samples = 0
+        train_start_ixs = np.zeros(len(path_infos), dtype=int)
+        test_start_ixs = np.zeros(len(path_infos), dtype=int)
 
         for i, info in enumerate(path_infos):
             path, proportion = get_elems(info)
@@ -662,16 +664,27 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
             test_samples = int(num_samples * get_test_size(i))
             train_samples = num_samples - test_samples
 
+            if proportion < 1:
+                train_start_ixs[i] = np.random.randint(0, z.attrs['Steps'] - num_samples)
+            else:
+                train_start_ixs[i] = 0
+
+            # split train/test data between two episodes
+            agent_steps_cumulative = np.cumsum(np.array(z.attrs['AgentSteps']))
+            test_start_ixs[i] = agent_steps_cumulative[np.where(agent_steps_cumulative < train_start_ixs[i] + train_samples)[0][-1]]
+            train_samples = test_start_ixs[i] - train_start_ixs[i]
+            test_samples = num_samples - train_samples
+
             all_train_samples += train_samples
             all_test_samples += test_samples
 
-        return all_train_samples, all_test_samples
+        return all_train_samples, all_test_samples, train_start_ixs, test_start_ixs
 
-    total_train_samples, total_test_samples = get_total_sample_count()
+    total_train_samples, total_test_samples, train_start_ixs, test_start_ixs = get_total_sample_data()
 
     if verbose:
         print(f"Loading {total_train_samples + total_test_samples} samples from {len(path_infos)} dataset(s) with "
-              f"test size {test_size}{' only last' if only_test_last else ''} ({total_test_samples} samples) and "
+              f"test size {total_test_samples/(total_train_samples + total_test_samples):.2f}{' only last' if only_test_last else ''} ({total_test_samples} samples) and "
               f"split mode '{test_split_mode}'")
 
     data_train = PommerDataset.create_empty(total_train_samples, transform=train_transform,
@@ -705,20 +718,17 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
         if proportion < 1:
             elem_samples_nb = int(len(elem_samples) * proportion)
-            elem_samples_from = np.random.randint(0, len(elem_samples) - elem_samples_nb)
-
             if verbose:
-                print(f"Selected slice [{elem_samples_from}:{elem_samples_from + elem_samples_nb}] "
+                print(f"Selected slice [{train_start_ixs[i]}:{train_start_ixs[i] + elem_samples_nb}] "
                       f"({elem_samples_nb} samples)")
         else:
             elem_samples_nb = len(elem_samples)
-            elem_samples_from = 0
 
-        test_nb = int(elem_samples_nb * get_test_size(i))
-        train_nb = elem_samples_nb - test_nb
+        train_nb = test_start_ixs[i] - train_start_ixs[i]
+        test_nb = elem_samples_nb - train_nb
 
-        data_train.set(elem_samples, buffer_train_idx, elem_samples_from, train_nb, batch_size=10000)
-        data_test.set(elem_samples, buffer_test_idx, elem_samples_from + train_nb, test_nb, batch_size=10000)
+        data_train.set(elem_samples, buffer_train_idx, train_start_ixs[i], train_nb, batch_size=10000)
+        data_test.set(elem_samples, buffer_test_idx, train_start_ixs[i] + train_nb, test_nb, batch_size=10000)
         del elem_samples
         gc.collect()
 
