@@ -172,6 +172,11 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
 
                 collector->get_buffer()->clear();
             }
+
+            if(config.flushEpisodes >= 0 && (episode + 1) % config.flushEpisodes == 0)
+            {
+                config.ipcManager->flush();
+            }
         }
 
         if (!result.isDone) {

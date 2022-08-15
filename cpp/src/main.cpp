@@ -225,6 +225,9 @@ int main(int argc, char **argv) {
         searchLimits.simulations = configVals["simulations"].as<int>();
         searchLimits.movetime = configVals["movetime"].as<int>();
 
+        // intermediate flushing in case something breaks
+        config.flushEpisodes = 10;
+
         setDefaultFFAConfig(config);
         tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, opponents, searchLimits, switchDepth);
     }

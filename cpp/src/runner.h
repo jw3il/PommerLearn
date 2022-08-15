@@ -80,6 +80,11 @@ struct RunnerConfig
      * @brief ipcManager The IPCManager which is used to save/transmit the episode logs. No logs are saved if this is a nullptr.
      */
     IPCManager* ipcManager = nullptr;
+
+    /**
+     * @brief flushEpisodes The number of episodes until the stored data is flushed by the runner. -1 for no flushing.
+     */
+    int flushEpisodes = -1;
 };
 
 /**
