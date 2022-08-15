@@ -21,8 +21,36 @@
 
 namespace po = boost::program_options;
 
-void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
-             PlanningAgentType planningAgentType, std::string opponents, SearchLimits searchLimits, int switchDepth)
+bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones)
+{
+    if(firstOpponentType == "SimpleUnbiasedAgent")
+    {
+        return new agents::SimpleUnbiasedAgent(rand());
+    }
+    else if(firstOpponentType == "Clone")
+    {
+        auto clone = crazyAraAgent->clone();
+        return clone->get();
+        // store the clone so it does not run out of scope when we exit the loop
+        clones.push_back(std::move(clone));
+    }
+    else if (firstOpponentType == "LazyAgent")
+    {
+        return new agents::LazyAgent();
+    }
+    else if (firstOpponentType == "HarmlessAgent")
+    {
+        return new agents::HarmlessAgent();
+    }
+    else
+    {
+        throw std::runtime_error("Opponent type '" + firstOpponentType + "' is not supported.");
+    }
+}
+
+void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
+             PlanningAgentType planningAgentType, const std::string& firstOpponentType, const std::string& secondOpponentType,
+             SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability)
 {
     srand(config.seed);
     StateConstants::init(false);
@@ -55,20 +83,13 @@ void tourney(std::string modelDir, const int deviceID, RunnerConfig config, bool
     // opponents
     std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
     for(int i = 1; i < bboard::AGENT_COUNT; i++) {
-        if(opponents == "SimpleUnbiasedAgent")
-        {
-            agents[i] = new agents::SimpleUnbiasedAgent(rand());
+        if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
+            // set agent as first type
+            agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones);
         }
-        else if(opponents == "Clone")
-        {
-            auto clone = crazyAraAgent->clone();
-            agents[i] = clone->get();
-            // store the clone so it does not run out of scope when we exit the loop
-            clones.push_back(std::move(clone));
-        }
-        else
-        {
-            throw std::runtime_error("Opponent type '" + opponents + "' is not supported.");
+        else {
+            // set agent as second type
+            agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones);
         }
     }
 
@@ -129,9 +150,13 @@ int main(int argc, char **argv) {
             ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
             ("movetime", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
-            ("opponents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used as opponents. "
-                                                                                          "Available options [SimpleUnbiasedAgent, Clone]. "
-                                                                                          "Clone uses clones of the MCTS agent as opponents and logs their samples.")
+            ("1st-opponent-type", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used as opponents. "
+                                                                                                  "Available options [SimpleUnbiasedAgent, LazyAgent, HarmlessAgent, Clone]. "
+                                                                                                  "Clone uses clones of the MCTS agent as opponents and logs their samples.")
+            ("2nd-opponent-type", po::value<std::string>()->default_value("HarmlessAgent"), "Agent type used as opponents. "
+                                                                                        "Available options [SimpleUnbiasedAgent, LazyAgent, HarmlessAgent, Clone]. "
+                                                                                        "Clone uses clones of the MCTS agent as opponents and logs their samples.")
+            ("1st-opponent-type-probability", po::value<float>()->default_value(1.0), "Probability of occurence of the first opponent type. The second type will use the counter-probability.")
             ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
@@ -219,14 +244,16 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        std::string opponents = configVals["opponents"].as<std::string>();
+        std::string firstOpponentType = configVals["1st-opponent-type"].as<std::string>();
+        std::string secondOpponentType = configVals["2nd-opponent-type"].as<std::string>();
 
         SearchLimits searchLimits;
         searchLimits.simulations = configVals["simulations"].as<int>();
         searchLimits.movetime = configVals["movetime"].as<int>();
 
         setDefaultFFAConfig(config);
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, opponents, searchLimits, switchDepth);
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
+                searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>());
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
