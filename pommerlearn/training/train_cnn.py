@@ -65,8 +65,7 @@ def create_model(train_config):
 
 
 def create_optimizer(model: nn.Module, train_config: dict):
-    return optim.SGD(model.parameters(), lr=train_config["max_lr"], momentum=train_config["max_momentum"],
-                     weight_decay=train_config["weight_decay"])
+    return optim.AdamW(model.parameters(), lr=train_config["max_lr"], weight_decay=train_config["weight_decay"])
 
 
 def train_cnn(train_config):
