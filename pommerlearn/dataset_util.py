@@ -664,14 +664,16 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
             test_samples = int(num_samples * get_test_size(i))
             train_samples = num_samples - test_samples
 
+            agent_steps_cumulative = np.cumsum(np.array(z.attrs['AgentSteps']))
+
             if proportion < 1:
                 train_start_ixs[i] = np.random.randint(0, z.attrs['Steps'] - num_samples)
+                test_start_ixs[i] = z.attrs['Steps'] - test_samples
             else:
                 train_start_ixs[i] = 0
+                # split train/test data between two episodes
+                test_start_ixs[i] = agent_steps_cumulative[np.where(agent_steps_cumulative < train_start_ixs[i] + train_samples)[0][-1]]
 
-            # split train/test data between two episodes
-            agent_steps_cumulative = np.cumsum(np.array(z.attrs['AgentSteps']))
-            test_start_ixs[i] = agent_steps_cumulative[np.where(agent_steps_cumulative < train_start_ixs[i] + train_samples)[0][-1]]
             train_samples = test_start_ixs[i] - train_start_ixs[i]
             test_samples = num_samples - train_samples
 
@@ -718,17 +720,18 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
 
         if proportion < 1:
             elem_samples_nb = int(len(elem_samples) * proportion)
+            test_nb = int(elem_samples_nb * get_test_size(i))
+            train_nb = elem_samples_nb - test_nb
             if verbose:
                 print(f"Selected slice [{train_start_ixs[i]}:{train_start_ixs[i] + elem_samples_nb}] "
                       f"({elem_samples_nb} samples)")
         else:
             elem_samples_nb = len(elem_samples)
-
-        train_nb = test_start_ixs[i] - train_start_ixs[i]
-        test_nb = elem_samples_nb - train_nb
+            train_nb = test_start_ixs[i] - train_start_ixs[i]
+            test_nb = elem_samples_nb - train_nb
 
         data_train.set(elem_samples, buffer_train_idx, train_start_ixs[i], train_nb, batch_size=10000)
-        data_test.set(elem_samples, buffer_test_idx, train_start_ixs[i] + train_nb, test_nb, batch_size=10000)
+        data_test.set(elem_samples, buffer_test_idx, test_start_ixs[i], test_nb, batch_size=10000)
         del elem_samples
         gc.collect()
 
