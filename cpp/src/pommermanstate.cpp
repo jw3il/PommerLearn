@@ -264,6 +264,30 @@ bool _attribute_changed(const bboard::AgentInfo& oldInfo, const bboard::AgentInf
             || oldInfo.maxBombCount != newInfo.maxBombCount;
 }
 
+void PommermanState::update_destinationItem(int item, bool moved){
+    // reset pickup info
+    collectedItem.extraBomb = false;
+    collectedItem.incRange = false;
+    collectedItem.kick = false;
+    // set flag for picked up power up
+    if (moved){
+        switch (item)
+        {
+        case bboard::Item::EXTRABOMB:
+            collectedItem.extraBomb = true;
+            break;
+        case bboard::Item::INCRRANGE:
+            collectedItem.incRange = true;
+            break;
+        case bboard::Item::KICK:
+            collectedItem.kick = true;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 void PommermanState::do_action(Action action)
 {
     bboard::AgentInfo info = state.agents[agentID];
@@ -279,6 +303,10 @@ void PommermanState::do_action(Action action)
         hasBufferedActions = false;
     }
 
+    // check for powerups
+    bboard::Position dest = bboard::util::DesiredPosition(info.x, info.y, moves[agentID]);
+    int destItem = state.items[dest.y][dest.x];
+
     // std::cout << "Moves: " << (int)moves[0] << " " << (int)moves[1] << " " << (int)moves[2] << " " << (int)moves[3] << std::endl;
     state.Step(moves);
 
@@ -286,6 +314,10 @@ void PommermanState::do_action(Action action)
             || bombCount != state.bombs.count || flameCount != state.flames.count) {
         eventHash = rand();
     }
+
+    // check if agent collected the powerup and set flags
+    bool moved = (dest.x == state.agents[agentID].x) && (dest.y == state.agents[agentID].y);
+    update_destinationItem(destItem, moved);
 }
 
 void PommermanState::undo_action(Action action) {

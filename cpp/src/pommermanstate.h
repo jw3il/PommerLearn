@@ -15,6 +15,11 @@
 #include "data_representation.h"
 #include "clonable.h"
 
+struct CollectedItem {
+    bool extraBomb;
+    bool incRange;
+    bool kick;
+};
 
 class StateConstantsPommerman : public StateConstantsInterface<StateConstantsPommerman>
 {
@@ -102,6 +107,7 @@ public:
     const bool statefulModel;
     const uint maxTimeStep;
     const uint valueVersion;
+    CollectedItem collectedItem;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.
@@ -143,6 +149,8 @@ public:
 
     void planning_agents_reset();
     void planning_agents_act();
+
+    void update_destinationItem(int item, bool moved);
 
     // State interface
     std::vector<Action> legal_actions() const override;
