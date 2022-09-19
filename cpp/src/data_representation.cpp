@@ -148,7 +148,37 @@ inline void _infoToPlanes(const bboard::AgentInfo* info, xtPlanesType xtPlanes, 
     xt::view(xtPlanes, planeIndex++) = info->canKick ? 1 : 0;
 }
 
-void BoardToPlanes(const bboard::Board* board, int id, float* planes)
+template <typename xtPlanesType>
+inline void _shiftPlanes(const bboard::Board* board, int id, xtPlanesType xtPlanes){
+
+    // move values appearing in agents view & set 
+    // 1|2|3            1|4|5               0|4|5
+    // 4|5|6    -->     1|x|8       -->     0|x|8
+    // x|8|9            1|2|3               0|0|0
+    const int n = bboard::BOARD_SIZE;
+    int shiftX = board->agents[id].x - (n>>1);
+    int shiftY = board->agents[id].y - (n>>1);
+    auto destY = xt::range(std::max(0,-shiftY), n-std::max(0,shiftY));
+    auto destX = xt::range(std::max(0,-shiftX), n-std::max(0,shiftX));
+    auto srcY = xt::range(std::max(0,shiftY), n+std::min(0,shiftY));
+    auto srcX = xt::range(std::max(0,shiftX), n+std::min(0,shiftX));
+    xt::view(xtPlanes, xt::all(), destY, destX) = xt::view(xtPlanes, xt::all(), srcY, srcX);
+    
+    if (shiftX < 0){
+        xt::view(xtPlanes, xt::all(), xt::range(0, abs(shiftX)), xt::all()) = 0;
+    } else {
+        xt::view(xtPlanes, xt::all(), xt::range(n-shiftX, n), xt::all()) = 0;
+    }
+        
+    if (shiftY < 0) {
+        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(0, abs(shiftY))) = 0;
+    } else {
+        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(n-shiftY, n)) = 0;
+    }
+        
+}       
+
+void BoardToPlanes(const bboard::Board* board, int id, float* planes, bool centeredView)
 {
     // shape of all planes of a state
     std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };
@@ -157,6 +187,10 @@ void BoardToPlanes(const bboard::Board* board, int id, float* planes)
     int planeIndex = 0;
     _boardToPlanes(board, id, xtPlanes, planeIndex);
     _infoToPlanes(&board->agents[id], xtPlanes, planeIndex);
+    std::cout << "Hi";
+    if (centeredView){
+        _shiftPlanes(board, id, xtPlanes);
+    }
 }
 
 std::string InitialStateToString(const bboard::State& state) {

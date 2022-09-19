@@ -68,8 +68,9 @@ Scalar Feature Planes:
  * @param board The board.
  * @param id The id of the player.
  * @param planes A float pointer to a buffer of size PLANE_COUNT * PLANE_SIZE * PLANE_SIZE.
+ * @param centeredView Agent is kept in the middle of the View. Limits the agents view to (board-size-1)/2 tiles.
  */
-void BoardToPlanes(const bboard::Board* board, int id, float* planes);
+void BoardToPlanes(const bboard::Board* board, int id, float* planes, bool centeredView = false);
 
 /**
  * @brief InitialStateString Converts an initial state to a string representation. Warning: Has to be the initial state, does not handle bombs or flames.
