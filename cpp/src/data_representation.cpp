@@ -153,8 +153,8 @@ inline void _shiftPlanes(const bboard::Board* board, int id, xtPlanesType xtPlan
 
     // move values appearing in agents view & set 
     // 1|2|3            1|4|5               0|4|5
-    // 4|5|6    -->     1|x|8       -->     0|x|8
-    // x|8|9            1|2|3               0|0|0
+    // 4|5|6    -->     4|x|8       -->     0|x|8
+    // x|8|9            x|8|9               0|0|0
     const int n = bboard::BOARD_SIZE;
     int shiftX = board->agents[id].x - (n>>1);
     int shiftY = board->agents[id].y - (n>>1);
@@ -187,7 +187,6 @@ void BoardToPlanes(const bboard::Board* board, int id, float* planes, bool cente
     int planeIndex = 0;
     _boardToPlanes(board, id, xtPlanes, planeIndex);
     _infoToPlanes(&board->agents[id], xtPlanes, planeIndex);
-    std::cout << "Hi";
     if (centeredView){
         _shiftPlanes(board, id, xtPlanes);
     }
