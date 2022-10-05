@@ -65,7 +65,15 @@ def create_model(train_config):
 
 
 def create_optimizer(model: nn.Module, train_config: dict):
-    return optim.AdamW(model.parameters(), lr=train_config["max_lr"], weight_decay=train_config["weight_decay"])
+    optimizer = train_config["optimizer"]
+    if optimizer == "adamw":
+        return optim.AdamW(model.parameters(), lr=train_config["max_lr"], weight_decay=train_config["weight_decay"])
+    elif optimizer == "sgd":
+        return optim.SGD(model.parameters(), lr=train_config["max_lr"], weight_decay=train_config["weight_decay"],
+                         momentum=train_config["max_momentum"])
+    else:
+        raise ValueError(f"Unknown optimizer {optimizer}")
+
 
 
 def train_cnn(train_config):
@@ -599,6 +607,7 @@ def fill_default_config(train_config):
         "mcts_val_weight": 0.0,  # None or in [0, 1]
         "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end", "weighted_actions"
         "policy_loss_argmax_target": False,
+        "optimizer": "adamw",
         "min_lr": 0.0001,
         "max_lr": 0.001,
         "min_momentum": 0.8,
