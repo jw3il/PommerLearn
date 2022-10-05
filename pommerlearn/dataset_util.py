@@ -592,7 +592,7 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
                         batch_size_test: int, train_transform = None, verbose: bool = True, sequence_length=None,
                         num_workers=2, only_test_last=False, train_sampling_mode: str = 'complete',
                         test_split_mode='simple'
-                        ) -> [DataLoader, DataLoader]:
+                        ) -> Tuple[DataLoader, DataLoader]:
     """
     Returns pytorch dataset loaders for a given path
 
@@ -673,9 +673,9 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
                 train_start_ixs[i] = 0
                 # split train/test data between two episodes
                 test_start_ixs[i] = agent_steps_cumulative[np.where(agent_steps_cumulative < train_start_ixs[i] + train_samples)[0][-1]]
-
-            train_samples = test_start_ixs[i] - train_start_ixs[i]
-            test_samples = num_samples - train_samples
+                # correct train & test samples
+                train_samples = test_start_ixs[i] - train_start_ixs[i]
+                test_samples = num_samples - train_samples
 
             all_train_samples += train_samples
             all_test_samples += test_samples
@@ -723,8 +723,10 @@ def create_data_loaders(path_infos: Union[str, List[Union[str, Tuple[str, float]
             test_nb = int(elem_samples_nb * get_test_size(i))
             train_nb = elem_samples_nb - test_nb
             if verbose:
-                print(f"Selected slice [{train_start_ixs[i]}:{train_start_ixs[i] + elem_samples_nb}] "
-                      f"({elem_samples_nb} samples)")
+                print(f"Selected slices "
+                      f"[{train_start_ixs[i]}:{train_start_ixs[i] + train_nb}] and "
+                      f"[{test_start_ixs[i]}:{test_start_ixs[i] + test_nb}] "
+                      f"({train_nb} + {test_nb} = {elem_samples_nb} samples)")
         else:
             elem_samples_nb = len(elem_samples)
             train_nb = test_start_ixs[i] - train_start_ixs[i]
