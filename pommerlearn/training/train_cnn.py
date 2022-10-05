@@ -65,8 +65,15 @@ def create_model(train_config):
 
 
 def create_optimizer(model: nn.Module, train_config: dict):
-    return optim.SGD(model.parameters(), lr=train_config["max_lr"], momentum=train_config["max_momentum"],
-                     weight_decay=train_config["weight_decay"])
+    optimizer = train_config["optimizer"]
+    if optimizer == "adamw":
+        return optim.AdamW(model.parameters(), lr=train_config["max_lr"], weight_decay=train_config["weight_decay"])
+    elif optimizer == "sgd":
+        return optim.SGD(model.parameters(), lr=train_config["max_lr"], weight_decay=train_config["weight_decay"],
+                         momentum=train_config["max_momentum"])
+    else:
+        raise ValueError(f"Unknown optimizer {optimizer}")
+
 
 
 def train_cnn(train_config):
@@ -385,12 +392,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
                                            ya_train, yp_train, ids=ids, device=device)
 
             combined_loss.backward()
-            lr, momentum = 0, 0
-            for param_group in optimizer.param_groups:
-                lr = lr_schedule(local_step)
-                param_group['lr'] = lr
 
-                momentum = momentum_schedule(local_step)
+            lr, momentum = lr_schedule(local_step), momentum_schedule(local_step)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
                 param_group['momentum'] = momentum
 
             optimizer.step()
@@ -598,17 +603,17 @@ def fill_default_config(train_config):
         "model_batch_sizes": [1, 8],
         # hyperparameters
         "value_version": 1,
-        "discount_factor": 0.9,
-        "mcts_val_weight": 0.5,  # None or in [0, 1]
+        "discount_factor": 0.99,
+        "mcts_val_weight": 0.0,  # None or in [0, 1]
         "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end", "weighted_actions"
         "policy_loss_argmax_target": False,
+        "optimizer": "adamw",
         "min_lr": 0.0001,
-        "max_lr": 0.05,
+        "max_lr": 0.001,
         "min_momentum": 0.8,
         "max_momentum": 0.95,
-        "schedule": "one_cycle",  # "cosine_annealing", "one_cycle", "constant"
-        "momentum": 0.9,
-        "weight_decay": 1e-03,
+        "schedule": "constant",  # "cosine_annealing", "one_cycle", "constant"
+        "weight_decay": 1e-04,
         "value_loss_ratio": 0.1,
         "test_size": 0.2,
         "test_split_mode": "simple",
@@ -616,13 +621,13 @@ def fill_default_config(train_config):
         "batch_size": 128,  # warning: should be adapted when using sequences
         "batch_size_test": 1024,
         "random_state":  42,
-        "nb_epochs":  20,
+        "nb_epochs":  5,
         "model": "risev3",  # "a0", "risev3", "lstm"
         "sequence_length": 8,  # only used when model is stateful
         "use_downsampling": True,
         "se_type": None,  # None, "se", "cbam", "eca_se", "ca_se", "cm_se", "sa_se", "sm_se"
         "num_res_blocks": 4,
-        "act_type": "relu",
+        "act_type": "lrelu",
         "channels_policy_head": 16,
         "channels": 64,
         "channels_operating": 256,

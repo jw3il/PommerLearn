@@ -137,10 +137,12 @@ You can then start training by running
 Prerequisites and Building
 * Make sure that you've pulled all submodules recursively
 * In older versions of TensorRT, you have to manually comment out `using namespace sample;` in `deps/CrazyAra/engine/src/nn/tensorrtapi.cpp`
+* We experienced issues with `std::filesystem` being undefined when using GCC 7.5.0. We recommend to update to more recent versions, e.g. GCC 11.2.0.
 
 Running
 * For runtime issues like `libstdc++.so.6: version 'GLIBCXX_3.4.30' not found`, try loading your system libraries with `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/`.
 * If you encounter errors like `ModuleNotFoundError: No module named 'training'`, set your `PYTHONPATH` to the `pommerlearn` directory. For example, `export PYTHONPATH=/PommerLearn/pommerlearn`.
+* When loading `tensorboard` runs, you can get errors like `Error: tonic::transport::Error(Transport, hyper::Error(Accept, Os { code: 24, kind: Other, message: "Too many open files" }))`. The argument `--load_fast=false` might help.
 
 ### Performance Profiling
 

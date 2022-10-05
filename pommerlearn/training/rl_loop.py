@@ -516,15 +516,11 @@ def main():
     value_version = 1
     train_config = {
         "device": device_str,
-        "nb_epochs": 2,
+        "nb_epochs": 1,
         "only_test_last": False,
         "test_size": 0.1,
         "tensorboard_dir": str(base_dir / "runs" / run_id),
         "batches_until_eval": 100,
-        "train_sampling_mode": "weighted_actions",
-        "test_split_mode": "random",
-        "discount_factor": 0.97,
-        "mcts_val_weight": 0.3,
         "value_version": value_version,
         # "train_sampling_mode": "weighted_value_class",
         # for lstm
