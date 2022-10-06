@@ -30,9 +30,9 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
     else if(firstOpponentType == "Clone")
     {
         auto clone = crazyAraAgent->clone();
-        return clone->get();
         // store the clone so it does not run out of scope when we exit the loop
         clones.push_back(std::move(clone));
+        return clone->get();
     }
     else if (firstOpponentType == "LazyAgent")
     {
