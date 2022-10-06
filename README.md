@@ -140,7 +140,9 @@ Prerequisites and Building
 * We experienced issues with `std::filesystem` being undefined when using GCC 7.5.0. We recommend to update to more recent versions, e.g. GCC 11.2.0.
 
 Running
-* For runtime issues like `libstdc++.so.6: version 'GLIBCXX_3.4.30' not found`, try loading your system libraries with `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/`.
+* For runtime issues like `libstdc++.so.6: version 'GLIBCXX_3.4.30' not found`, try loading your system libraries with `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/`. 
+  On some systems, ctypes somehow uses a different libstdc++ from the conda environment instead of the correct lib path. 
+  As a last resort, you can back up the original library `mv /conda-lib-path/libstdc++.so.6 /conda-lib-path/libstdc++.so.6.old` and then create a symbolic link `ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /conda-lib-path/libstdc++.so.6`.
 * If you encounter errors like `ModuleNotFoundError: No module named 'training'`, set your `PYTHONPATH` to the `pommerlearn` directory. For example, `export PYTHONPATH=/PommerLearn/pommerlearn`.
 * When loading `tensorboard` runs, you can get errors like `Error: tonic::transport::Error(Transport, hyper::Error(Accept, Os { code: 24, kind: Other, message: "Too many open files" }))`. The argument `--load_fast=false` might help.
 
