@@ -218,7 +218,7 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Versio
     // TODO: Does not account for merged observations
     bboard::Observation obs;
     bboard::Observation::Get(state, agentID, this->agentObsParams, obs);
-    BoardToPlanes(&obs, 0, inputPlanes);
+    BoardToPlanes(&obs, agentID, inputPlanes);
 
     if (this->statefulModel)
     {
