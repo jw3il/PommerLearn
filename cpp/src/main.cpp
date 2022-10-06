@@ -50,7 +50,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
 
 void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
              PlanningAgentType planningAgentType, const std::string& firstOpponentType, const std::string& secondOpponentType,
-             SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability)
+             SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
 {
     srand(config.seed);
     StateConstants::init(false);
@@ -77,12 +77,16 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
     }
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents;
+    
     // main agent
-    agents[0] = crazyAraAgent.get();
+    agents[agentID] = crazyAraAgent.get();
 
     // opponents
     std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
-    for(int i = 1; i < bboard::AGENT_COUNT; i++) {
+    for(int i = 0; i < bboard::AGENT_COUNT; i++) {
+        if (i == agentID) {
+            continue;
+        }
         if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
             // set agent as first type
             agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones);
@@ -144,6 +148,7 @@ int main(int argc, char **argv) {
 
             // mcts options
             ("model-dir", po::value<std::string>()->default_value("./model"), "The directory which contains the agent's model(s) for multiple batch sizes")
+            ("agent-id", po::value<int>()->default_value(0), "The agent id used by the mcts agent.")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
             // TODO: State size should be detected automatically (?)
@@ -256,7 +261,7 @@ int main(int argc, char **argv) {
 
         setDefaultFFAConfig(config);
         tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
-                searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>());
+                searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
