@@ -451,6 +451,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     return TERMINAL_NONE;
 }
 
+#ifndef MCTS_SINGLE_PLAYER
 inline TerminalType is_terminal_ffa_1vs1_sim(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
 {
     int agentID = pommerState->agentID;
@@ -492,6 +493,7 @@ inline TerminalType is_terminal_ffa_1vs1_sim(const PommermanState* pommerState, 
 
     return TERMINAL_NONE;
 }
+#endif
 
 inline int _get_num_of_dead_opponents(const bboard::State& state, const uint ownId)
 {
