@@ -23,6 +23,10 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
     hasPlanningAgents(false),
     hasBufferedActions(false)
 {
+#ifndef MCTS_SINGLE_PLAYER
+    simulatedOpponentID = -1;
+#endif
+
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
         auxiliaryOutputs.resize(StateConstantsPommerman::NB_AUXILIARY_OUTPUTS());
@@ -32,6 +36,32 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
         throw std::runtime_error("You have not set an auxiliary (state) output but you claim that your model is stateful.");
     }
 }
+
+#ifndef MCTS_SINGLE_PLAYER
+int _get_closest_opponent(const bboard::State* state, const int id)
+{
+    const bboard::AgentInfo& self = state->agents[id];
+    int closestOpponent = -1;
+    int closestDistance = bboard::BOARD_SIZE * 2;
+    for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+        if (i == id) {
+            continue;
+        }
+        const bboard::AgentInfo& other = state->agents[i];
+        if (!self.IsEnemy(other)) {
+            continue;
+        }
+
+        int hamming = abs(self.x - other.x) + abs(self.y - other.y);
+        if (hamming < closestDistance) {
+            closestDistance = hamming;
+            closestOpponent = i;
+        }
+    }
+
+    return closestOpponent;
+}
+#endif
 
 void PommermanState::set_agent_id(const int id)
 {
@@ -158,7 +188,9 @@ void PommermanState::planning_agents_act()
 
 std::vector<Action> PommermanState::legal_actions() const
 {
-    const bboard::AgentInfo& self = state.agents[agentID];
+    // select the agent from which we are viewing this game
+    const bboard::AgentInfo& self = state.agents[get_turn_agent_id()];
+
     std::vector<Action> legalActions;
 
     // it's always possible to idle
@@ -215,10 +247,12 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
 
 void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
 {
+    int turnAgentID = get_turn_agent_id();
+
     // TODO: Does not account for merged observations
     bboard::Observation obs;
-    bboard::Observation::Get(state, agentID, this->agentObsParams, obs);
-    BoardToPlanes(&obs, agentID, inputPlanes);
+    bboard::Observation::Get(state, turnAgentID, this->agentObsParams, obs);
+    BoardToPlanes(&obs, turnAgentID, inputPlanes);
 
     if (this->statefulModel)
     {
@@ -265,27 +299,38 @@ bool _attribute_changed(const bboard::AgentInfo& oldInfo, const bboard::AgentInf
 }
 
 void PommermanState::do_action(Action action)
-{
-    bboard::AgentInfo info = state.agents[agentID];
-    int bombCount = state.bombs.count;
-    int flameCount = state.flames.count;
-
-    moves[agentID] = bboard::Move(action);
-
+{    
     if (hasPlanningAgents) {
         // fill the remaining moves
         planning_agents_act();
-        // after this step, our cached actions are invalid
-        hasBufferedActions = false;
     }
+
+    int turnAgentID = get_turn_agent_id();
+#ifdef MCTS_SINGLE_PLAYER
+    // set the own action
+    moves[turnAgentID] = bboard::Move(action);
+#else
+    // we first let our own agent move, then the opponent
+    // self (buffered) -> opponent (step) -> self (buffered) -> opponent (step) ...
+    moves[turnAgentID] = bboard::Move(action);
+    if (simulatedOpponentID == -1) {
+        // select opponent and return (no environment step yet)
+        simulatedOpponentID = _get_closest_opponent(&state, agentID);
+        // make sure that the actions survive the clone operation
+        // even if we have no planning agent opponents
+        hasBufferedActions = true;
+        return;
+    }
+    else {
+        // we do the step and will continue from our own perspective
+        simulatedOpponentID == -1;
+    }
+#endif
 
     // std::cout << "Moves: " << (int)moves[0] << " " << (int)moves[1] << " " << (int)moves[2] << " " << (int)moves[3] << std::endl;
     state.Step(moves);
-
-    if (_attribute_changed(info, state.agents[agentID])
-            || bombCount != state.bombs.count || flameCount != state.flames.count) {
-        eventHash = rand();
-    }
+    // after this step, any buffered actions are invalid
+    hasBufferedActions = false;
 }
 
 void PommermanState::undo_action(Action action) {
@@ -354,11 +399,12 @@ std::string PommermanState::action_to_san(Action action, const std::vector<Actio
 
 inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
 {
+    int turnAgentID = pommerState->get_turn_agent_id();
     const bboard::State& state = pommerState->state;
 
     if(state.finished)
     {
-        if(state.IsWinner(pommerState->agentID))
+        if(state.IsWinner(turnAgentID))
         {
             customTerminalValue = 1.0f;
             return TERMINAL_WIN;
@@ -379,7 +425,7 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     }
 
     // state is not finished
-    if(state.agents[pommerState->agentID].dead)
+    if(state.agents[turnAgentID].dead)
     {
         if (pommerState->gameMode == bboard::GameMode::FreeForAll) {
             customTerminalValue = -1.0f;
@@ -494,6 +540,9 @@ PommermanState* PommermanState::clone() const
     clone->state = state;
     clone->hasTrueState = hasTrueState;
     clone->agentID = agentID;
+#ifndef MCTS_SINGLE_PLAYER
+    clone->simulatedOpponentID = simulatedOpponentID;
+#endif
     clone->agentObsParams = agentObsParams;
     clone->opponentObsParams = opponentObsParams;
     if (hasPlanningAgents) {
@@ -508,11 +557,10 @@ PommermanState* PommermanState::clone() const
                 clone->hasPlanningAgents = true;
             }
         }
-
-        clone->hasBufferedActions = hasBufferedActions;
-        if (hasBufferedActions) {
-            std::copy_n(moves, bboard::AGENT_COUNT, clone->moves);
-        }
+    }
+    clone->hasBufferedActions = hasBufferedActions;
+    if (hasBufferedActions) {
+        std::copy_n(moves, bboard::AGENT_COUNT, clone->moves);
     }
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
         clone->auxiliaryOutputs = auxiliaryOutputs;  // deep copy auxiliary outputs
