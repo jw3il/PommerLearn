@@ -104,6 +104,7 @@ public:
     const uint valueVersion;
 #ifndef MCTS_SINGLE_PLAYER
     int simulatedOpponentID;
+    bool myTurn;
 #endif
 
     /**
@@ -118,7 +119,7 @@ public:
         return agentID;
 #else
         // we may play from the perspective of an opponent in this turn
-        return simulatedOpponentID != -1 ? simulatedOpponentID : agentID;
+        return myTurn ? agentID : simulatedOpponentID;
 #endif
     }
 

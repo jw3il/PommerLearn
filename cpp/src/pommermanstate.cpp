@@ -25,6 +25,7 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
 {
 #ifndef MCTS_SINGLE_PLAYER
     simulatedOpponentID = -1;
+    myTurn = true;
 #endif
 
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
@@ -48,7 +49,7 @@ int _get_closest_opponent(const bboard::State* state, const int id)
             continue;
         }
         const bboard::AgentInfo& other = state->agents[i];
-        if (!self.IsEnemy(other)) {
+        if (other.dead || !self.IsEnemy(other)) {
             continue;
         }
 
@@ -68,15 +69,28 @@ void PommermanState::set_agent_id(const int id)
     this->agentID = id;
 }
 
+void _init_search(PommermanState& pommermanState)
+{
+    if (pommermanState.hasPlanningAgents) {
+        pommermanState.planning_agents_reset();
+    }
+
+#ifndef MCTS_SINGLE_PLAYER
+    pommermanState.myTurn = true;
+    pommermanState.simulatedOpponentID = _get_closest_opponent(&pommermanState.state, pommermanState.agentID);
+#ifndef DISABLE_UCI_INFO
+    std::cout << "Simulated opponent: " << pommermanState.simulatedOpponentID << std::endl;
+#endif
+#endif
+}
+
 void PommermanState::set_state(const bboard::State* state)
 {
     // copy the state
     this->state = *state;
     this->hasTrueState = true;
 
-    if (hasPlanningAgents) {
-        planning_agents_reset();
-    }
+    _init_search(*this);
 }
 
 void PommermanState::set_observation(const bboard::Observation* obs)
@@ -85,9 +99,7 @@ void PommermanState::set_observation(const bboard::Observation* obs)
     obs->ToState(this->state);
     this->hasTrueState = false;
 
-    if (hasPlanningAgents) {
-        planning_agents_reset();
-    }
+    _init_search(*this);
 }
 
 void PommermanState::set_agent_observation_params(const bboard::ObservationParameters params)
@@ -299,13 +311,14 @@ bool _attribute_changed(const bboard::AgentInfo& oldInfo, const bboard::AgentInf
 }
 
 void PommermanState::do_action(Action action)
-{    
+{
     if (hasPlanningAgents) {
         // fill the remaining moves
         planning_agents_act();
     }
 
     int turnAgentID = get_turn_agent_id();
+
 #ifdef MCTS_SINGLE_PLAYER
     // set the own action
     moves[turnAgentID] = bboard::Move(action);
@@ -313,20 +326,18 @@ void PommermanState::do_action(Action action)
     // we first let our own agent move, then the opponent
     // self (buffered) -> opponent (step) -> self (buffered) -> opponent (step) ...
     moves[turnAgentID] = bboard::Move(action);
-    if (simulatedOpponentID == -1) {
-        // select opponent and return (no environment step yet)
-        simulatedOpponentID = _get_closest_opponent(&state, agentID);
+    if (myTurn) {
         // make sure that the actions survive the clone operation
         // even if we have no planning agent opponents
         hasBufferedActions = true;
+        myTurn = false;
         return;
     }
     else {
         // we do the step and will continue from our own perspective
-        simulatedOpponentID == -1;
+        myTurn = true;
     }
 #endif
-
     // std::cout << "Moves: " << (int)moves[0] << " " << (int)moves[1] << " " << (int)moves[2] << " " << (int)moves[3] << std::endl;
     state.Step(moves);
     // after this step, any buffered actions are invalid
@@ -440,6 +451,48 @@ inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t num
     return TERMINAL_NONE;
 }
 
+inline TerminalType is_terminal_ffa_1vs1_sim(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
+{
+    int agentID = pommerState->agentID;
+    int simulatedOpponentID = pommerState->simulatedOpponentID;
+    const bboard::State& state = pommerState->state;
+
+    if(!pommerState->myTurn) {
+        // the other agent is always at intermediate steps
+        // and we never want to stop the search there
+        return TERMINAL_NONE;
+    }
+
+    // we are in the perspective of agentID
+    // this agent wins if it survives longer than simulatedOpponentID
+    if(state.agents[simulatedOpponentID].dead) {
+        if(state.agents[agentID].dead)
+        {
+            customTerminalValue = 0.0f;
+            return TERMINAL_DRAW;
+        }
+        else 
+        {
+            customTerminalValue = 1.0f;
+            return TERMINAL_WIN;
+        }
+    }
+
+    // the agent looses if it is dead
+    if(state.agents[agentID].dead) {
+        customTerminalValue = -1.0f;
+        return TERMINAL_LOSS;
+    }
+
+    // the game is done for some other reason (e.g. max steps reached) => draw
+    if(state.finished) {
+        customTerminalValue = 0.0f;
+        return TERMINAL_DRAW;
+    }
+
+    return TERMINAL_NONE;
+}
+
 inline int _get_num_of_dead_opponents(const bboard::State& state, const uint ownId)
 {
     const bboard::AgentInfo& ownInfo = state.agents[ownId];
@@ -516,7 +569,11 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
     switch (valueVersion)
     {
     case 1:
+#ifdef MCTS_SINGLE_PLAYER
         return is_terminal_v1(this, numberLegalMoves, customTerminalValue);
+#else
+        return is_terminal_ffa_1vs1_sim(this, numberLegalMoves, customTerminalValue);
+#endif
     
     case 2:
         return is_terminal_v2(this, numberLegalMoves, customTerminalValue);
@@ -542,6 +599,7 @@ PommermanState* PommermanState::clone() const
     clone->agentID = agentID;
 #ifndef MCTS_SINGLE_PLAYER
     clone->simulatedOpponentID = simulatedOpponentID;
+    clone->myTurn = myTurn;
 #endif
     clone->agentObsParams = agentObsParams;
     clone->opponentObsParams = opponentObsParams;
