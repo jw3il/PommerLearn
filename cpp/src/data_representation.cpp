@@ -165,15 +165,15 @@ inline void _shiftPlanes(const bboard::Board* board, int id, xtPlanesType xtPlan
     xt::view(xtPlanes, xt::all(), destY, destX) = xt::view(xtPlanes, xt::all(), srcY, srcX);
     
     if (shiftX < 0){
-        xt::view(xtPlanes, xt::all(), xt::range(0, abs(shiftX)), xt::all()) = 0;
+        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(0, abs(shiftX))) = 0;
     } else {
-        xt::view(xtPlanes, xt::all(), xt::range(n-shiftX, n), xt::all()) = 0;
+        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(n-shiftX, n)) = 0;
     }
         
     if (shiftY < 0) {
-        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(0, abs(shiftY))) = 0;
+        xt::view(xtPlanes, xt::all(), xt::range(0, abs(shiftY)), xt::all()) = 0;
     } else {
-        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(n-shiftY, n)) = 0;
+        xt::view(xtPlanes, xt::all(), xt::range(n-shiftY, n), xt::all()) = 0;
     }
         
 }       
