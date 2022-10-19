@@ -127,6 +127,7 @@ int main(int argc, char **argv) {
             ("env-gen-seed-eps", po::value<long>()->default_value(1), "The number of episodes a single environment generation seed is reused (= new environment every x episodes).")
             ("seed", po::value<long>()->default_value(-1), "The seed used for the complete run (ignored if -1)")
             ("fix-agent-positions", "If set, the agent starting positions will be fixed across all episodes.")
+            ("centered-observation", "If set, the observation of an agent is an board_sizexboard_size window centered around the correstonding agent. The agent is not always aware of the full board.")
 
             // termination options, stop if:
             //   num_games > max-games
@@ -203,6 +204,7 @@ int main(int argc, char **argv) {
     config.printFirstLast = configVals.count("print-first-last") > 0;
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no-state") == 0;
+    config.observationParameters.agentCenteredView = configVals.count("centered-observation") > 0;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
