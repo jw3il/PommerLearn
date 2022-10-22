@@ -108,6 +108,11 @@ public:
     void set_pommerman_state(const bboard::Observation *obs);
 
     /**
+     * @brief get_pommerman_state gets the associated pommerman state.
+     */
+    const PommermanState* get_pommerman_state() const;
+
+    /**
      * @brief print_pv_line Prints the PV line of the mcts agent. This function is supposed to be called after the search.
      * @param mctsAgent MCTS Agent object
      * @param obs Current observation

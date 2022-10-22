@@ -70,6 +70,11 @@ void CrazyAraAgent::print_pv_line(MCTSAgent* mctsAgent, const bboard::Observatio
     }
 }
 
+const PommermanState* CrazyAraAgent::get_pommerman_state() const
+{
+    return pommermanState.get();
+}
+
 void CrazyAraAgent::add_results_to_buffer(const NeuralNetAPI* net, bboard::Move bestAction)
 {
     if (has_buffer()) {

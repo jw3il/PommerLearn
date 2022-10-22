@@ -7,7 +7,7 @@ RawCrazyAraAgent::RawCrazyAraAgent(std::shared_ptr<SafePtrQueue<RawNetAgentConta
 }
 
 RawCrazyAraAgent::RawCrazyAraAgent(const std::string& modelDirectory, const int deviceID): 
-    RawCrazyAraAgent(load_raw_net_agent_queue(modelDirectory, deviceID, 1)) {}
+    RawCrazyAraAgent(load_raw_net_agent_queue(modelDirectory, 1, deviceID)) {}
 
 bboard::Move RawCrazyAraAgent::act(const bboard::Observation *obs)
 {
@@ -17,7 +17,7 @@ bboard::Move RawCrazyAraAgent::act(const bboard::Observation *obs)
     return move;
 }
 
-std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> RawCrazyAraAgent::load_raw_net_agent_queue(const std::string& modelDirectory, const int deviceID, int count)
+std::unique_ptr<SafePtrQueue<RawNetAgentContainer>> RawCrazyAraAgent::load_raw_net_agent_queue(const std::string& modelDirectory, int count, int deviceID)
 {
     auto netQueue = std::make_unique<SafePtrQueue<RawNetAgentContainer>>();
 

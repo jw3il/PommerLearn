@@ -21,7 +21,7 @@
 
 namespace po = boost::program_options;
 
-bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones)
+bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones, std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue)
 {
     if(firstOpponentType == "SimpleUnbiasedAgent")
     {
@@ -32,7 +32,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
         auto clone = crazyAraAgent->clone();
         // store the clone so it does not run out of scope when we exit the loop
         clones.push_back(std::move(clone));
-        return clone->get();
+        return clones.back().get()->get();
     }
     else if (firstOpponentType == "LazyAgent")
     {
@@ -41,6 +41,15 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
     else if (firstOpponentType == "HarmlessAgent")
     {
         return new agents::HarmlessAgent();
+    }
+    else if (firstOpponentType == "RawNetAgent")
+    {
+        // create new rawnet agent based on given mcts agent
+        std::unique_ptr<RawCrazyAraAgent> rawNetAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
+        const PommermanState* crazyAraState = crazyAraAgent->get_pommerman_state();
+        rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams, crazyAraState->valueVersion);
+        clones.push_back(std::move(rawNetAgent));
+        return clones.back().get()->get();
     }
     else
     {
@@ -81,6 +90,12 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
     // main agent
     agents[agentID] = crazyAraAgent.get();
 
+    std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue;
+    if ((firstOpponentType == "RawNetAgent" && firstOpponentTypeProbability > 0) || (secondOpponentType == "RawNetAgent" && firstOpponentTypeProbability < 1)) {
+        // we might need raw network agents => load the network for them. We only need one network as they are evaluated sequentially
+        rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDir, 1, deviceID);
+    }
+
     // opponents
     std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
     for(int i = 0; i < bboard::AGENT_COUNT; i++) {
@@ -89,11 +104,11 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         }
         if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
             // set agent as first type
-            agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones);
+            agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
         }
         else {
             // set agent as second type
-            agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones);
+            agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
         }
     }
 
