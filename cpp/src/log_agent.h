@@ -33,8 +33,21 @@ public:
      */
     virtual int get_buffer_agent_id() = 0;
 
+    /**
+     * @brief Enable or disable the sample collector (default is enabled).
+     * 
+     * @param enabled whether the sample collector should be enabled
+     */
+    void set_logging_enabled(bool enabled);
+
+    /**
+     * @brief Get whether this sample collector is enabled.
+     */
+    bool get_logging_enabled();
+
 protected:
     std::unique_ptr<SampleBuffer> sampleBuffer;
+    bool enabled = true;
 };
 
 /**

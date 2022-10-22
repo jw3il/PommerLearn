@@ -15,6 +15,14 @@ bool SampleCollector::has_buffer() const {
     return sampleBuffer.get() != nullptr;
 }
 
+void SampleCollector::set_logging_enabled(bool enabled) {
+    this->enabled = enabled;
+}
+
+bool SampleCollector::get_logging_enabled() {
+    return enabled;
+}
+
 // LogAgent
 
 int LogAgent::get_buffer_agent_id() {

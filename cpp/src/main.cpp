@@ -46,6 +46,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
     {
         // create new rawnet agent based on given mcts agent
         std::unique_ptr<RawCrazyAraAgent> rawNetAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
+        rawNetAgent->set_logging_enabled(false);
         const PommermanState* crazyAraState = crazyAraAgent->get_pommerman_state();
         rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams, crazyAraState->valueVersion);
         clones.push_back(std::move(rawNetAgent));

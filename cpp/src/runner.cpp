@@ -89,7 +89,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
     if (config.ipcManager != nullptr) {
         for (uint i = 0; i < agents.size(); i++) {
             SampleCollector* sampleCollector = dynamic_cast<SampleCollector*>(agents[i]);
-            if (sampleCollector != nullptr) {
+            if (sampleCollector != nullptr && sampleCollector->get_logging_enabled()) {
                 sampleCollector->create_buffer(config.maxEpisodeSteps);
                 sampleCollectors.push_back(sampleCollector);
             }
