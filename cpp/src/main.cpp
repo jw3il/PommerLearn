@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no-state") == 0;
     config.agentCenteredView = configVals.count("centered-observation") > 0;
-    centeredView = config.agentCenteredView;
+    CENTERED_OBSERVATION = config.agentCenteredView;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();

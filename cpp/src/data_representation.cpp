@@ -5,7 +5,7 @@
 #include <sstream>
 
 
-bool centeredView;
+bool CENTERED_OBSERVATION;
 
 float inline _getNormalizedBombStrength(int stength)
 {
@@ -190,7 +190,7 @@ void BoardToPlanes(const bboard::Board* board, int id, float* planes)
     int planeIndex = 0;
     _boardToPlanes(board, id, xtPlanes, planeIndex);
     _infoToPlanes(&board->agents[id], xtPlanes, planeIndex);
-    if (centeredView){
+    if (CENTERED_OBSERVATION){
         _shiftPlanes(board, id, xtPlanes);
     }
 }
