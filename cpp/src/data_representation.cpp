@@ -4,6 +4,9 @@
 #include "xtensor/xadapt.hpp"
 #include <sstream>
 
+
+bool centeredView;
+
 float inline _getNormalizedBombStrength(int stength)
 {
     float val = (float)stength / bboard::BOARD_SIZE;
@@ -178,7 +181,7 @@ inline void _shiftPlanes(const bboard::Board* board, int id, xtPlanesType xtPlan
         
 }       
 
-void BoardToPlanes(const bboard::Board* board, int id, float* planes, bool centeredView)
+void BoardToPlanes(const bboard::Board* board, int id, float* planes)
 {
     // shape of all planes of a state
     std::vector<std::size_t> stateShape = { PLANE_COUNT, PLANE_SIZE, PLANE_SIZE };

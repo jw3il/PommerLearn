@@ -9,6 +9,7 @@ const int PLANE_SIZE = bboard::BOARD_SIZE;
 const int PLANES_TOTAL_FLOATS = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
 
 const int NUM_MOVES = 6;
+extern bool centeredView; // option for centering the observation around the agent
 
 inline long GetObsSize(const long step) {
     return step * PLANES_TOTAL_FLOATS;
@@ -70,7 +71,7 @@ Scalar Feature Planes:
  * @param planes A float pointer to a buffer of size PLANE_COUNT * PLANE_SIZE * PLANE_SIZE.
  * @param centeredView Agent is kept in the middle of the View. Limits the agents view to (board-size-1)/2 tiles.
  */
-void BoardToPlanes(const bboard::Board* board, int id, float* planes, bool centeredView = false);
+void BoardToPlanes(const bboard::Board* board, int id, float* planes);
 
 /**
  * @brief InitialStateString Converts an initial state to a string representation. Warning: Has to be the initial state, does not handle bombs or flames.

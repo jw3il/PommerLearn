@@ -85,6 +85,14 @@ struct RunnerConfig
      * @brief flushEpisodes The number of episodes until the stored data is flushed by the runner. -1 for no flushing.
      */
     int flushEpisodes = -1;
+
+    /**
+     * @brief agentCenteredView Option to center the observation around the corresponding agent. The observation size does not change. 
+     *  The agents vision is thereby limited to board_size/2 tiles in each direction
+     *  false for no centering
+     * 
+     */
+    bool agentCenteredView = false;
 };
 
 /**
