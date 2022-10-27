@@ -13,6 +13,16 @@ float inline _getNormalizedBombStrength(int stength)
     return val > 1.0f ? 1.0f : val;
 }
 
+bool inline _isOutOfPlane(const bboard::AgentInfo& self, int x, int y)
+{
+    if (!CENTERED_OBSERVATION) {
+        return false;
+    }
+
+    const int planeViewSize = (PLANE_SIZE - 1) / 2;
+    return abs(x - self.x) > planeViewSize || abs(y - self.y) > planeViewSize;
+}
+
 template <typename xtPlanesType>
 inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPlanes, int& planeIndex)
 {
@@ -99,6 +109,34 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
         }
     }
 
+    if (CENTERED_OBSERVATION)
+    {
+        // if the observation is centered, we don't need our own position.
+        // instead, highlight everything on the board that is within boundaries
+        // TODO for limited view: maybe instead set the view size around the agent
+        xt::view(xtPlanes, agent0Plane + ((0 + agentOffset) % 4)) = 1;
+    }
+
+    // the observation has to show which agents are still alive, even if they are invisible
+    const bboard::AgentInfo& self = board->agents[id];
+    for (int i = 0; i < bboard::AGENT_COUNT; i++)
+    {
+        if (i == id)
+        {
+            continue;
+        }
+
+        const bboard::AgentInfo& info = board->agents[i];
+        if (!info.dead && (!info.visible || _isOutOfPlane(self, info.x, info.y)))
+        {
+            // the observation has to show that this agent is still alive
+            // hacky idea: distribute negation of agent's 1.0 across the whole board
+            // ideally one could distribute the 1.0 according to the probability of the
+            // agent's location, but this is outside the observation plane in centered mode :/
+            xt::view(xtPlanes, agent0Plane + ((i + agentOffset) % 4)) = -1.0f / (bboard::BOARD_SIZE * bboard::BOARD_SIZE);
+        }
+    }
+
     for (int i = 0; i < board->bombs.count; i++)
     {
         bboard::Bomb bomb = board->bombs[i];
@@ -165,18 +203,20 @@ inline void _shiftPlanes(const bboard::Board* board, int id, xtPlanesType xtPlan
     auto destX = xt::range(std::max(0,-shiftX), n-std::max(0,shiftX));
     auto srcY = xt::range(std::max(0,shiftY), n+std::min(0,shiftY));
     auto srcX = xt::range(std::max(0,shiftX), n+std::min(0,shiftX));
-    xt::view(xtPlanes, xt::all(), destY, destX) = xt::view(xtPlanes, xt::all(), srcY, srcX);
+    auto planeRange = xt::range(0, N_POSITION_DEPENDENT_PLANES);
+
+    xt::view(xtPlanes, planeRange, destY, destX) = xt::view(xtPlanes, planeRange, srcY, srcX);
     
     if (shiftX < 0){
-        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(0, abs(shiftX))) = 0;
+        xt::view(xtPlanes, planeRange, xt::all(), xt::range(0, abs(shiftX))) = 0;
     } else {
-        xt::view(xtPlanes, xt::all(), xt::all(), xt::range(n-shiftX, n)) = 0;
+        xt::view(xtPlanes, planeRange, xt::all(), xt::range(n-shiftX, n)) = 0;
     }
         
     if (shiftY < 0) {
-        xt::view(xtPlanes, xt::all(), xt::range(0, abs(shiftY)), xt::all()) = 0;
+        xt::view(xtPlanes, planeRange, xt::range(0, abs(shiftY)), xt::all()) = 0;
     } else {
-        xt::view(xtPlanes, xt::all(), xt::range(n-shiftY, n), xt::all()) = 0;
+        xt::view(xtPlanes, planeRange, xt::range(n-shiftY, n), xt::all()) = 0;
     }
         
 }       

@@ -7,6 +7,7 @@
 const int PLANE_COUNT = 18;
 const int PLANE_SIZE = bboard::BOARD_SIZE;
 const int PLANES_TOTAL_FLOATS = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
+const int N_POSITION_DEPENDENT_PLANES = 14;
 
 const int NUM_MOVES = 6;
 extern bool CENTERED_OBSERVATION; // option for centering the observation around the agent
@@ -45,6 +46,8 @@ Items
 Bomb:
 * Bomb Position & Life 0 -> 1
 * Bomb Blast Strength
+* Horizontal Bomb Movement {-1, 0, 1} for left, none, right
+* Vertical Bomb Movement {-1, 0, 1} for down, none, up
 
 Flames:
 * Bomb Flame Position & Life 1 -> 0
