@@ -204,8 +204,7 @@ int main(int argc, char **argv) {
     config.printFirstLast = configVals.count("print-first-last") > 0;
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no-state") == 0;
-    config.agentCenteredView = configVals.count("centered-observation") > 0;
-    CENTERED_OBSERVATION = config.agentCenteredView;
+    CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
