@@ -1,6 +1,7 @@
 .idea/
 .vscode/
 .editorconfig/
+eval_plotting/
 *__pycache__*
 CMakeLists.txt.user
 

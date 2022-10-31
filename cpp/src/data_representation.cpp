@@ -4,10 +4,23 @@
 #include "xtensor/xadapt.hpp"
 #include <sstream>
 
+
+bool CENTERED_OBSERVATION;
+
 float inline _getNormalizedBombStrength(int stength)
 {
     float val = (float)stength / bboard::BOARD_SIZE;
     return val > 1.0f ? 1.0f : val;
+}
+
+bool inline _isOutOfPlane(const bboard::AgentInfo& self, int x, int y)
+{
+    if (!CENTERED_OBSERVATION) {
+        return false;
+    }
+
+    const int planeViewSize = (PLANE_SIZE - 1) / 2;
+    return abs(x - self.x) > planeViewSize || abs(y - self.y) > planeViewSize;
 }
 
 template <typename xtPlanesType>
@@ -96,6 +109,34 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
         }
     }
 
+    if (CENTERED_OBSERVATION)
+    {
+        // if the observation is centered, we don't need our own position.
+        // instead, highlight everything on the board that is within boundaries
+        // TODO for limited view: maybe instead set the view size around the agent
+        xt::view(xtPlanes, agent0Plane + ((0 + agentOffset) % 4)) = 1;
+    }
+
+    // the observation has to show which agents are still alive, even if they are invisible
+    const bboard::AgentInfo& self = board->agents[id];
+    for (int i = 0; i < bboard::AGENT_COUNT; i++)
+    {
+        if (i == id)
+        {
+            continue;
+        }
+
+        const bboard::AgentInfo& info = board->agents[i];
+        if (!info.dead && (!info.visible || _isOutOfPlane(self, info.x, info.y)))
+        {
+            // the observation has to show that this agent is still alive
+            // hacky idea: distribute negation of agent's 1.0 across the whole board
+            // ideally one could distribute the 1.0 according to the probability of the
+            // agent's location, but this is outside the observation plane in centered mode :/
+            xt::view(xtPlanes, agent0Plane + ((i + agentOffset) % 4)) = -1.0f / (bboard::BOARD_SIZE * bboard::BOARD_SIZE);
+        }
+    }
+
     for (int i = 0; i < board->bombs.count; i++)
     {
         bboard::Bomb bomb = board->bombs[i];
@@ -148,6 +189,38 @@ inline void _infoToPlanes(const bboard::AgentInfo* info, xtPlanesType xtPlanes, 
     xt::view(xtPlanes, planeIndex++) = info->canKick ? 1 : 0;
 }
 
+template <typename xtPlanesType>
+inline void _shiftPlanes(const bboard::Board* board, int id, xtPlanesType xtPlanes){
+
+    // move values appearing in agents view & set 
+    // 1|2|3            1|4|5               0|4|5
+    // 4|5|6    -->     4|x|8       -->     0|x|8
+    // x|8|9            x|8|9               0|0|0
+    const int n = bboard::BOARD_SIZE;
+    int shiftX = board->agents[id].x - (n>>1);
+    int shiftY = board->agents[id].y - (n>>1);
+    auto destY = xt::range(std::max(0,-shiftY), n-std::max(0,shiftY));
+    auto destX = xt::range(std::max(0,-shiftX), n-std::max(0,shiftX));
+    auto srcY = xt::range(std::max(0,shiftY), n+std::min(0,shiftY));
+    auto srcX = xt::range(std::max(0,shiftX), n+std::min(0,shiftX));
+    auto planeRange = xt::range(0, N_POSITION_DEPENDENT_PLANES);
+
+    xt::view(xtPlanes, planeRange, destY, destX) = xt::view(xtPlanes, planeRange, srcY, srcX);
+    
+    if (shiftX < 0){
+        xt::view(xtPlanes, planeRange, xt::all(), xt::range(0, abs(shiftX))) = 0;
+    } else {
+        xt::view(xtPlanes, planeRange, xt::all(), xt::range(n-shiftX, n)) = 0;
+    }
+        
+    if (shiftY < 0) {
+        xt::view(xtPlanes, planeRange, xt::range(0, abs(shiftY)), xt::all()) = 0;
+    } else {
+        xt::view(xtPlanes, planeRange, xt::range(n-shiftY, n), xt::all()) = 0;
+    }
+        
+}       
+
 void BoardToPlanes(const bboard::Board* board, int id, float* planes)
 {
     // shape of all planes of a state
@@ -157,6 +230,9 @@ void BoardToPlanes(const bboard::Board* board, int id, float* planes)
     int planeIndex = 0;
     _boardToPlanes(board, id, xtPlanes, planeIndex);
     _infoToPlanes(&board->agents[id], xtPlanes, planeIndex);
+    if (CENTERED_OBSERVATION){
+        _shiftPlanes(board, id, xtPlanes);
+    }
 }
 
 std::string InitialStateToString(const bboard::State& state) {

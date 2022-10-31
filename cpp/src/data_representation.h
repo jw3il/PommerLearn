@@ -7,8 +7,10 @@
 const int PLANE_COUNT = 18;
 const int PLANE_SIZE = bboard::BOARD_SIZE;
 const int PLANES_TOTAL_FLOATS = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
+const int N_POSITION_DEPENDENT_PLANES = 14;
 
 const int NUM_MOVES = 6;
+extern bool CENTERED_OBSERVATION; // option for centering the observation around the agent
 
 inline long GetObsSize(const long step) {
     return step * PLANES_TOTAL_FLOATS;
@@ -44,6 +46,8 @@ Items
 Bomb:
 * Bomb Position & Life 0 -> 1
 * Bomb Blast Strength
+* Horizontal Bomb Movement {-1, 0, 1} for left, none, right
+* Vertical Bomb Movement {-1, 0, 1} for down, none, up
 
 Flames:
 * Bomb Flame Position & Life 1 -> 0
@@ -68,6 +72,7 @@ Scalar Feature Planes:
  * @param board The board.
  * @param id The id of the player.
  * @param planes A float pointer to a buffer of size PLANE_COUNT * PLANE_SIZE * PLANE_SIZE.
+ * @param centeredView Agent is kept in the middle of the View. Limits the agents view to (board-size-1)/2 tiles.
  */
 void BoardToPlanes(const bboard::Board* board, int id, float* planes);
 
