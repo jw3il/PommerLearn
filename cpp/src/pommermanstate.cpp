@@ -342,6 +342,10 @@ void PommermanState::do_action(Action action)
     state.Step(moves);
     // after this step, any buffered actions are invalid
     hasBufferedActions = false;
+#ifndef MCTS_SINGLE_PLAYER
+    // update simulated opponent ID
+    simulatedOpponentID = _get_closest_opponent(&state, agentID);
+#endif
 }
 
 void PommermanState::undo_action(Action action) {
@@ -410,6 +414,15 @@ std::string PommermanState::action_to_san(Action action, const std::vector<Actio
 
 inline TerminalType is_terminal_v1(const PommermanState* pommerState, size_t numberLegalMoves, float& customTerminalValue)
 {
+#ifndef MCTS_SINGLE_PLAYER
+    if(!pommerState->myTurn) {
+        // the other agent is always at intermediate steps
+        // and we never want to stop the search there
+        customTerminalValue = 0.0f;
+        return TERMINAL_NONE;
+    }
+#endif
+
     int turnAgentID = pommerState->get_turn_agent_id();
     const bboard::State& state = pommerState->state;
 
@@ -574,11 +587,8 @@ TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customT
     switch (valueVersion)
     {
     case 1:
-#ifdef MCTS_SINGLE_PLAYER
         return is_terminal_v1(this, numberLegalMoves, customTerminalValue);
-#else
-        return is_terminal_ffa_1vs1_sim(this, numberLegalMoves, customTerminalValue);
-#endif
+        // return is_terminal_ffa_1vs1_sim(this, numberLegalMoves, customTerminalValue);
     
     case 2:
         return is_terminal_v2(this, numberLegalMoves, customTerminalValue);
