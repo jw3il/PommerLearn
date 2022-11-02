@@ -461,34 +461,37 @@ inline TerminalType is_terminal_ffa_1vs1_sim(const PommermanState* pommerState, 
     if(!pommerState->myTurn) {
         // the other agent is always at intermediate steps
         // and we never want to stop the search there
+        customTerminalValue = 0.0f;
         return TERMINAL_NONE;
     }
 
-    // we are in the perspective of agentID
-    // this agent wins if it survives longer than simulatedOpponentID
-    if(state.agents[simulatedOpponentID].dead) {
-        if(state.agents[agentID].dead)
-        {
-            customTerminalValue = 0.0f;
-            return TERMINAL_DRAW;
-        }
-        else 
-        {
-            customTerminalValue = 1.0f;
-            return TERMINAL_WIN;
-        }
+    if(state.finished && state.isDraw) {
+        customTerminalValue = 0.0f;
+        return TERMINAL_DRAW;
     }
 
-    // the agent looses if it is dead
+    // the agent always looses if it is dead
     if(state.agents[agentID].dead) {
         customTerminalValue = -1.0f;
         return TERMINAL_LOSS;
     }
 
-    // the game is done for some other reason (e.g. max steps reached) => draw
-    if(state.finished) {
+    // it is considered a draw if the simulated opponent is dead => we stop the simulation
+    if(state.agents[simulatedOpponentID].dead) {
         customTerminalValue = 0.0f;
         return TERMINAL_DRAW;
+    }
+
+    // the game is done
+    if(state.finished) {
+        if (state.IsWinner(agentID)) {
+            customTerminalValue = 1.0f;
+            return TERMINAL_WIN;
+        }
+        else {
+            customTerminalValue = 0.0f;
+            return TERMINAL_DRAW;
+        }
     }
 
     return TERMINAL_NONE;
