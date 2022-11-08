@@ -97,20 +97,37 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDir, 1, deviceID);
     }
 
-    // opponents
-    std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
-    for(int i = 0; i < bboard::AGENT_COUNT; i++) {
-        if (i == agentID) {
-            continue;
+    
+    if (config.gameMode == bboard::GameMode::FreeForAll){
+        // FFA
+        // opponents
+        std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
+        for(int i = 0; i < bboard::AGENT_COUNT; i++) {
+            if (i == agentID) {
+                continue;
+            }
+            if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
+                // set agent as first type
+                agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+            }
+            else {
+                // set agent as second type
+                agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+            }
         }
+    } else {
+        //Team mode
+        std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
+        std::string opponentType;
         if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
-            // set agent as first type
-            agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+            opponentType = firstOpponentType;
         }
         else {
-            // set agent as second type
-            agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+            opponentType = secondOpponentType;
         }
+        agents[(agentID+1)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+        agents[(agentID+2)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+        agents[(agentID+3)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
     }
 
     std::cout << "Agents loaded. Starting the runner.." << std::endl;
@@ -121,7 +138,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         mctsAgent->export_search_tree(3, "lastSearchTee.gv");
     }
     */
-}
+} 
 
 inline void setDefaultFFAConfig(RunnerConfig &config) {
     config.gameMode = bboard::GameMode::FreeForAll;
@@ -131,6 +148,14 @@ inline void setDefaultFFAConfig(RunnerConfig &config) {
     config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
 }
 
+inline void setDefaultTeamConfig(RunnerConfig &config){
+    config.gameMode = bboard::GameMode::TwoTeams;
+    // regular team rules
+    config.observationParameters.exposePowerUps = false;
+    config.observationParameters.agentPartialMapView = true;
+    config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::InView;
+}
+
 int main(int argc, char **argv) {
     po::options_description configDesc("Available options");
 
@@ -138,7 +163,7 @@ int main(int argc, char **argv) {
             ("help", "Print help message")
 
             // general options
-            ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
+            ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts, team_mcts")
             ("print", "If set, print the current state of the environment in every step.")
             ("print-first-last", "If set, print the first and last environment state of each episode.")
 
@@ -235,7 +260,7 @@ int main(int argc, char **argv) {
         setDefaultFFAConfig(config);
         Runner::run_simple_unbiased_agents(config);
     }
-    else if (mode == "ffa_mcts") {
+    else if ((mode == "ffa_mcts") || (mode == "team_mcts")) {
         bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
         std::string modelDir = configVals["model-dir"].as<std::string>();
 
@@ -277,7 +302,12 @@ int main(int argc, char **argv) {
         // intermediate flushing in case something breaks
         config.flushEpisodes = 10;
 
-        setDefaultFFAConfig(config);
+        if (mode == "ffa_mcts"){
+            setDefaultFFAConfig(config);
+        }
+        else {
+            setDefaultTeamConfig(config);
+        }
         tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
                 searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
     }
