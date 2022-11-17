@@ -34,14 +34,15 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
         obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::InView;
         obsParams.exposePowerUps = false;
     }
+    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
+    obsParams.exposePowerUps = false;
 
 
-    uint valueVersion = 1;
     if (ffa){
-        crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams, valueVersion);
+        crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams);
     } 
     else {
-        crazyAraAgent->init_state(bboard::GameMode::TwoTeams, obsParams, obsParams, valueVersion);
+        crazyAraAgent->init_state(bboard::GameMode::TwoTeams, obsParams, obsParams);
     }
 
     if(!rawNetAgent)

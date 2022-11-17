@@ -54,9 +54,8 @@ public:
      * @param gameMode The gamemode
      * @param obsParams How this agent observes the state
      * @param opponentObsParams How opponents observe the state (only relevant for MCTS)
-     * @param valueVersion The value version (only relevant for MCTS)
      */
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion=1);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams);
 
     /**
      * @brief Use the true state of the given environment instead of the observation in the act method.

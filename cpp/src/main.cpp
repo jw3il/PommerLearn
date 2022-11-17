@@ -48,7 +48,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
         std::unique_ptr<RawCrazyAraAgent> rawNetAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
         rawNetAgent->set_logging_enabled(false);
         const PommermanState* crazyAraState = crazyAraAgent->get_pommerman_state();
-        rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams, crazyAraState->valueVersion);
+        rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams);
         clones.push_back(std::move(rawNetAgent));
         return clones.back().get()->get();
     }
@@ -58,7 +58,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
     }
 }
 
-void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
+void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize,
              PlanningAgentType planningAgentType, const std::string& firstOpponentType, const std::string& secondOpponentType,
              SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
 {
@@ -80,7 +80,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
 
     // for now, just use the same observation parameters for opponents
     bboard::ObservationParameters opponentObsParams = config.observationParameters;
-    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, valueVersion);
+    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams);
 
     if (!useRawNet) {
         ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
@@ -207,7 +207,6 @@ int main(int argc, char **argv) {
             ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
-            ("value-version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
             ("no-state", "Whether to use (partial) observations instead of the true state for mcts.")
     ;
 
@@ -308,7 +307,7 @@ int main(int argc, char **argv) {
         else {
             setDefaultTeamConfig(config);
         }
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
                 searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
     }
     else {

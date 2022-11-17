@@ -122,7 +122,7 @@ void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType
         {
             std::unique_ptr<RawCrazyAraAgent> crazyAraAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
             crazyAraAgent->id = i;
-            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams, pommermanState->valueVersion);
+            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams);
             agent = std::move(crazyAraAgent);
             break;
         }

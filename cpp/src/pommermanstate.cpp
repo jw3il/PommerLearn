@@ -12,14 +12,13 @@
 
 uint StateConstantsPommerman::auxiliaryStateSize = 0;
 
-PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion):
+PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep):
     hasTrueState(false),
     agentID(-1),
     gameMode(gameMode),
     eventHash(0),
     statefulModel(statefulModel),
     maxTimeStep(maxTimeStep),
-    valueVersion(valueVersion),
     hasPlanningAgents(false),
     hasBufferedActions(false)
 {
@@ -467,20 +466,7 @@ inline TerminalType is_terminal_v4(const PommermanState* pommerState, size_t num
 
 TerminalType PommermanState::is_terminal(size_t numberLegalMoves, float& customTerminalValue) const
 {
-    switch (valueVersion)
-    {
-    case 1:
-        return is_terminal_v1(this, numberLegalMoves, customTerminalValue);
-    
-    case 2:
-        return is_terminal_v2(this, numberLegalMoves, customTerminalValue);
-
-    case 4:
-        return is_terminal_v4(this, numberLegalMoves, customTerminalValue);
-
-    default:
-        throw std::runtime_error("Unknown value version " + std::to_string(valueVersion));
-    }    
+    return is_terminal_v1(this, numberLegalMoves, customTerminalValue);
 }
 
 bool PommermanState::gives_check(Action action) const
@@ -490,7 +476,7 @@ bool PommermanState::gives_check(Action action) const
 
 PommermanState* PommermanState::clone() const
 {
-    PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep, valueVersion);
+    PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep);
     clone->state = state;
     clone->hasTrueState = hasTrueState;
     clone->agentID = agentID;

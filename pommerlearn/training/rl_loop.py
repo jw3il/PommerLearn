@@ -513,7 +513,6 @@ def main():
 
     # Info: All path-related arguments should be set inside the rl loop
 
-    value_version = 1
     train_config = {
         "device": device_str,
         "nb_epochs": 1,
@@ -521,7 +520,6 @@ def main():
         "test_size": 0.1,
         "tensorboard_dir": str(base_dir / "runs" / run_id),
         "batches_until_eval": 100,
-        "value_version": value_version,
         # "train_sampling_mode": "weighted_value_class",
         # for lstm
         "use_flat_core": False,
@@ -531,7 +529,6 @@ def main():
     # make sure we don't overwrite some important settings
     parsed_train_args.pop("tensorboard_dir", None)
     parsed_train_args.pop("device", None)
-    parsed_train_args.pop("value_version", None)
     train_config.update(parsed_train_args)
     train_config = training.train_cnn.fill_default_config(train_config)
 
@@ -544,7 +541,6 @@ def main():
         f"--planning-agents={get_and_remove(parsed_exec_args, 'planning-agents', 'SimpleUnbiasedAgent')}",
         f"--simulations={get_and_remove(parsed_exec_args, 'simulations', '100')}",
         f"--movetime={get_and_remove(parsed_exec_args, 'movetime', '100')}",
-        f"--value-version={value_version}",
     ]
     dataset_args.extend(arg_dict_to_arg_list(parsed_exec_args))
 

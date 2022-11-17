@@ -87,9 +87,8 @@ public:
      * @param gameMode The game mode
      * @param statefulModel Whether the used model is stateful
      * @param maxTimeStep The max number of time steps of an episode (= max depth)
-     * @param valueVersion Specifies how the value of terminal states is defined. 1 = considers only win/loss, 2 = considers defeated agents
      */
-    PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep, uint valueVersion);
+    PommermanState(bboard::GameMode gameMode, bool statefulModel, uint maxTimeStep);
     bool hasTrueState;
     bboard::State state;
     bboard::Move moves[bboard::AGENT_COUNT];
@@ -101,7 +100,6 @@ public:
     std::vector<float> auxiliaryOutputs;
     const bool statefulModel;
     const uint maxTimeStep;
-    const uint valueVersion;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.
