@@ -409,12 +409,6 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
     Creates the value target for a zarr dataset z by combining episode values with value predictions from the dataset.
 
     :param z: The zarr dataset
-    <list>
-    <li>1 = considers only win/loss</li>
-    <li>2 = considers defeated agents</li>
-    <li>3 = similar to 2 but with intermediate rewards</li>
-    <li>4 = similar to 2 but with less punishment for dying. Focuses on number of dead opponents.</li>
-    </list>
     :param discount_factor: The discount factor for the episode values (not mcts values)
     :param mcts_val_weight: Static weight of mcts values (completely ignored when None)
         val_target = mcts_val_weight * mcts values + (1 - mcts_val_weight) * episode values
@@ -429,10 +423,12 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
     agent_ids = np.array(z.attrs.get('AgentIds'))
     agent_episode = np.array(z.attrs.get('AgentEpisode'))
     episode_winner = np.array(z.attrs.get('EpisodeWinner'))
+    episode_winning_team = np.array(z.attrs.get('EpisodeWinningTeam'))
     episode_dead = np.array(z.attrs.get('EpisodeDead'))
     episode_actions = z.attrs.get('EpisodeActions')
     episode_steps = np.array(z.attrs.get('EpisodeSteps'))
     episode_draw = np.array(z.attrs.get('EpisodeDraw'))
+    is_ffa = episode_winning_team == -1
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
 
     # Warning: this is not the true value of the state but instead the Q-value of the "best" (= most selected) move.
@@ -487,18 +483,27 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
         episode_discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
         episode_mcts_val = all_mcts_val[current_step:next_step]
 
-        # TODO: Adapt for team mode
-        # only distribute rewards when the (agent) episode is done
-        if winner == agent_id:
-            episode_value = 1
-        elif e_draw and e_steps == steps:
-            # agent is part of the draw
-            episode_value = 0
-        elif dead:
-            episode_value = -1
+
+        if is_ffa:
+            # only distribute rewards when the (agent) episode is done
+            if winner == agent_id:
+                episode_value = 1
+            elif e_draw and e_steps == steps:
+                # agent is part of the draw
+                episode_value = 0
+            elif dead:
+                episode_value = -1
+            else:
+                # episode not done and agent not dead
+                episode_value = 0
         else:
-            # episode not done and agent not dead
-            episode_value = 0
+            if episode_winning_team == agent_id % 2 + 1:
+                episode_value = 1
+            elif episode_winning_team == 0:
+                episode_value = 0
+            else:
+                episode_value = -1
+
 
         episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
 

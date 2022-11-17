@@ -202,7 +202,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
         {
             std::cout << "winning agent " << result.winningAgent;
         }
-        else if (result.winningTeam != 0)
+        else if (result.winningTeam > 0)
         {
             std::cout << "winning team " << result.winningTeam;
         }

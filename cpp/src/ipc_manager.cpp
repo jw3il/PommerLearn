@@ -188,6 +188,7 @@ void FileBasedIPCManager::flush() {
     // episodes
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
     attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningAgent;});
+    attributes["EpisodeWinningTeam"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningTeam;});
     attributes["EpisodeDone"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.isDone;});
     attributes["EpisodeDraw"] = _mapVector<EpisodeInfo, bool>(episodeInfos, [](EpisodeInfo &info){ return info.isDraw;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
