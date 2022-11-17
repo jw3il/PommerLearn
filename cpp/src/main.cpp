@@ -97,11 +97,11 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDir, 1, deviceID);
     }
 
-    
+    std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
+
     if (config.gameMode == bboard::GameMode::FreeForAll){
         // FFA
         // opponents
-        std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
         for(int i = 0; i < bboard::AGENT_COUNT; i++) {
             if (i == agentID) {
                 continue;
@@ -117,7 +117,6 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         }
     } else {
         //Team mode
-        std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
         std::string opponentType;
         if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
             opponentType = firstOpponentType;
@@ -126,7 +125,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
             opponentType = secondOpponentType;
         }
         agents[(agentID+1)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
-        agents[(agentID+2)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+        agents[(agentID+2)%4] = create_agent_by_name("Clone", crazyAraAgent.get(), clones, rawNetAgentQueue);
         agents[(agentID+3)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
     }
 
@@ -153,7 +152,7 @@ inline void setDefaultTeamConfig(RunnerConfig &config){
     // regular team rules
     config.observationParameters.exposePowerUps = false;
     config.observationParameters.agentPartialMapView = true;
-    config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::InView;
+    config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
 }
 
 int main(int argc, char **argv) {
