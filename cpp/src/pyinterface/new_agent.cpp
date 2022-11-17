@@ -25,13 +25,9 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
     // partial observability
     bboard::ObservationParameters obsParams;
     if (ffa){
-        obsParams.agentPartialMapView = false;
-        obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
         obsParams.exposePowerUps = false;
     }
     else {
-        obsParams.agentPartialMapView = true;
-        obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::InView;
         obsParams.exposePowerUps = false;
     }
     obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
