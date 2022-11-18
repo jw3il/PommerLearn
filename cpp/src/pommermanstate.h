@@ -100,7 +100,6 @@ public:
     std::vector<float> auxiliaryOutputs;
     const bool statefulModel;
     const uint maxTimeStep;
-    const uint valueVersion;
 #ifndef MCTS_SINGLE_PLAYER
     int simulatedOpponentID;
     bool myTurn;
