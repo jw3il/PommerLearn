@@ -100,6 +100,26 @@ public:
     std::vector<float> auxiliaryOutputs;
     const bool statefulModel;
     const uint maxTimeStep;
+#ifndef MCTS_SINGLE_PLAYER
+    int simulatedOpponentID;
+    bool myTurn;
+#endif
+
+    /**
+     * @brief Get the id of the agent that is doing the next move in MCTS
+     * 
+     * @return an agent id 
+     */
+    inline int get_turn_agent_id() const
+    {
+#ifdef MCTS_SINGLE_PLAYER
+        // always our own agent
+        return agentID;
+#else
+        // we may play from the perspective of an opponent in this turn
+        return myTurn ? agentID : simulatedOpponentID;
+#endif
+    }
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.

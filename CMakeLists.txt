@@ -7,6 +7,7 @@ option(USE_TENSORRT              "Build with TensorRT support"  ON)
 option(USE_TENSORRT8             "Build with TensorRT support (version 8)"  OFF)
 option(USE_TORCH                 "Build with Torch support"  OFF)
 option(USE_PROFILING             "Build with profiling"   OFF)
+option(USE_1VS1_MCTS             "Build with adaptive 1vs1 mcts variant"   OFF)
 
 if(USE_TENSORRT8)
     set(USE_TENSORRT ON)
@@ -43,7 +44,10 @@ add_definitions(-DMODE_POMMERMAN)
 # add_definitions(-DCRAZYARA_AGENT_PV)
 add_definitions(-DDISABLE_UCI_INFO)  # optional
 add_definitions(-DMCTS_STORE_STATES)
-add_definitions(-DMCTS_SINGLE_PLAYER)
+if(NOT USE_1VS1_MCTS)
+    # add single player definition
+    add_definitions(-DMCTS_SINGLE_PLAYER)
+endif()
 add_definitions(-DYNAMIC_NN_ARCH)
 
 check_env_defined("BLAZE_PATH")
