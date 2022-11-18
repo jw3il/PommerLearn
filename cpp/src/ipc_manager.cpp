@@ -188,11 +188,13 @@ void FileBasedIPCManager::flush() {
     // episodes
     attributes["EpisodeInitialState"] = _mapVector<EpisodeInfo, std::string>(episodeInfos, [](EpisodeInfo &info){ return InitialStateToString(info.initialState);});
     attributes["EpisodeWinner"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningAgent;});
+    attributes["EpisodeWinningTeam"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.winningTeam;});
     attributes["EpisodeDone"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.isDone;});
     attributes["EpisodeDraw"] = _mapVector<EpisodeInfo, bool>(episodeInfos, [](EpisodeInfo &info){ return info.isDraw;});
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
     attributes["EpisodeActions"] = _mapVector<EpisodeInfo, std::array<std::vector<int8_t>, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.actions;});
     attributes["EpisodeDead"] = _mapVector<EpisodeInfo, std::array<bool, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.dead;});
+    attributes["EpisodeGameMode"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return static_cast<int>(info.gameMode); });
 
     // total steps
     attributes["Steps"] = this->processedSteps;

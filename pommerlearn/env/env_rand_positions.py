@@ -63,14 +63,10 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
             random.shuffle(agents)
             board[agents[0][0], agents[0][1]] = constants.Item.Agent0.value
             board[agents[1][0], agents[1][1]] = constants.Item.Agent1.value
-            opos_ix = 0
 
         else:
             agents = [(1, 1), (size - 2, 1), (1, size - 2), (size - 2, size - 2)]
             random.shuffle(agents)
-            opos_x = size-2 if agents[0][0] == 1 else 1
-            opos_y = size-2 if agents[0][1] == 1 else 1
-            opos_ix = agents.index((opos_x, opos_y))
             board[agents[0][0], agents[0][1]] = constants.Item.Agent0.value
             board[agents[1][0], agents[1][1]] = constants.Item.Agent1.value
             board[agents[2][0], agents[2][1]] = constants.Item.Agent2.value
@@ -117,17 +113,17 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
             num_wood = lay_wall(constants.Item.Wood.value, num_wood,
                                 coordinates, board)
 
-        return board, agents, opos_ix
+        return board, agents
 
     assert (num_rigid % 2 == 0)
     assert (num_wood % 2 == 0)
-    board, agents, opos_ix = make(size, num_rigid, num_wood, num_agents)
+    board, agents = make(size, num_rigid, num_wood, num_agents)
 
     # Make sure it's possible to reach most of the passages.
     while len(inaccessible_passages(board, agents)) > 4:
-        board, agents, opos_ix = make(size, num_rigid, num_wood, num_agents)
+        board, agents = make(size, num_rigid, num_wood, num_agents)
 
-    return board, opos_ix
+    return board
 
 class PommeRandomPositon(v0.Pomme):
     def __init__(self, agent_list):
@@ -138,9 +134,7 @@ class PommeRandomPositon(v0.Pomme):
             agent.init_agent(id_, env_kwargs['game_type'])
         self.set_agents(agent_list)
         self.set_init_game_state(None)
-        self.opposite_position_counter = [0 for _ in range(3)]
     
     def make_board(self):
-        self._board, opos_ix = make_board(self._board_size, self._num_rigid,
+        self._board = make_board(self._board_size, self._num_rigid,
                                          self._num_wood, len(self._agents))
-        self.opposite_position_counter[opos_ix-1] += 1

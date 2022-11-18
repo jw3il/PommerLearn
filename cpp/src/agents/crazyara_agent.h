@@ -54,9 +54,8 @@ public:
      * @param gameMode The gamemode
      * @param obsParams How this agent observes the state
      * @param opponentObsParams How opponents observe the state (only relevant for MCTS)
-     * @param valueVersion The value version (only relevant for MCTS)
      */
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion=1);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams);
 
     /**
      * @brief Use the true state of the given environment instead of the observation in the act method.
@@ -106,6 +105,11 @@ public:
      * @param obs Given observation
      */
     void set_pommerman_state(const bboard::Observation *obs);
+
+    /**
+     * @brief get_pommerman_state gets the associated pommerman state.
+     */
+    const PommermanState* get_pommerman_state() const;
 
     /**
      * @brief print_pv_line Prints the PV line of the mcts agent. This function is supposed to be called after the search.

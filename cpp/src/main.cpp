@@ -21,7 +21,7 @@
 
 namespace po = boost::program_options;
 
-bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones)
+bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones, std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue)
 {
     if(firstOpponentType == "SimpleUnbiasedAgent")
     {
@@ -32,7 +32,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
         auto clone = crazyAraAgent->clone();
         // store the clone so it does not run out of scope when we exit the loop
         clones.push_back(std::move(clone));
-        return clone->get();
+        return clones.back().get()->get();
     }
     else if (firstOpponentType == "LazyAgent")
     {
@@ -42,13 +42,23 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
     {
         return new agents::HarmlessAgent();
     }
+    else if (firstOpponentType == "RawNetAgent")
+    {
+        // create new rawnet agent based on given mcts agent
+        std::unique_ptr<RawCrazyAraAgent> rawNetAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
+        rawNetAgent->set_logging_enabled(false);
+        const PommermanState* crazyAraState = crazyAraAgent->get_pommerman_state();
+        rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams);
+        clones.push_back(std::move(rawNetAgent));
+        return clones.back().get()->get();
+    }
     else
     {
         throw std::runtime_error("Opponent type '" + firstOpponentType + "' is not supported.");
     }
 }
 
-void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize, uint valueVersion,
+void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize,
              PlanningAgentType planningAgentType, const std::string& firstOpponentType, const std::string& secondOpponentType,
              SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
 {
@@ -70,7 +80,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
 
     // for now, just use the same observation parameters for opponents
     bboard::ObservationParameters opponentObsParams = config.observationParameters;
-    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, valueVersion);
+    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams);
 
     if (!useRawNet) {
         ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
@@ -81,20 +91,42 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
     // main agent
     agents[agentID] = crazyAraAgent.get();
 
-    // opponents
+    std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue;
+    if ((firstOpponentType == "RawNetAgent" && firstOpponentTypeProbability > 0) || (secondOpponentType == "RawNetAgent" && firstOpponentTypeProbability < 1)) {
+        // we might need raw network agents => load the network for them. We only need one network as they are evaluated sequentially
+        rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDir, 1, deviceID);
+    }
+
     std::vector<std::unique_ptr<Clonable<bboard::Agent>>> clones;
-    for(int i = 0; i < bboard::AGENT_COUNT; i++) {
-        if (i == agentID) {
-            continue;
+
+    if (config.gameMode == bboard::GameMode::FreeForAll){
+        // FFA
+        // opponents
+        for(int i = 0; i < bboard::AGENT_COUNT; i++) {
+            if (i == agentID) {
+                continue;
+            }
+            if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
+                // set agent as first type
+                agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+            }
+            else {
+                // set agent as second type
+                agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+            }
         }
+    } else {
+        //Team mode
+        std::string opponentType;
         if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
-            // set agent as first type
-            agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones);
+            opponentType = firstOpponentType;
         }
         else {
-            // set agent as second type
-            agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones);
+            opponentType = secondOpponentType;
         }
+        agents[(agentID+1)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+        agents[(agentID+2)%4] = create_agent_by_name("Clone", crazyAraAgent.get(), clones, rawNetAgentQueue);
+        agents[(agentID+3)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
     }
 
     std::cout << "Agents loaded. Starting the runner.." << std::endl;
@@ -105,13 +137,21 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         mctsAgent->export_search_tree(3, "lastSearchTee.gv");
     }
     */
-}
+} 
 
 inline void setDefaultFFAConfig(RunnerConfig &config) {
     config.gameMode = bboard::GameMode::FreeForAll;
     // regular ffa rules
     config.observationParameters.exposePowerUps = false;
     config.observationParameters.agentPartialMapView = false;
+    config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
+}
+
+inline void setDefaultTeamConfig(RunnerConfig &config){
+    config.gameMode = bboard::GameMode::TwoTeams;
+    // regular team rules
+    config.observationParameters.exposePowerUps = false;
+    config.observationParameters.agentPartialMapView = true;
     config.observationParameters.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
 }
 
@@ -122,7 +162,7 @@ int main(int argc, char **argv) {
             ("help", "Print help message")
 
             // general options
-            ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts")
+            ("mode", po::value<std::string>()->default_value("ffa_sl"), "Available modes: ffa_sl, ffa_mcts, team_mcts")
             ("print", "If set, print the current state of the environment in every step.")
             ("print-first-last", "If set, print the first and last environment state of each episode.")
 
@@ -131,6 +171,7 @@ int main(int argc, char **argv) {
             ("env-gen-seed-eps", po::value<long>()->default_value(1), "The number of episodes a single environment generation seed is reused (= new environment every x episodes).")
             ("seed", po::value<long>()->default_value(-1), "The seed used for the complete run (ignored if -1)")
             ("fix-agent-positions", "If set, the agent starting positions will be fixed across all episodes.")
+            ("centered-observation", "If set, the observation of an agent is an board_sizexboard_size window centered around the corresponding agent. The agent is not always aware of the full board.")
 
             // termination options, stop if:
             //   num_games > max-games
@@ -165,7 +206,6 @@ int main(int argc, char **argv) {
             ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
-            ("value-version", po::value<uint>()->default_value(1), "1 = considers only win/loss, 2 = considers defeated agents")
             ("no-state", "Whether to use (partial) observations instead of the true state for mcts.")
     ;
 
@@ -208,6 +248,7 @@ int main(int argc, char **argv) {
     config.printFirstLast = configVals.count("print-first-last") > 0;
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no-state") == 0;
+    CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
@@ -217,7 +258,7 @@ int main(int argc, char **argv) {
         setDefaultFFAConfig(config);
         Runner::run_simple_unbiased_agents(config);
     }
-    else if (mode == "ffa_mcts") {
+    else if ((mode == "ffa_mcts") || (mode == "team_mcts")) {
         bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
         std::string modelDir = configVals["model-dir"].as<std::string>();
 
@@ -259,8 +300,13 @@ int main(int argc, char **argv) {
         // intermediate flushing in case something breaks
         config.flushEpisodes = 10;
 
-        setDefaultFFAConfig(config);
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), configVals["value-version"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
+        if (mode == "ffa_mcts"){
+            setDefaultFFAConfig(config);
+        }
+        else {
+            setDefaultTeamConfig(config);
+        }
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
                 searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
     }
     else {

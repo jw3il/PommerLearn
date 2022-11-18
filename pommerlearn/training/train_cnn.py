@@ -94,7 +94,7 @@ def train_cnn(train_config):
 
     train_loader, val_loader = create_data_loaders(
         train_config["dataset_path"],
-        train_config["value_version"], train_config["discount_factor"], train_config["mcts_val_weight"],
+        train_config["discount_factor"], train_config["mcts_val_weight"],
         train_config["test_size"], train_config["batch_size"], train_config["batch_size_test"],
         train_transform=train_config["dataset_train_transform"], sequence_length=train_sequence_length,
         num_workers=train_config["num_workers"], only_test_last=train_config["only_test_last"],
@@ -602,7 +602,6 @@ def fill_default_config(train_config):
         "output_dir": "./model",
         "model_batch_sizes": [1, 8],
         # hyperparameters
-        "value_version": 1,
         "discount_factor": 0.99,
         "mcts_val_weight": 0.0,  # None or in [0, 1]
         "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end", "weighted_actions"

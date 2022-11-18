@@ -5,7 +5,7 @@
 #include <iostream>
 #include "string.h"
 
-std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, SearchLimits searchLimits=SearchLimits())
+std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -24,12 +24,22 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
 
     // partial observability
     bboard::ObservationParameters obsParams;
-    obsParams.agentPartialMapView = false;
-    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::All;
+    if (ffa){
+        obsParams.exposePowerUps = false;
+    }
+    else {
+        obsParams.exposePowerUps = false;
+    }
+    obsParams.agentInfoVisibility = bboard::AgentInfoVisibility::OnlySelf;
     obsParams.exposePowerUps = false;
 
-    uint valueVersion = 1;
-    crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams, valueVersion);
+
+    if (ffa){
+        crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams);
+    } 
+    else {
+        crazyAraAgent->init_state(bboard::GameMode::TwoTeams, obsParams, obsParams);
+    }
 
     if(!rawNetAgent)
     {
@@ -78,9 +88,11 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
             << "> Model dir: " << modelDir << std::endl
             << "> State size: " << stateSize << std::endl;
 
+        bool isFFA = !(agentName.find("RawNetAgentTeam") == 0);
+
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA);
     }
     else if(agentName.find("CrazyAraAgent") == 0)
     {
@@ -107,10 +119,12 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         SearchLimits searchLimits;
         searchLimits.simulations = std::stoi(simulations);
         searchLimits.movetime = std::stoi(moveTime);
+
+        bool isFFA = !(agentName.find("CrazyAraAgentTeam") == 0);
         
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, searchLimits=searchLimits);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, searchLimits=searchLimits);
     }
 
     return nullptr;

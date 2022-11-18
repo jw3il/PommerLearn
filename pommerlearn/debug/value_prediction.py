@@ -14,12 +14,12 @@ from env.replay_env import PommeReplay
 from nn.PommerModel import PommerModel
 
 
-def plot_value_prediction(dataset_path, model_path, agent_episode, discount_factor, mcts_val_weight, value_version,
+def plot_value_prediction(dataset_path, model_path, agent_episode, discount_factor, mcts_val_weight,
                           figure_prefix, save_figure, show_figure):
     z = zarr.open(str(dataset_path), 'r')
     print("Total number of episodes in dataset", len(z.attrs.get('AgentSteps')))
 
-    data = PommerDataset.from_zarr(z, value_version, discount_factor, mcts_val_weight)
+    data = PommerDataset.from_zarr(z, discount_factor, mcts_val_weight)
     episode_slice = get_agent_episode_slice(z, agent_episode)
     num_steps = episode_slice.stop - episode_slice.start
 
@@ -76,17 +76,17 @@ def plot_value_prediction(dataset_path, model_path, agent_episode, discount_fact
     plt.legend(loc='lower left')
 
     if save_figure:
-        fig.savefig(f"{figure_prefix}_ep{agent_episode}_g{discount_factor:.2f}_v{value_version}.svg", bbox_inches='tight')
+        fig.savefig(f"{figure_prefix}_ep{agent_episode}_g{discount_factor:.2f}.svg", bbox_inches='tight')
 
     if show_figure:
         plt.show()
 
 
-def print_episodes_with_value(dataset_path, value_version, target_value):
+def print_episodes_with_value(dataset_path, target_value):
     episodes = []
 
     z = zarr.open(str(dataset_path), 'r')
-    data = PommerDataset.from_zarr(z, value_version, 1)
+    data = PommerDataset.from_zarr(z, 1)
     for agent_episode in range(0, len(z.attrs.get('AgentSteps'))):
         episode_slice = get_agent_episode_slice(z, agent_episode)
         if np.abs(data[episode_slice.start].val - target_value) < 0.01:
@@ -103,7 +103,7 @@ def print_episodes_with_value(dataset_path, value_version, target_value):
 
 dataset_path="mcts_data_500.zr"
 
-# print_episodes_with_value(dataset_path, value_version=2, target_value=-1/3)
+# print_episodes_with_value(dataset_path, target_value=-1/3)
 # PommeReplay.play(zarr.open(str(dataset_path), 'r'), 484, render=True, render_pause=None)
 # sys.exit()
 
@@ -113,7 +113,6 @@ plot_value_prediction(
     agent_episode=484,
     discount_factor=0.99,
     mcts_val_weight=0.5,
-    value_version=4,
     figure_prefix="values_g0.97",
     save_figure=True,
     show_figure=True

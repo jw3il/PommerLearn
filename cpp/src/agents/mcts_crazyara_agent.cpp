@@ -88,7 +88,7 @@ void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType
             throw std::runtime_error("Cannot use planningAgentType RawNetworkAgent with empty model directory.");
         }
 
-        rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDirectory, deviceID, searchSettings.threads);
+        rawNetAgentQueue = RawCrazyAraAgent::load_raw_net_agent_queue(modelDirectory, searchSettings.threads, deviceID);
     }
 
     for (int i = 0; i < bboard::AGENT_COUNT; i++) {
@@ -122,7 +122,7 @@ void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType
         {
             std::unique_ptr<RawCrazyAraAgent> crazyAraAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
             crazyAraAgent->id = i;
-            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams, pommermanState->valueVersion);
+            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams);
             agent = std::move(crazyAraAgent);
             break;
         }

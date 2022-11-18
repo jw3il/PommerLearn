@@ -11,6 +11,7 @@ struct EpisodeInfo
     // information about the episode itself
     bboard::State initialState;
     std::array<std::vector<int8_t>, bboard::AGENT_COUNT> actions;
+    bboard::GameMode gameMode;
 
     // information about the result
     int winningAgent;

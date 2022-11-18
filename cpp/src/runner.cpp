@@ -18,6 +18,7 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
 {
     EpisodeInfo info;
     info.initialState = env.GetState();
+    info.gameMode = env.GetGameMode();
 
     if (printSteps || printFirstLast) {
         env.Print(false);
@@ -89,7 +90,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
     if (config.ipcManager != nullptr) {
         for (uint i = 0; i < agents.size(); i++) {
             SampleCollector* sampleCollector = dynamic_cast<SampleCollector*>(agents[i]);
-            if (sampleCollector != nullptr) {
+            if (sampleCollector != nullptr && sampleCollector->get_logging_enabled()) {
                 sampleCollector->create_buffer(config.maxEpisodeSteps);
                 sampleCollectors.push_back(sampleCollector);
             }
@@ -202,7 +203,7 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
         {
             std::cout << "winning agent " << result.winningAgent;
         }
-        else if (result.winningTeam != 0)
+        else if (result.winningTeam > 0)
         {
             std::cout << "winning team " << result.winningTeam;
         }

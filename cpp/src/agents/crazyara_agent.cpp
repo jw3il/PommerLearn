@@ -4,9 +4,9 @@
 #include "agents/rawnetagent.h"
 #include "agents/mctsagent.h"
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, uint8_t valueVersion)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams)
 {
-    pommermanState = std::make_unique<PommermanState>(gameMode, has_stateful_model(), 800, valueVersion);
+    pommermanState = std::make_unique<PommermanState>(gameMode, has_stateful_model(), 800);
     pommermanState->set_agent_observation_params(obsParams);
     pommermanState->set_opponent_observation_params(opponentObsParams);
 }
@@ -68,6 +68,11 @@ void CrazyAraAgent::print_pv_line(MCTSAgent* mctsAgent, const bboard::Observatio
             std::cout << "END ========== " << std::endl;
         }
     }
+}
+
+const PommermanState* CrazyAraAgent::get_pommerman_state() const
+{
+    return pommermanState.get();
 }
 
 void CrazyAraAgent::add_results_to_buffer(const NeuralNetAPI* net, bboard::Move bestAction)
