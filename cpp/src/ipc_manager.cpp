@@ -194,6 +194,7 @@ void FileBasedIPCManager::flush() {
     attributes["EpisodeSteps"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return info.steps;});
     attributes["EpisodeActions"] = _mapVector<EpisodeInfo, std::array<std::vector<int8_t>, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.actions;});
     attributes["EpisodeDead"] = _mapVector<EpisodeInfo, std::array<bool, bboard::AGENT_COUNT>>(episodeInfos, [](EpisodeInfo &info){ return info.dead;});
+    attributes["EpisodeGameMode"] = _mapVector<EpisodeInfo, int>(episodeInfos, [](EpisodeInfo &info){ return static_cast<int>(info.gameMode); });
 
     // total steps
     attributes["Steps"] = this->processedSteps;

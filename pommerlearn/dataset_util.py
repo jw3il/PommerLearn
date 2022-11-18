@@ -428,7 +428,7 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
     episode_actions = z.attrs.get('EpisodeActions')
     episode_steps = np.array(z.attrs.get('EpisodeSteps'))
     episode_draw = np.array(z.attrs.get('EpisodeDraw'))
-    is_ffa = episode_winning_team == -1
+    episode_game_mode = np.array(z.attrs.get('EpisodeGameMode'))
     # episode_done = np.array(z.attrs.get('EpisodeDone'))
 
     # Warning: this is not the true value of the state but instead the Q-value of the "best" (= most selected) move.
@@ -474,7 +474,10 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
         e_draw = episode_draw[ep]
         e_steps = episode_steps[ep]
 
-        died_in_step = get_agent_died_in_step(episode_actions[ep], episode_dead[ep])
+        is_ffa = episode_game_mode[ep] == 0
+        winning_team = episode_winning_team[ep]
+
+        # died_in_step = get_agent_died_in_step(episode_actions[ep], episode_dead[ep])
 
         # min to handle cut datasets
         next_step = min(current_step + steps, total_steps)
@@ -482,7 +485,6 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
 
         episode_discounting = np.power(discount_factor, np.arange(steps - 1, steps - 1 - num_steps, -1))
         episode_mcts_val = all_mcts_val[current_step:next_step]
-
 
         if is_ffa:
             # only distribute rewards when the (agent) episode is done
@@ -497,13 +499,12 @@ def get_value_target(z, discount_factor: float, mcts_val_weight: Optional[float]
                 # episode not done and agent not dead
                 episode_value = 0
         else:
-            if episode_winning_team == agent_id % 2 + 1:
+            if winning_team == agent_id % 2 + 1:
                 episode_value = 1
-            elif episode_winning_team == 0:
+            elif winning_team == 0:
                 episode_value = 0
             else:
                 episode_value = -1
-
 
         episode_target = get_combined_target(episode_mcts_val, episode_value, episode_discounting)
 

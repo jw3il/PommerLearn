@@ -18,6 +18,7 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
 {
     EpisodeInfo info;
     info.initialState = env.GetState();
+    info.gameMode = env.GetGameMode();
 
     if (printSteps || printFirstLast) {
         env.Print(false);
