@@ -7,7 +7,7 @@ option(USE_TENSORRT              "Build with TensorRT support"  ON)
 option(USE_TENSORRT8             "Build with TensorRT support (version 8)"  OFF)
 option(USE_TORCH                 "Build with Torch support"  OFF)
 option(USE_PROFILING             "Build with profiling"   OFF)
-option(USE_1VS1_MCTS             "Build with adaptive 1vs1 mcts variant"   ON)
+option(USE_1VS1_MCTS             "Build with adaptive 1vs1 mcts variant"   OFF)
 
 if(USE_TENSORRT8)
     set(USE_TENSORRT ON)

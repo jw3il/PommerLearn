@@ -68,5 +68,11 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSE_TENSORRT8=ON -DCMAKE_CXX_COMPILER="$(
     # clear the cache
     rm -r CMakeFiles
 
+WORKDIR /PommerLearn/build1vs1
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSE_TENSORRT8=ON -DUSE_1VS1_MCTS=ON -DCMAKE_CXX_COMPILER="$(which g++)" .. && \
+    make VERBOSE=1 all -j8 && \
+    # clear the cache
+    rm -r CMakeFiles
+
 # start environment
 CMD ["conda", "run", "--no-capture-output", "-n", "pommer", "/bin/bash"]
