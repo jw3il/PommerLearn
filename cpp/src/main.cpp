@@ -15,13 +15,17 @@
 #include "boost/program_options.hpp"
 
 #include "clonable.h"
-
+#include "pommermanstate.h"
 // normally not required
 #include "agents/mctsagent.h"
 
 namespace po = boost::program_options;
 
-bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones, std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue)
+//ToDo: insert config for virtualStep
+bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, \
+                                    std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones, \
+                                    std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue, \
+                                    bool useVirtualState)
 {
     if(firstOpponentType == "SimpleUnbiasedAgent")
     {
@@ -48,7 +52,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
         std::unique_ptr<RawCrazyAraAgent> rawNetAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
         rawNetAgent->set_logging_enabled(false);
         const PommermanState* crazyAraState = crazyAraAgent->get_pommerman_state();
-        rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams);
+        rawNetAgent->init_state(crazyAraState->gameMode, crazyAraState->opponentObsParams, crazyAraState->opponentObsParams, useVirtualState);
         clones.push_back(std::move(rawNetAgent));
         return clones.back().get()->get();
     }
@@ -73,6 +77,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir, deviceID);
     }
     else {
+        //ToDo: use-terminal-solver als argument
         SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
@@ -80,7 +85,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
 
     // for now, just use the same observation parameters for opponents
     bboard::ObservationParameters opponentObsParams = config.observationParameters;
-    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams);
+    crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, config.useVirtualStep);
 
     if (!useRawNet) {
         ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
@@ -108,11 +113,11 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
             }
             if (firstOpponentTypeProbability == 1 || rand() % 100 < firstOpponentTypeProbability * 100) {
                 // set agent as first type
-                agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+                agents[i] = create_agent_by_name(firstOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue, config.useVirtualStep);
             }
             else {
                 // set agent as second type
-                agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+                agents[i] = create_agent_by_name(secondOpponentType, crazyAraAgent.get(), clones, rawNetAgentQueue, config.useVirtualStep);
             }
         }
     } else {
@@ -124,9 +129,9 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         else {
             opponentType = secondOpponentType;
         }
-        agents[(agentID+1)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
-        agents[(agentID+2)%4] = create_agent_by_name("Clone", crazyAraAgent.get(), clones, rawNetAgentQueue);
-        agents[(agentID+3)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue);
+        agents[(agentID+1)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue, config.useVirtualStep);
+        agents[(agentID+2)%4] = create_agent_by_name("Clone", crazyAraAgent.get(), clones, rawNetAgentQueue, config.useVirtualStep);
+        agents[(agentID+3)%4] = create_agent_by_name(opponentType, crazyAraAgent.get(), clones, rawNetAgentQueue, config.useVirtualStep);
     }
 
     std::cout << "Agents loaded. Starting the runner.." << std::endl;
@@ -192,6 +197,8 @@ int main(int argc, char **argv) {
             ("agent-id", po::value<int>()->default_value(0), "The agent id used by the mcts agent.")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
+
+            ("virtual-step", "Option to use previous states to reconstruct known information about previously seen parts of the board")
             // TODO: State size should be detected automatically (?)
             ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
@@ -249,6 +256,7 @@ int main(int argc, char **argv) {
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no-state") == 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
+    config.useVirtualStep = configVals.count("virtual-step")>0;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();

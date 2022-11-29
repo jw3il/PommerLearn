@@ -23,6 +23,7 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
     hasBufferedActions(false)
 {
     std::fill_n(moves, bboard::AGENT_COUNT, bboard::Move::IDLE);
+    //std::fill_n(&this->vsParams.itemAge[0][0], bboard::BOARD_SIZE * bboard::BOARD_SIZE , 0);
     if (StateConstantsPommerman::NB_AUXILIARY_OUTPUTS() != 0) {
         auxiliaryOutputs.resize(StateConstantsPommerman::NB_AUXILIARY_OUTPUTS());
     }
@@ -35,6 +36,11 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
 void PommermanState::set_agent_id(const int id)
 {
     this->agentID = id;
+}
+
+void PommermanState::set_virtual_step(bool useVirtualStep)
+{
+    this->useVirtualStep = useVirtualStep;
 }
 
 void PommermanState::set_state(const bboard::State* state)
@@ -50,8 +56,12 @@ void PommermanState::set_state(const bboard::State* state)
 
 void PommermanState::set_observation(const bboard::Observation* obs)
 {
-    // TODO: Merge observations
-    obs->ToState(this->state);
+
+    if (this->useVirtualStep && obs->timeStep>0){
+        obs->VirtualStep(this->state, true, true, nullptr);
+    } else {
+        obs->ToState(this->state);
+    }
     this->hasTrueState = false;
 
     if (hasPlanningAgents) {
@@ -214,9 +224,13 @@ void PommermanState::set(const std::string &fenStr, bool isChess960, int variant
 
 void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
 {
-    // TODO: Does not account for merged observations
+    // TODO: Does not account for merged observations (add Parameter merge)
     bboard::Observation obs;
-    bboard::Observation::Get(state, agentID, this->agentObsParams, obs);
+    bboard::ObservationParameters obsParams = this->agentObsParams;
+    if (this->useVirtualStep){
+        obsParams.agentPartialMapView = false;
+    }
+    bboard::Observation::Get(state, agentID, obsParams, obs);
     BoardToPlanes(&obs, agentID, inputPlanes);
 
     if (this->statefulModel)
@@ -482,6 +496,7 @@ PommermanState* PommermanState::clone() const
     clone->agentID = agentID;
     clone->agentObsParams = agentObsParams;
     clone->opponentObsParams = opponentObsParams;
+    clone->useVirtualStep = useVirtualStep;
     if (hasPlanningAgents) {
         // clone all relevant agents
         for (size_t i = 0; i < planningAgents.size(); i++) {

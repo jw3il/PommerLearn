@@ -100,6 +100,7 @@ public:
     std::vector<float> auxiliaryOutputs;
     const bool statefulModel;
     const uint maxTimeStep;
+    bool useVirtualStep;
 
     /**
      * @brief planningAgents contains other agents which can be used in the planning process.
@@ -121,6 +122,7 @@ public:
     void set_agent_observation_params(const bboard::ObservationParameters params);
     void set_opponent_observation_params(const bboard::ObservationParameters params);
     void set_agent_id(const int id);
+    void set_virtual_step(bool useVirtualStep);
 
     // planning agent methods
 

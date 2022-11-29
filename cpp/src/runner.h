@@ -5,6 +5,7 @@
 #include "agents.hpp"
 #include "ipc_manager.h"
 #include "episode_info.h"
+#include "pommermanstate.h"
 
 /**
  * @brief Configuration struct for the runner class.
@@ -20,6 +21,11 @@ struct RunnerConfig
      * @brief observationParameters The observation parameters for all agents in all episodes.
      */
     bboard::ObservationParameters observationParameters;
+
+    /**
+     * @brief useVirtualStep Parameter defining wetherto recreate information from previous observations
+     */
+    bool useVirtualStep = false;
 
     /**
      * @brief maxEpisodeSteps The maximum number of steps per episode.

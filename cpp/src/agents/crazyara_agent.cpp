@@ -4,11 +4,12 @@
 #include "agents/rawnetagent.h"
 #include "agents/mctsagent.h"
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, bool useVirtualStep)
 {
     pommermanState = std::make_unique<PommermanState>(gameMode, has_stateful_model(), 800);
     pommermanState->set_agent_observation_params(obsParams);
     pommermanState->set_opponent_observation_params(opponentObsParams);
+    pommermanState->set_virtual_step(useVirtualStep);
 }
 
 void CrazyAraAgent::use_environment_state(bboard::Environment* env) 
@@ -95,15 +96,13 @@ void CrazyAraAgent::add_results_to_buffer(const NeuralNetAPI* net, bboard::Move 
 bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
 {
     set_pommerman_state(obs);
-
-    pommermanState->set_observation(obs);
-
     crazyara::Agent* agent = get_acting_agent();
     NeuralNetAPI* net = get_acting_net();
-
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
+    std::cout << "CrazyAraAgent::act::perform_action"<< std::endl;
     agent->perform_action();
 
+    std::cout << "CrazyAraAgent::act::bestAction"<< std::endl;
     bboard::Move bestAction = bboard::Move(agent->get_best_action());
 
     #if ! defined(DISABLE_UCI_INFO) || defined(CRAZYARA_AGENT_PV)
@@ -121,6 +120,7 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     #endif
 
     add_results_to_buffer(net, bestAction);
+    std::cout << "Acted"<< std::endl;
     return bestAction;
 }
 
