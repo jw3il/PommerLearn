@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
             ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
-            ("no-state", "Whether to use (partial) observations instead of the true state for mcts.")
+            ("with-state", "Whether to use the true state instead of (partial) observations for mcts.")
     ;
 
     po::variables_map configVals;
@@ -254,7 +254,7 @@ int main(int argc, char **argv) {
     config.printSteps = configVals.count("print") > 0;
     config.printFirstLast = configVals.count("print-first-last") > 0;
     config.ipcManager = ipcManager.get();
-    config.useStateInSearch = configVals.count("no-state") == 0;
+    config.useStateInSearch = configVals.count("with-state") > 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
     config.useVirtualStep = configVals.count("virtual-step")>0;
 
