@@ -54,7 +54,7 @@ std::pair<std::string, std::string> _extract_arg(std::string input, std::string 
     auto delimiterPos = input.find(":");
     if(delimiterPos == std::string::npos)
     {
-        return std::pair<std::string, std::string>("", input);
+        return std::pair<std::string, std::string>(input, "");
     }
 
     std::string arg = input.substr(0, delimiterPos);
@@ -62,7 +62,7 @@ std::pair<std::string, std::string> _extract_arg(std::string input, std::string 
     return std::pair<std::string, std::string>(arg, remainder);
 }
 
-std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, long seed, bool virtualStep=false)
+std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, long seed)
 {
     if(agentName == "SimpleAgent")
     {
@@ -77,18 +77,22 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         auto tmp = _extract_arg(agentName);
         tmp = _extract_arg(tmp.second);
         std::string modelDir = tmp.first;
-        std::string stateSize = tmp.second;
+        tmp = _extract_arg(tmp.second);
+        std::string stateSize = tmp.first;
+        bool virtualStep = (tmp.second == "virtualStep");
         if(modelDir.empty() || stateSize.empty()) 
         {
             std::cout << "Could not parse agent identifier. Specify the agent like RawNet:dir:stateSize" << std::endl;
             return nullptr;
         }
 
+        bool isFFA = !(agentName.find("RawNetAgentTeam") == 0);
+
         std::cout << "Creating RawNetAgent with " << std::endl
             << "> Model dir: " << modelDir << std::endl
-            << "> State size: " << stateSize << std::endl;
-
-        bool isFFA = !(agentName.find("RawNetAgentTeam") == 0);
+            << "> State size: " << stateSize << std::endl
+            << "> FFA: " << isFFA << std::endl
+            << "> VirtualStep: " << virtualStep << std::endl;
 
         // always use device with id 0
         int deviceID = 0;
@@ -103,24 +107,29 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         std::string stateSize = tmp.first;
         tmp = _extract_arg(tmp.second);
         std::string simulations = tmp.first;
-        std::string moveTime = tmp.second;
+        tmp = _extract_arg(tmp.second);
+        std::string moveTime = tmp.first;
+        bool virtualStep = (tmp.second == "virtualStep");
         if(modelDir.empty() || stateSize.empty() || simulations.empty() || moveTime.empty()) 
         {
-            std::cout << "Could not parse agent identifier. Specify the agent like CrazyAra:dir:stateSize:simulations:moveTime" << std::endl;
+            std::cout << "Could not parse agent identifier. Specify the agent like CrazyAra:dir:stateSize:simulations:moveTime (:virtualStep (optional)" << std::endl;
             return nullptr;
         }
+        
+        bool isFFA = !(agentName.find("CrazyAraAgentTeam") == 0);
 
         std::cout << "Creating CrazyAraAgent with " << std::endl
                   << "> Model dir: " << modelDir << std::endl
                   << "> State size: " << stateSize << std::endl
                   << "> Simulations: " << simulations << std::endl
-                  << "> Movetime: " << moveTime << std::endl;
+                  << "> Movetime: " << moveTime << std::endl
+                  << "> FFA: " << isFFA << std::endl
+                  << "> VirtualStep: " << virtualStep << std::endl;
 
         SearchLimits searchLimits;
         searchLimits.simulations = std::stoi(simulations);
         searchLimits.movetime = std::stoi(moveTime);
 
-        bool isFFA = !(agentName.find("CrazyAraAgentTeam") == 0);
         
         // always use device with id 0
         int deviceID = 0;
