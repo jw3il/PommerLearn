@@ -5,7 +5,7 @@
 #include <iostream>
 #include "string.h"
 
-std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, SearchLimits searchLimits=SearchLimits())
+std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, bool virtualStep, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -35,10 +35,10 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
 
 
     if (ffa){
-        crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams);
+        crazyAraAgent->init_state(bboard::GameMode::FreeForAll, obsParams, obsParams, virtualStep);
     } 
     else {
-        crazyAraAgent->init_state(bboard::GameMode::TwoTeams, obsParams, obsParams);
+        crazyAraAgent->init_state(bboard::GameMode::TwoTeams, obsParams, obsParams, virtualStep);
     }
 
     if(!rawNetAgent)
@@ -62,7 +62,7 @@ std::pair<std::string, std::string> _extract_arg(std::string input, std::string 
     return std::pair<std::string, std::string>(arg, remainder);
 }
 
-std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, long seed)
+std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, long seed, bool virtualStep=false)
 {
     if(agentName == "SimpleAgent")
     {
@@ -92,7 +92,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
 
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA, virtualStep);
     }
     else if(agentName.find("CrazyAraAgent") == 0)
     {
@@ -124,7 +124,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, searchLimits=searchLimits);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep,searchLimits=searchLimits);
     }
 
     return nullptr;
