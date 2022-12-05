@@ -21,7 +21,6 @@
 
 namespace po = boost::program_options;
 
-//ToDo: insert config for virtualStep
 bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyAraAgent* crazyAraAgent, \
                                     std::vector<std::unique_ptr<Clonable<bboard::Agent>>>& clones, \
                                     std::shared_ptr<SafePtrQueue<RawNetAgentContainer>> rawNetAgentQueue, \
@@ -77,8 +76,8 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir, deviceID);
     }
     else {
-        //ToDo: use-terminal-solver als argument
         SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
+        searchSettings.mctsSolver = config.useTerminalSolver;
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
     }
@@ -197,6 +196,7 @@ int main(int argc, char **argv) {
             ("agent-id", po::value<int>()->default_value(0), "The agent id used by the mcts agent.")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
+            ("use-terminal-solver", "If set, the MCTS solver for terminals and tablebases will be active")
 
             ("virtual-step", "Option to use previous states to reconstruct known information about previously seen parts of the board")
             // TODO: State size should be detected automatically (?)
@@ -257,6 +257,7 @@ int main(int argc, char **argv) {
     config.useStateInSearch = configVals.count("with-state") > 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
     config.useVirtualStep = configVals.count("virtual-step")>0;
+    config.useTerminalSolver = configVals.count("use-terminal-solver")>0;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
