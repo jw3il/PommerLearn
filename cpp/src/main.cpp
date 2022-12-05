@@ -74,6 +74,7 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
     }
     else {
         SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
+        searchSettings.mctsSolver = config.useTerminalSolver;
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
     }
@@ -192,6 +193,8 @@ int main(int argc, char **argv) {
             ("agent-id", po::value<int>()->default_value(0), "The agent id used by the mcts agent.")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
+            ("use-terminal-solver", "If set, the MCTS solver for terminals and tablebases will be active")
+
             // TODO: State size should be detected automatically (?)
             ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
             ("simulations", po::value<int>()->default_value(100), "Size of the flattened state of the model (0 for no state)")
@@ -249,6 +252,8 @@ int main(int argc, char **argv) {
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("no-state") == 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
+
+    config.useTerminalSolver = configVals.count("use-terminal-solver")>0;
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
