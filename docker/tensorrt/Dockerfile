@@ -59,6 +59,8 @@ ARG BUILD_TIMESTAMMP=unknown
 # update repository
 WORKDIR /PommerLearn
 RUN git pull && \
+    # optional: checkout specific branch
+    # git checkout master && \
     git submodule update
 
 # build the binary

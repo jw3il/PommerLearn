@@ -14,14 +14,16 @@ if [[ -z "${TAG}" ]]; then
     TAG=tensorrt
 fi
 
-if [[ -z "${POMMER_1VS1}" ]]; then
+if [ -z "${POMMER_1VS1}" ] || [ "${POMMER_1VS1}" != true ]; then
     EXEC_PATH=/PommerLearn/build/PommerLearn
 else
     EXEC_PATH=/PommerLearn/build1vs1/PommerLearn
-    echo "Warning: running PommerLearn with the 1vs1 build."
+    echo -e "\033[41;37m###########################################################\033[0m"
+    echo -e "\033[41;37m#### Warning: running PommerLearn with the 1vs1 build. ####\033[0m"
+    echo -e "\033[41;37m###########################################################\033[0m"
 fi
 
 # Run the image and pass additional args with "$@"
 docker run --gpus all -v "${POMMER_DATA_DIR}":/data --rm --shm-size="${POMMER_SHM_SIZE}" "pommer:${TAG}" \
     conda run --no-capture-output -n pommer \
-    python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec "/PommerLearn/${EXEC_PATH}/PommerLearn" "$@"
+    python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec "${EXEC_PATH}" "$@"
