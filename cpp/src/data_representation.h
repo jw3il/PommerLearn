@@ -61,7 +61,7 @@ Player (relative ids)
 Scalar Feature Planes:
 * Self: Player Bomb Strength
 * Self: Bomb Count (Ammo)
-* Self: Max Momb Count
+* Self: Max Bomb Count
 * Self: Can Kick
 * Alive 0 (relative ids)
 * Alive 1
