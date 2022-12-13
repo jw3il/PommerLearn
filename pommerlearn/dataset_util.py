@@ -86,6 +86,8 @@ class PommerDataset(Dataset):
     """
     A pommerman dataset.
     """
+    NUM_PLANES = 23
+    PLANE_SIZE = 11
     PLANE_HORIZONTAL_BOMB_MOVEMENT = 7
     PLANE_VERTICAL_BOMB_MOVEMENT = 8
     PLANE_AGENT0 = 10
@@ -180,7 +182,10 @@ class PommerDataset(Dataset):
         """
 
         return PommerDataset(
-            obs=np.empty((count, 18, 11, 11), dtype=np.single),
+            obs=np.empty(
+                (count, PommerDataset.NUM_PLANES, PommerDataset.PLANE_SIZE,  PommerDataset.PLANE_SIZE),
+                dtype=np.single
+            ),
             val=np.empty(count, dtype=np.single),
             act=np.empty(count, dtype=np.byte),
             pol=np.empty((count, 6), dtype=np.single),
@@ -267,7 +272,10 @@ class PommerDataset(Dataset):
         else:
             # build a sequence of samples
             sequence = PommerSample(
-                torch.zeros((self.sequence_length, 18, 11, 11), dtype=torch.float),
+                torch.zeros(
+                    (self.sequence_length, PommerDataset.NUM_PLANES, PommerDataset.PLANE_SIZE, PommerDataset.PLANE_SIZE),
+                    dtype=torch.float
+                ),
                 torch.zeros(self.sequence_length, dtype=torch.float),
                 torch.zeros(self.sequence_length, dtype=torch.int),
                 torch.zeros((self.sequence_length, 6), dtype=torch.float)
