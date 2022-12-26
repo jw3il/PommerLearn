@@ -4,7 +4,7 @@
 #include "bboard.hpp"
 #include "xtensor/xarray.hpp"
 
-const int PLANE_COUNT = 18;
+const int PLANE_COUNT = 23;
 const int PLANE_SIZE = bboard::BOARD_SIZE;
 const int PLANES_TOTAL_FLOATS = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
 const int N_POSITION_DEPENDENT_PLANES = 14;
@@ -52,18 +52,22 @@ Bomb:
 Flames:
 * Bomb Flame Position & Life 1 -> 0
 
-Player
-* Position Self
-* Position Enemy 1
-* Position Enemy 2
-* Position Enemy 3
+Player (relative ids)
+* Position 0
+* Position 1
+* Position 2
+* Position 3
 
 Scalar Feature Planes:
 * Self: Player Bomb Strength
 * Self: Bomb Count (Ammo)
-* Self: Max Momb Count
+* Self: Max Bomb Count
 * Self: Can Kick
-
+* Alive 0 (relative ids)
+* Alive 1
+* Alive 2
+* Alive 3
+* Number of steps (normalized in [0, 1] for step 0 to 799)
 */
 
 /**

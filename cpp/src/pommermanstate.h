@@ -22,13 +22,13 @@ private:
     static uint auxiliaryStateSize;
 public:
     static uint BOARD_WIDTH() {
-        return 11;
+        return PLANE_SIZE;
     }
     static uint BOARD_HEIGHT() {
-        return 11;
+        return PLANE_SIZE;
     }
     static uint NB_CHANNELS_TOTAL() {
-        return 18;
+        return PLANE_COUNT;
     }
     static uint NB_LABELS() {
         return 6;

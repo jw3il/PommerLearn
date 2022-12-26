@@ -111,30 +111,10 @@ inline void _boardToPlanes(const bboard::Board* board, int id, xtPlanesType xtPl
 
     if (CENTERED_OBSERVATION)
     {
-        // if the observation is centered, we don't need our own position.
-        // instead, highlight everything on the board that is within boundaries
-        // TODO for limited view: maybe instead set the view size around the agent
+        // If the observation is centered, our own position is always at the center.
+        // Adding this would not provide any additional information.
+        // Instead, we highlight the board's boundaries.
         xt::view(xtPlanes, agent0Plane + ((0 + agentOffset) % 4)) = 1;
-    }
-
-    // the observation has to show which agents are still alive, even if they are invisible
-    const bboard::AgentInfo& self = board->agents[id];
-    for (int i = 0; i < bboard::AGENT_COUNT; i++)
-    {
-        if (i == id)
-        {
-            continue;
-        }
-
-        const bboard::AgentInfo& info = board->agents[i];
-        if (!info.dead && (!info.visible || _isOutOfPlane(self, info.x, info.y)))
-        {
-            // the observation has to show that this agent is still alive
-            // hacky idea: distribute negation of agent's 1.0 across the whole board
-            // ideally one could distribute the 1.0 according to the probability of the
-            // agent's location, but this is outside the observation plane in centered mode :/
-            xt::view(xtPlanes, agent0Plane + ((i + agentOffset) % 4)) = -1.0f / (bboard::BOARD_SIZE * bboard::BOARD_SIZE);
-        }
     }
 
     for (int i = 0; i < board->bombs.count; i++)
@@ -186,7 +166,16 @@ inline void _infoToPlanes(const bboard::AgentInfo* info, xtPlanesType xtPlanes, 
     xt::view(xtPlanes, planeIndex++) = _getNormalizedBombStrength(info->bombStrength);
     xt::view(xtPlanes, planeIndex++) = (float)info->bombCount / bboard::MAX_BOMBS_PER_AGENT;
     xt::view(xtPlanes, planeIndex++) = (float)info->maxBombCount / bboard::MAX_BOMBS_PER_AGENT;
-    xt::view(xtPlanes, planeIndex++) = info->canKick ? 1 : 0;
+    xt::view(xtPlanes, planeIndex++) = info->canKick ? 1.0f : 0.0f;
+}
+
+template <typename xtPlanesType>
+inline void _aliveToPlanes(const bboard::Board* board, const int id, xtPlanesType xtPlanes, int& planeIndex)
+{
+    for (int i = 0; i < bboard::AGENT_COUNT; i++)
+    {
+        xt::view(xtPlanes, planeIndex++) = board->agents[(id + i) % bboard::AGENT_COUNT].dead ? 0.0f : 1.0f;
+    }
 }
 
 template <typename xtPlanesType>
@@ -230,6 +219,9 @@ void BoardToPlanes(const bboard::Board* board, int id, float* planes)
     int planeIndex = 0;
     _boardToPlanes(board, id, xtPlanes, planeIndex);
     _infoToPlanes(&board->agents[id], xtPlanes, planeIndex);
+    _aliveToPlanes(board, id, xtPlanes, planeIndex);
+    xt::view(xtPlanes, planeIndex++) = (float)board->timeStep / 799.0f;
+
     if (CENTERED_OBSERVATION){
         _shiftPlanes(board, id, xtPlanes);
     }
