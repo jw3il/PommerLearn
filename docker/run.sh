@@ -23,7 +23,16 @@ else
     echo -e "\033[41;37m###########################################################\033[0m"
 fi
 
-# Run the image and pass additional args with "$@"
+# select entry point and pass additional args with "$@"
+if [ -z "${MODE}" ] || [ "${MODE}" = "train" ]; then
+    CMD="conda run --no-capture-output -n pommer python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec ${EXEC_PATH} $@"
+elif [ "${MODE}" = "exec" ]; then
+    CMD="${EXEC_PATH} $@"
+else
+    echo "Unknown mode '${MODE}'."
+    exit 1;
+fi
+
+# Run the image
 docker run --gpus all -v "${POMMER_DATA_DIR}":/data --rm --shm-size="${POMMER_SHM_SIZE}" "pommer:${TAG}" \
-    conda run --no-capture-output -n pommer \
-    python -u /PommerLearn/pommerlearn/training/rl_loop.py --dir /data --exec "${EXEC_PATH}" "$@"
+    $CMD
