@@ -13,3 +13,4 @@ rtpt
 onnx
 onnxsim
 onnxruntime
+simple-gpu-scheduler
