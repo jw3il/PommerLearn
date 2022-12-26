@@ -21,8 +21,9 @@ declare -a MODEL_NAME_PATH_PAIRS=(
     "initial /data/dummy-model/onnx"
 )
 
-GAMES=10 #100
-SIMULATIONS="0 25" #"0 50 100 250 500 1000"
+GAMES=10 #1000
+SIMULATIONS="0 50" # "0 50 100 250 500 1000"
+SEARCH_MODES="OnePlayer TwoPlayer" # "OnePlayer TwoPlayer"
 
 # logfile path on host machine
 LOGFILE="${POMMER_DATA_DIR}/$(date +%Y%m%d_%H%M%S)_pommer_log.csv"
@@ -35,7 +36,7 @@ echo "SearchMode,ModelName,ModelPath,Simulations,Episodes,TotalSteps,Wins0,Alive
 # run experiments
 for sim in ${SIMULATIONS}; do
 for pair in "${MODEL_NAME_PATH_PAIRS[@]}"; do
-for search in "OnePlayer" "TwoPlayer"; do
+for search in ${SEARCH_MODES}; do
     read -a strarr <<< "$pair"
     model_name=${strarr[0]}
     model_path=${strarr[1]}
