@@ -599,7 +599,7 @@ def fill_default_config(train_config):
         "dataset_train_transform": default_data_transform,  # None
         "torch_input_dir": None,
         # output
-        "output_dir": "./model",
+        "output_dir": "./model-sl",
         "model_batch_sizes": [1, 8],
         # hyperparameters
         "discount_factor": 0.99,
@@ -650,4 +650,8 @@ def fill_default_config(train_config):
 
 
 if __name__ == '__main__':
-    train_cnn(fill_default_config({}))
+    # you can insert your custom config here
+    train_cnn(fill_default_config({
+        # "dataset_path": "1M_simple_0.zr",
+        # "test_size": 0.01,
+    }))

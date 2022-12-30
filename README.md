@@ -42,6 +42,37 @@ Additional notes:
     Adding `--ipc=host` or `--shm-size=32g` to the `docker run` command helps.
     This is also done by default in `docker/run.sh`.
 
+## Experiments
+
+### Search
+
+1. Generate an SL dataset with 1 million samples with
+
+    ```
+    $POMMER_EXEC --mode=ffa_sl --chunk-size=1000 --chunk-count=1000 --log --file-prefix=./1M_simple
+    ```
+    where `$POMMER_EXEC` can be your `PommerLearn` executable or `MODE=exec bash docker/run.sh`
+
+2. Train SL model: Run `pommerlearn/training/train_cnn.py` with the following modified arguments
+
+    ```
+    "dataset_path": "1M_simple_0.zr"
+    "test_size": 0.01
+    ```
+    and save it as `$POMMER_DATA_DIR/model-sl`
+
+3. Generate a dummy model by running `pommerlearn/debug/create_dummy_model.py` and save it as `$POMMER_DATA_DIR/model-dummy`
+
+4. Navigate into the docker directory and run the search experiments with
+
+    ```
+    ./docker $ bash search_experiments.sh
+    ```
+
+### Reinforcement Learning Runs
+
+TODO
+
 ## Development
 
 ### Manual Installation of Dependencies
