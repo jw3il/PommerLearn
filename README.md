@@ -49,11 +49,11 @@ Additional notes:
 1. Generate an SL dataset with 1 million samples with
 
     ```
-    $POMMER_EXEC --mode=ffa_sl --chunk-size=1000 --chunk-count=1000 --log --file-prefix=./1M_simple
+    $POMMER_EXEC --mode=ffa_sl --max-games=-1 --chunk-size=1000 --chunk-count=1000 --log --file-prefix=./1M_simple
     ```
     where `$POMMER_EXEC` can be your `PommerLearn` executable or `MODE=exec bash docker/run.sh`
 
-2. Train SL model: Run `pommerlearn/training/train_cnn.py` with the following modified arguments
+2. Train SL model: Run `pommerlearn/training/train_cnn.py` with the following modified arguments (see bottom of the file)
 
     ```
     "dataset_path": "1M_simple_0.zr"
