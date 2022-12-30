@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
             ("agent-id", po::value<int>()->default_value(0), "The agent id used by the mcts agent.")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
-            ("use-terminal-solver", "If set, the MCTS solver for terminals and tablebases will be active")
+            ("use-terminal-solver", po::value<bool>()->default_value(true), "If set, the MCTS solver for terminals and tablebases will be active")
 
             // TODO: State size should be detected automatically (?)
             ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
     config.useStateInSearch = configVals.count("no-state") == 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
 
-    config.useTerminalSolver = configVals.count("use-terminal-solver")>0;
+    config.useTerminalSolver = configVals["use-terminal-solver"].as<bool>();
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
