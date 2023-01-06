@@ -78,7 +78,7 @@ def main():
     env_type='PommeTeamCompetition-v0'
     env = pommerman.make(env_type, agent_list)  #PommeRandomPositon(agent_list) - for ffa version with random starting positions
 
-    use_env_state = True
+    use_env_state = False
 
     if use_env_state:
         for a in agent_list:
