@@ -99,10 +99,8 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     crazyara::Agent* agent = get_acting_agent();
     NeuralNetAPI* net = get_acting_net();
     agent->set_search_settings(pommermanState.get(), &searchLimits, &evalInfo);
-    std::cout << "CrazyAraAgent::act::perform_action"<< std::endl;
     agent->perform_action();
 
-    std::cout << "CrazyAraAgent::act::bestAction"<< std::endl;
     bboard::Move bestAction = bboard::Move(agent->get_best_action());
 
     #if ! defined(DISABLE_UCI_INFO) || defined(CRAZYARA_AGENT_PV)
@@ -120,7 +118,6 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     #endif
 
     add_results_to_buffer(net, bestAction);
-    std::cout << "Acted"<< std::endl;
     return bestAction;
 }
 
