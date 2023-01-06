@@ -2,8 +2,7 @@ import pommerman
 import pommerman.agents as agents
 from pypomcpp.autocopy import AutoCopy
 from pypomcpp.cppagent import CppAgent
-from pypomcpp.util import evaluate, print_stats
-from shutil import copyfile
+from pypomcpp.util import evaluate
 from env.env_rand_positions import PommeRandomPositon
 
 lib_path = "./build/libPommerLearnPy.so"
