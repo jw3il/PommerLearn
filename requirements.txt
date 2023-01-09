@@ -3,7 +3,7 @@
 numpy
 matplotlib
 imageio
-torch==1.9.0
+torch>=1.9.0
 zarr
 numcodecs
 tqdm
@@ -13,3 +13,6 @@ rtpt
 onnx
 onnxsim
 onnxruntime
+simple-gpu-scheduler
+# fix pyglet version as we use Python 3.7
+pyglet==1.5.17

@@ -64,11 +64,13 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
     return info;
 }
 
-void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins, std::array<int, bboard::AGENT_COUNT> nbAlive)
+void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins, std::array<int, bboard::AGENT_COUNT> nbAlive, bool csv)
 {
-    std::cout << "------------------------------" << std::endl;
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     double elapsedSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
+
+    // print as human-readable format
+    std::cout << "------------------------------" << std::endl;
     std::cout << "Total episodes: " << episode <<  std::endl;
     std::cout << "Average steps: " << totalEpisodeSteps / episode <<  std::endl;
     std::cout << "Wins | Alive: " << std::endl;
@@ -82,6 +84,17 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
     std::cout << "Not done: " << nbNotDone << " (" << (float)nbNotDone * 100 / episode << "%)" << std::endl;
     std::cout << "Elapsed time: " << elapsedSeconds << " s (" << elapsedSeconds / episode << " s/episode, " << (elapsedSeconds * 1000) / totalEpisodeSteps << " ms/step)" << std::endl;
     std::cout << "------------------------------" << std::endl;
+
+    if (csv) {
+        // print stats in machine-readable format
+        std::cout << episode << "," << totalEpisodeSteps;
+        for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
+            int wins = nbWins[agentIdx];
+            int alive = nbAlive[agentIdx];
+            std::cout << "," << wins << "," << alive;
+        }
+        std::cout << "," << nbDraws << "," << nbNotDone << "," << elapsedSeconds << std::endl;
+    }
 }
 
 void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerConfig config) {
@@ -217,12 +230,12 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
 
         if ((episode + 1) % 20 == 0)
         {
-            _print_stats(begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive);
+            _print_stats(begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive, false);
         }
     }
 
     // display aggregated statistics
-    _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive);
+    _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive, true);
 }
 
 void Runner::run_simple_unbiased_agents(RunnerConfig config) {
