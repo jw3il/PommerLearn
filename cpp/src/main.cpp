@@ -267,6 +267,10 @@ int main(int argc, char **argv) {
         setDefaultFFAConfig(config);
         Runner::run_simple_unbiased_agents(config);
     }
+    else if (mode == "team_sl") {
+        setDefaultTeamConfig(config);
+        Runner::run_simple_unbiased_agents(config);
+    }
     else if ((mode == "ffa_mcts") || (mode == "team_mcts")) {
         bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
         std::string modelDir = configVals["model-dir"].as<std::string>();
