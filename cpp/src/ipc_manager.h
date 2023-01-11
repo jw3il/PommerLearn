@@ -1,7 +1,7 @@
 #ifndef IPCMANAGER_H
 #define IPCMANAGER_H
 
-#include "log_agent.h"
+#include "agents/log_agent.h"
 #include "episode_info.h"
 #include "sample_buffer.h"
 

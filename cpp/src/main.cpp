@@ -256,8 +256,6 @@ int main(int argc, char **argv) {
     config.useStateInSearch = configVals.count("with-state") > 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
     config.useVirtualStep = configVals.count("virtual-step")>0;
-    config.useTerminalSolver = configVals.count("use-terminal-solver")>0;
-
     config.useTerminalSolver = configVals["use-terminal-solver"].as<bool>();
 
     int deviceID = configVals["gpu"].as<int>();

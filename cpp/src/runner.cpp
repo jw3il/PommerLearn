@@ -1,7 +1,8 @@
 #include "runner.h"
 
 #include <iostream>
-#include "log_agent.h"
+#include "agents/log_agent.h"
+#include "agents/virtual_step_wrapper.h"
 #include "agents/crazyara_agent.h"
 
 #include "agents.hpp"
@@ -240,17 +241,24 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
 
 void Runner::run_simple_unbiased_agents(RunnerConfig config) {
     // create wrappers to log the actions of some agents
-    WrappedLogAgent agentWrappers[4];
-    std::array<bboard::Agent*, 4> agents = {&agentWrappers[0], &agentWrappers[1], &agentWrappers[2], &agentWrappers[3]};
-
-    // make the wrappers act like simple agents
+    WrappedLogAgent* agentWrappers[4];    
     for (int i = 0; i < 4; i++) {
-        agentWrappers[i].set_agent(std::make_unique<agents::SimpleUnbiasedAgent>(config.seed + i));
+        if (config.useVirtualStep) {
+            agentWrappers[i] = new VirtualStepWrapper<WrappedLogAgent>();
+        }
+        else {
+            agentWrappers[i] = new WrappedLogAgent();
+        }
+
+        // make the wrappers act like regular agents
+        agentWrappers[i]->set_agent(std::make_unique<agents::SimpleUnbiasedAgent>(config.seed + i));
     }
 
+    std::array<bboard::Agent*, 4> agents = {agentWrappers[0], agentWrappers[1], agentWrappers[2], agentWrappers[3]};
     Runner::run(agents, config);
 
     for (int i = 0; i < 4; i++) {
-        agentWrappers[i].release_agent();
+        agentWrappers[i]->release_agent();
+        delete agentWrappers[i];
     }
 }
