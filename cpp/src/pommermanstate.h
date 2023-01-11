@@ -42,9 +42,15 @@ public:
     static uint NB_AUXILIARY_OUTPUTS() {
         return auxiliaryStateSize;
     }
+    /**
+     * @brief The index where the state begins within the auxiliary output.
+     */
     static uint AUXILIARY_STATE_BEGIN() {
-        return NB_CHANNELS_TOTAL() * NB_SQUARES();
+        return 0;
     }
+    /**
+     * @brief The size of the state auxiliary output
+     */
     static uint AUXILIARY_STATE_SIZE() {
         return auxiliaryStateSize;
     }

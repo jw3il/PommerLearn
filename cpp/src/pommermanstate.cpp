@@ -285,8 +285,8 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Versio
         // add auxiliary outputs
         uint observationSize = PLANE_COUNT * PLANE_SIZE * PLANE_SIZE;
 
-        uint stateBegin = StateConstantsPommerman::AUXILIARY_STATE_BEGIN();
-        float* statePointer = &inputPlanes[observationSize + stateBegin];
+        // state input directly starts after observations
+        float* statePointer = &inputPlanes[observationSize];
         uint stateSize = StateConstantsPommerman::AUXILIARY_STATE_SIZE();
 
         if (state.timeStep == 0)
@@ -297,7 +297,8 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Versio
         else
         {
             // use the last auxiliary outputs as an input for the next state
-            std::copy_n(auxiliaryOutputs.begin(), stateSize, statePointer);
+            uint stateBegin = StateConstantsPommerman::AUXILIARY_STATE_BEGIN();
+            std::copy_n(auxiliaryOutputs.begin() + stateBegin, stateSize, statePointer);
         }
     }
 }
