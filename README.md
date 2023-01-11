@@ -69,9 +69,18 @@ Additional notes:
     ./docker $ bash search_experiments.sh
     ```
 
+    The results will be recorded in a single csv file.
+
 ### Reinforcement Learning Runs
 
-TODO
+Navigate into the docker directory and run the rl experiments with
+
+```
+./docker $ bash rl_experiments.sh
+```
+
+This will create a new directory in your working directory to store the training logs.
+You will find the results in your `$POMMER_DATA_DIR/archive` and the tensorboard runs in `$POMMER_DATA_DIR/runs`.
 
 ## Development
 
