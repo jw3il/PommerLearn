@@ -56,8 +56,9 @@ Additional notes:
 2. Train SL model: Run `pommerlearn/training/train_cnn.py` with the following modified arguments (see bottom of the file)
 
     ```
-    "dataset_path": "1M_simple_0.zr"
-    "test_size": 0.01
+    "dataset_path": "1M_simple_0.zr",
+    "test_size": 0.01,
+    "output_dir": "./model-sl"
     ```
     and save it as `$POMMER_DATA_DIR/model-sl`
 
@@ -82,6 +83,31 @@ Navigate into the docker directory and run the rl experiments with
 This will create a new directory in your working directory to store the training logs.
 You will find the results in your `$POMMER_DATA_DIR/archive` and the tensorboard runs in `$POMMER_DATA_DIR/runs`.
 
+### Team Mode Experiments
+
+1. Similar to the FFA environment, we first create two SL datasets
+
+    ```
+    $POMMER_EXEC --mode=team_sl --max-games=-1 --chunk-size=1000 --chunk-count=1000 --log --file-prefix=./1M_simple_team
+    $POMMER_EXEC --mode=team_sl --max-games=-1 --chunk-size=1000 --chunk-count=1000 --virtual-step --log --file-prefix=./1M_simple_team_virtual_step
+    ```
+2. Then we train the models: run `pommerlearn/training/train_cnn.py` with the following modified arguments (see bottom of the file)
+
+    ```
+    "dataset_path": "1M_simple_team_0.zr",
+    "test_size": 0.01,
+    "output_dir": "./model-team"
+    ```
+
+    and
+
+    ```
+    "dataset_path": "1M_simple_team_virtual_step_0.zr",
+    "test_size": 0.01,
+    "output_dir": "./model-team-virtual-step"
+    ```
+
+    and save the models in `$POMMER_DATA_DIR`
 ## Development
 
 ### Manual Installation of Dependencies
