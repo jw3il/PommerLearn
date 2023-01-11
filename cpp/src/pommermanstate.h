@@ -36,11 +36,14 @@ public:
     static uint NB_LABELS_POLICY_MAP() {
         return 6;
     }
+    static uint NB_VALUES_TOTAL() {
+        return NB_CHANNELS_TOTAL() * NB_SQUARES() + auxiliaryStateSize;
+    }
     static uint NB_AUXILIARY_OUTPUTS() {
         return auxiliaryStateSize;
     }
     static uint AUXILIARY_STATE_BEGIN() {
-        return 0;
+        return NB_CHANNELS_TOTAL() * NB_SQUARES();
     }
     static uint AUXILIARY_STATE_SIZE() {
         return auxiliaryStateSize;

@@ -104,6 +104,7 @@ void PommermanState::set_observation(const bboard::Observation* obs)
     if (this->useVirtualStep && obs->timeStep>0){
         obs->VirtualStep(this->state, true, true, nullptr);
     } else {
+        // reset state object
         this->state = bboard::State();
         obs->ToState(this->state);
     }
@@ -296,7 +297,7 @@ void PommermanState::get_state_planes(bool normalize, float *inputPlanes, Versio
         else
         {
             // use the last auxiliary outputs as an input for the next state
-            std::copy_n(auxiliaryOutputs.begin() + stateBegin, stateSize, statePointer);
+            std::copy_n(auxiliaryOutputs.begin(), stateSize, statePointer);
         }
     }
 }
