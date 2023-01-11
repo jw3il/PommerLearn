@@ -104,6 +104,7 @@ void PommermanState::set_observation(const bboard::Observation* obs)
     if (this->useVirtualStep && obs->timeStep>0){
         obs->VirtualStep(this->state, true, true, nullptr);
     } else {
+        this->state = bboard::State();
         obs->ToState(this->state);
     }
     this->hasTrueState = false;

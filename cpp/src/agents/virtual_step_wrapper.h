@@ -37,6 +37,7 @@ public:
     bboard::Move act(const bboard::Observation* obs) override {
         if (obs->timeStep == 0) {
             // reset internal state
+            this->state = bboard::State();
             obs->ToState(this->state);
         }
         else {
