@@ -63,7 +63,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
 
 void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize,
              PlanningAgentType planningAgentType, const std::string& firstOpponentType, const std::string& secondOpponentType,
-             SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
+             SearchSettings searchSettings, SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
 {
     srand(config.seed);
     StateConstants::init(false);
@@ -76,8 +76,6 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
         crazyAraAgent = std::make_unique<RawCrazyAraAgent>(modelDir, deviceID);
     }
     else {
-        SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
-        searchSettings.mctsSolver = config.useTerminalSolver;
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
     }
@@ -162,6 +160,8 @@ inline void setDefaultTeamConfig(RunnerConfig &config){
 int main(int argc, char **argv) {
     po::options_description configDesc("Available options");
 
+    SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(true);
+
     configDesc.add_options()
             ("help", "Print help message")
 
@@ -196,7 +196,6 @@ int main(int argc, char **argv) {
             ("agent-id", po::value<int>()->default_value(0), "The agent id used by the mcts agent.")
             ("gpu", po::value<int>()->default_value(0), "The (GPU) device index passed to CrazyAra")
             ("raw-net-agent", "If set, uses the raw net agent instead of the mcts agent.")
-            ("use-terminal-solver", po::value<bool>()->default_value(true), "If set, the MCTS solver for terminals and tablebases will be active")
             ("virtual-step", "Option to use previous states to reconstruct known information about previously seen parts of the board")
             // TODO: State size should be detected automatically (?)
             ("state-size", po::value<uint>()->default_value(0), "Size of the flattened state of the model (0 for no state)")
@@ -213,6 +212,13 @@ int main(int argc, char **argv) {
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
             ("with-state", "Whether to use the true state instead of (partial) observations for mcts.")
+            // direct passthrough of search settings
+            ("mctsSolver", po::value<bool>()->default_value(searchSettings.mctsSolver), "If set, the MCTS solver for terminals and tablebases will be active")
+            ("dirichletAlpha", po::value<float>()->default_value(searchSettings.dirichletAlpha), "Search settings: dirichlet alpha (parameter of the distribution used for noise)")
+            ("dirichletEpsilon", po::value<float>()->default_value(searchSettings.dirichletEpsilon), "Search settings: amount of noise added to the root node in [0, 1]")
+            ("nodePolicyTemperature", po::value<float>()->default_value(searchSettings.nodePolicyTemperature), "Search settings: policy shaping, values > 1 leads to more exploitation and values in (0, 1] flatten out the policy")
+            ("qVetoDelta", po::value<float>()->default_value(searchSettings.qVetoDelta), "Search settings: describes how much better the highest Q-Value has to be to replace the candidate move with the highest visit count")
+            ("qValueWeight", po::value<float>()->default_value(searchSettings.qValueWeight), "Search settings: boosts action with 2nd most visits with the given factor according to the Q-value difference, if its Q-value is bigger")
     ;
 
     po::variables_map configVals;
@@ -254,9 +260,16 @@ int main(int argc, char **argv) {
     config.printFirstLast = configVals.count("print-first-last") > 0;
     config.ipcManager = ipcManager.get();
     config.useStateInSearch = configVals.count("with-state") > 0;
+    config.useVirtualStep = configVals.count("virtual-step") > 0;
     CENTERED_OBSERVATION = configVals.count("centered-observation") > 0;
-    config.useVirtualStep = configVals.count("virtual-step")>0;
-    config.useTerminalSolver = configVals["use-terminal-solver"].as<bool>();
+
+    // search parameters
+    searchSettings.mctsSolver = configVals["mctsSolver"].as<bool>();
+    searchSettings.dirichletAlpha = configVals["dirichletAlpha"].as<float>();
+    searchSettings.dirichletEpsilon = configVals["dirichletEpsilon"].as<float>();
+    searchSettings.nodePolicyTemperature = configVals["nodePolicyTemperature"].as<float>();
+    searchSettings.qVetoDelta = configVals["qVetoDelta"].as<float>();
+    searchSettings.qValueWeight = configVals["qValueWeight"].as<float>();
 
     int deviceID = configVals["gpu"].as<int>();
     int switchDepth = configVals["switch-depth"].as<int>();
@@ -319,7 +332,7 @@ int main(int argc, char **argv) {
             setDefaultTeamConfig(config);
         }
         tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
-                searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
+                searchSettings, searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;

@@ -91,11 +91,6 @@ struct RunnerConfig
      * @brief flushEpisodes The number of episodes until the stored data is flushed by the runner. -1 for no flushing.
      */
     int flushEpisodes = -1;
-
-    /**
-     * @brief useTerminalSolver If true, then the MCTS solver for terminals and tablebases will be active
-     */
-    bool useTerminalSolver = true;
 };
 
 /**

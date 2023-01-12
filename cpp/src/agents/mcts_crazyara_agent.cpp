@@ -48,14 +48,15 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
     searchSettings.threads = 4;
     searchSettings.useMCGS = false;
     searchSettings.multiPV = 1;
-    searchSettings.nodePolicyTemperature = 1.0f;
     if (selfPlay)
     {
         searchSettings.dirichletEpsilon = 0.25f;
+        searchSettings.nodePolicyTemperature = 1.0f;
     }
     else
     {
         searchSettings.dirichletEpsilon = 0;
+        searchSettings.nodePolicyTemperature = 1.7f;
     }
     searchSettings.dirichletAlpha = 0.2f;
     searchSettings.epsilonGreedyCounter = 0;
