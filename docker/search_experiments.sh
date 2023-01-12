@@ -56,7 +56,7 @@ for tsolver in ${TERMINAL_SOLVER}; do
     fi
 
     # main command
-    CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --model=${model_path} ${SIM_PARAM} --max-games=${GAMES} --use-terminal-solver=${tsolver}"
+    CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --model=${model_path} ${SIM_PARAM} --max-games=${GAMES} --mctsSolver=${tsolver}"
     # get stats from last line and append stats with run configuration to logfile
     echo "$CMD | tail -n 1 | xargs printf \"${search},${tsolver},${model_name},${model_path},${sim},%s\n\" >> ${LOGFILE}";
 done

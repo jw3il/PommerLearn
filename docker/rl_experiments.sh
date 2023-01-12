@@ -24,9 +24,9 @@ mkdir -p $DIRNAME
 for twoplayersearch in "true" "false"; do
 for model in "dummy" "sl"; do
 cat << EndOfMessage
-POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --name-initials=JW --model="/data/model-${model}/" --comment="${model}_100s_2${twoplayersearch}_noterm" --it 100 --exec-args="--simulations=100 --use-terminal-solver=false" > "${DIRNAME}/${model}_100s_2${twoplayersearch}_noterm.log" 2>&1
-POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --name-initials=JW --model="/data/model-${model}/" --comment="${model}_250s_2${twoplayersearch}_noterm" --it 100 --exec-args="--simulations=250 --use-terminal-solver=false" > "${DIRNAME}/${model}_250s_2${twoplayersearch}_noterm.log" 2>&1
-POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --name-initials=JW --model="/data/model-${model}/" --comment="${model}_500s_2${twoplayersearch}_noterm" --it 100 --exec-args="--simulations=500 --use-terminal-solver=false" > "${DIRNAME}/${model}_500s_2${twoplayersearch}_noterm.log" 2>&1
+POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --name-initials=JW --model="/data/model-${model}/" --comment="${model}_100s_2${twoplayersearch}_noterm" --it 100 --exec-args="--simulations=100 --mctsSolver=false" > "${DIRNAME}/${model}_100s_2${twoplayersearch}_noterm.log" 2>&1
+POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --name-initials=JW --model="/data/model-${model}/" --comment="${model}_250s_2${twoplayersearch}_noterm" --it 100 --exec-args="--simulations=250 --mctsSolver=false" > "${DIRNAME}/${model}_250s_2${twoplayersearch}_noterm.log" 2>&1
+POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --name-initials=JW --model="/data/model-${model}/" --comment="${model}_500s_2${twoplayersearch}_noterm" --it 100 --exec-args="--simulations=500 --mctsSolver=false" > "${DIRNAME}/${model}_500s_2${twoplayersearch}_noterm.log" 2>&1
 EndOfMessage
 done
 done
