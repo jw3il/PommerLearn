@@ -412,6 +412,11 @@ def try_cast(d: dict):
             d[key] = False
             continue
 
+        # check for None
+        if val.strip() == 'None':
+            d[key] = None
+            continue
+
     return d
 
 
