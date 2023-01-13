@@ -104,9 +104,8 @@ def main():
     """ run evaluation and save results """
     inputs = parse_args()
 
-    if inputs.model_dir is None:
-        MODEL_PATH = "2022_08_24-14_10_29_from_zero_g99_m00_1e_clr_lrelu_wd10-4-adamw-199-20220919T140224Z-001/2022_08_24-14_10_29_from_zero_g99_m00_1e_clr_lrelu_wd10-4-adamw-199/onnx"
-        inputs.model_dir = MODEL_PATH
+    if inputs.model_dir is None: 
+        raise ValueError('inputs.model_dir must be set to the agents model directory')
 
     # path to save results (if none -> creates folder and saves under PommerLearn/eval_plotting/"Pomme_e_{games}")
     eval_path = inputs.eval_path
