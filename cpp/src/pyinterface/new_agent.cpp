@@ -5,7 +5,7 @@
 #include <iostream>
 #include "string.h"
 
-std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, bool virtualStep, SearchLimits searchLimits=SearchLimits())
+std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, bool virtualStep, bool mctsSolver, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -18,6 +18,7 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
     else
     {
         SearchSettings searchSettings = MCTSCrazyAraAgent::get_default_search_settings(false);
+        searchSettings.mctsSolver = mctsSolver;
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
     }
@@ -79,7 +80,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         std::string modelDir = tmp.first;
         tmp = _extract_arg(tmp.second);
         std::string stateSize = tmp.first;
-        bool virtualStep = (tmp.second == "virtualStep");
+        bool virtualStep = (tmp.second.find("virtualStep") != std::string::npos);
         if(modelDir.empty() || stateSize.empty()) 
         {
             std::cout << "Could not parse agent identifier. Specify the agent like RawNet:dir:stateSize" << std::endl;
@@ -96,7 +97,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
 
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA, virtualStep);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA, virtualStep, false);
     }
     else if(agentName.find("CrazyAraAgent") == 0)
     {
@@ -109,10 +110,11 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         std::string simulations = tmp.first;
         tmp = _extract_arg(tmp.second);
         std::string moveTime = tmp.first;
-        bool virtualStep = (tmp.second == "virtualStep");
+        bool virtualStep = (tmp.second.find("virtualStep") != std::string::npos);
+        bool mctsSolver = (tmp.second.find("mctsSolver") != std::string::npos);
         if(modelDir.empty() || stateSize.empty() || simulations.empty() || moveTime.empty()) 
         {
-            std::cout << "Could not parse agent identifier. Specify the agent like CrazyAra:dir:stateSize:simulations:moveTime (:virtualStep (optional)" << std::endl;
+            std::cout << "Could not parse agent identifier. Specify the agent like CrazyAra:dir:stateSize:simulations:moveTime (:virtualStep and/or :mctsSolver" << std::endl;
             return nullptr;
         }
         
@@ -124,7 +126,8 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
                   << "> Simulations: " << simulations << std::endl
                   << "> Movetime: " << moveTime << std::endl
                   << "> FFA: " << isFFA << std::endl
-                  << "> VirtualStep: " << virtualStep << std::endl;
+                  << "> VirtualStep: " << virtualStep << std::endl
+                  << "> mctsSolver: " << mctsSolver << std::endl;
 
         SearchLimits searchLimits;
         searchLimits.simulations = std::stoi(simulations);
@@ -133,7 +136,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep,searchLimits=searchLimits);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep, mctsSolver, searchLimits=searchLimits);
     }
 
     return nullptr;
