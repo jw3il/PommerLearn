@@ -83,8 +83,8 @@ def parse_args():
     # Crazy Ara Parameters
     parser.add_argument('--simulations', type=int, default=100, help='number of simulations')
     parser.add_argument('--movetime', type=int, default=100, help='move time')
-    parser.add_argument('--virtual_step', type=bool, default=False, help='use virtual step')
-    parser.add_argument('--terminal', type=bool, default=False, help='use mctsSolver')
+    parser.add_argument('--virtual_step', default=False, action='store_true', help='use virtual step')
+    parser.add_argument('--terminal', default=False, action='store_true', help='use mctsSolver')
     # Opponents
     parser.add_argument('-o', '--opponent', type=str, default="simple", help='name of the opponent agent possible [crazyara, rawnet,  simple, dypm, hazoj, gorog, skynet, navocado]')
 
@@ -94,7 +94,7 @@ def parse_args():
     parser.add_argument('-g', '--games', type=int, default=10, help='number of games')
     parser.add_argument('-e', '--env', type=str, default="team", help='game mode: [ffa, ffa_random, team]')
 
-    parser.add_argument('--use_true_state', type=bool, default=False, help='Whether to use the true state instead of (partial) observations')
+    parser.add_argument('--use_true_state', default=False, action='store_true', help='Whether to use the true state instead of (partial) observations')
 
     parsed_args = parser.parse_args()
     return parsed_args
