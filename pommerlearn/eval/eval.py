@@ -23,7 +23,10 @@ def get_agent_list(autolib: AutoCopy, inputs):
     def create_agent(name, port=15000):
         """Create an agent given its name and the cli inputs"""
         if name == 'crazyara':
-            agent_name = f"CrazyAraAgent:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}"
+            if inputs.env == 'team':
+                agent_name = f"CrazyAraAgentTeam:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}"
+            else:
+               agent_name = f"CrazyAraAgent:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}" 
             if inputs.virtual_step:
                 agent_name += ':virtualStep'
             if inputs.terminal:
