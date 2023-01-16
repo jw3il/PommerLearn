@@ -119,7 +119,7 @@ def main():
 
     # Make the environment using the agent list
     if inputs.env == 'team':
-        env_type ='PommeTeamCompetition-v0'
+        env_type ='PommeRadio-v2'
         env = pommerman.make(env_type, agent_list)
     elif inputs.env == 'ffa':
         env_type ='PommeFFACompetition-v0'
