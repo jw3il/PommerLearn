@@ -83,8 +83,8 @@ def parse_args():
     # Crazy Ara Parameters
     parser.add_argument('--simulations', type=int, default=100, help='number of simulations')
     parser.add_argument('--movetime', type=int, default=100, help='move time')
-    parser.add_argument('--virtual_step', type=int, default=100, help='use virtual step')
-    parser.add_argument('--terminal', type=int, default=100, help='use mctsSolver')
+    parser.add_argument('--virtual_step', type=bool, default=False, help='use virtual step')
+    parser.add_argument('--terminal', type=bool, default=False, help='use mctsSolver')
     # Opponents
     parser.add_argument('-o', '--opponent', type=str, default="simple", help='name of the opponent agent possible [crazyara, rawnet,  simple, dypm, hazoj, gorog, skynet, navocado]')
 
@@ -119,7 +119,7 @@ def main():
 
     # Make the environment using the agent list
     if inputs.env == 'team':
-        env_type ='PommeTeamCompetition-v0'
+        env_type ='PommeRadio-v2'
         env = pommerman.make(env_type, agent_list)
     elif inputs.env == 'ffa':
         env_type ='PommeFFACompetition-v0'
