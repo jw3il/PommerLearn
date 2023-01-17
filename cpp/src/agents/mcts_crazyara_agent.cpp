@@ -69,9 +69,10 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
     return searchSettings;
 }
 
-void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType, int switchDepth)
+void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType, PlanningAgentType planningAgentTeamType, int switchDepth)
 {
     this->planningAgentType = planningAgentType;
+    this->planningAgentTeamType = planningAgentTeamType;
     this->switchDepth = switchDepth;
 
     if (planningAgentType == PlanningAgentType::None) {
@@ -131,7 +132,7 @@ void MCTSCrazyAraAgent::init_planning_agents(PlanningAgentType planningAgentType
             break;
         }
 
-        if (switchDepth >= 0) {
+        if (planningAgentType == PlanningAgentType::RawNetworkAgent && switchDepth >= 0) {
             agent = std::make_unique<DepthSwitchAgent>(std::move(agent), switchDepth, rand());
         }
 
@@ -170,7 +171,7 @@ std::unique_ptr<Clonable<bboard::Agent>> MCTSCrazyAraAgent::clone()
     clonedAgent->id = id;
     clonedAgent->pommermanState = std::unique_ptr<PommermanState>(pommermanState->clone());
     // we have to reset the planning agents to disconnect the clones if they use shared networks
-    clonedAgent->init_planning_agents(planningAgentType, switchDepth);
+    clonedAgent->init_planning_agents(planningAgentType, planningAgentTeamType, switchDepth);
 
     return clonedAgent;
 }

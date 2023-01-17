@@ -4,6 +4,32 @@
 #include "agents/rawnetagent.h"
 #include "agents/mctsagent.h"
 
+PlanningAgentType planning_agent_type_from_string(std::string str)
+{
+    if (str == "None")
+    {
+        return PlanningAgentType::None;
+    }
+    else if (str == "SimpleUnbiasedAgent")
+    {
+        return PlanningAgentType::SimpleUnbiasedAgent;
+    }
+    else if (str == "SimpleAgent")
+    {
+        return PlanningAgentType::SimpleAgent;
+    }
+    else if (str == "LazyAgent")
+    {
+        return PlanningAgentType::LazyAgent;
+    }
+    else if (str == "RawNetAgent")
+    {
+        return PlanningAgentType::RawNetworkAgent;
+    }
+
+    throw std::runtime_error(std::string("Unknown planning agent type: ") + str);
+}
+
 void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, bool useVirtualStep)
 {
     pommermanState = std::make_unique<PommermanState>(gameMode, has_stateful_model(), 800);

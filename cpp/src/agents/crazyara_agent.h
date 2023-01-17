@@ -30,6 +30,14 @@ enum PlanningAgentType
 };
 
 /**
+ * @brief Parses a planning agent type from a given string.
+ * 
+ * @param str planning agent type as a string
+ * @return the corresponding PlanningAgentType 
+ */
+PlanningAgentType planning_agent_type_from_string(std::string str);
+
+/**
  * @brief Base class for wrapping CrazyAra agents as Pommerman agents.
  */
 class CrazyAraAgent : public LogAgent, public Clonable<bboard::Agent>
@@ -186,6 +194,7 @@ private:
     const std::string modelDirectory;
     const int deviceID;
     PlanningAgentType planningAgentType = PlanningAgentType::None;
+    PlanningAgentType planningAgentTeamType = PlanningAgentType::None;
     int switchDepth = -1;
 
 public:
@@ -198,9 +207,10 @@ public:
      * @brief Initializes the planning agents (note that the state has to be initialized first).
      *
      * @param planningAgentType The (primary) planning agent type
+     * @param planningAgentTeamType The planning agent type for the team mate (id 1)
      * @param switchDepth Switch from planningAgentType to SimpleUnbiasedAgents at switchDepth if >= 0
      */
-    void init_planning_agents(PlanningAgentType planningAgentType, int switchDepth=-1);
+    void init_planning_agents(PlanningAgentType planningAgentType, PlanningAgentType planningAgentTeamType, int switchDepth=-1);
 
     // CrazyAraAgent
     bool has_stateful_model() override;
