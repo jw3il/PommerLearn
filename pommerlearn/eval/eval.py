@@ -1,15 +1,14 @@
+import argparse
 import pommerman
 import pommerman.agents as agents
 from pypomcpp.autocopy import AutoCopy
 from pypomcpp.cppagent import CppAgent
 from pypomcpp.util import evaluate
 from env.env_rand_positions import PommeRandomPositon
+from training.util_argparse import check_dir, check_file
 
-lib_path = "./build/libPommerLearnPy.so"
-model_path="build/model/onxx"
-
-def get_agent_list(index, autolib: AutoCopy, state_size, simulations, movetime):
-    # Provides different exemplary agent configurations
+def get_agent_list(autolib: AutoCopy, inputs):
+    """Provides different exemplary agent configurations"""
     
     # docker images have to be pulled once
     # They can be found at https://hub.docker.com/u/multiagentlearning
@@ -21,72 +20,124 @@ def get_agent_list(index, autolib: AutoCopy, state_size, simulations, movetime):
         "navocado": "multiagentlearning/navocado"
     }
 
-    # vs Docker Agents
-    if index == 0:
-        port = 15000
-        img = docker_img['gorog']
+    def create_agent(name, port=15000):
+        """Create an agent given its name and the cli inputs"""
+        if name == 'crazyara':
+            if inputs.env == 'team':
+                agent_name = f"CrazyAraAgentTeam:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}"
+            else:
+               agent_name = f"CrazyAraAgent:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}" 
+            if inputs.virtual_step:
+                agent_name += ':virtualStep'
+            if inputs.terminal:
+                agent_name += ':mctsSolver'
+            agent = CppAgent(autolib(), agent_name, 42, False)
+
+        elif name == 'rawnet':
+            agent_name = f"RawNetAgent:{inputs.model_dir}:{inputs.state_size}"
+            if inputs.virtual_step:
+                agent_name += ':virtualStep'
+            agent = CppAgent(autolib(), agent_name)   
+
+        elif name == 'simple':
+            agent = CppAgent(autolib(), "SimpleAgent", seed=17)
+
+        elif name in docker_img.keys():
+            agent = agents.DockerAgent(docker_image=docker_img[name], port=port)
+
+        else:
+            print("Unkown opponent agent type")
+            raise NotImplementedError
+
+        return agent
+
+    port = 13_000
+    # create a team env with 2 Crazy Ara agents and 2 opponents
+    if inputs.env == 'team':
         agent_list = [
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations}:{movetime}:virtualStep",42,False),
-            agents.DockerAgent(docker_image=img, port=port+1),
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations}:{movetime}:virtualStep",42,False),
-            agents.DockerAgent(docker_image=img, port=port+3),
+            create_agent('crazyara'),
+            create_agent(inputs.opponent, port),
+            create_agent('crazyara'),
+            create_agent(inputs.opponent, port+1)
         ]
-    # CrazyAraAgent vs Simple
-    elif index == 1:
-        agent_list = [
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations}:{movetime}",42,False),
-            CppAgent(autolib(), "SimpleAgent", seed=17),
-            CppAgent(autolib(), "SimpleAgent", seed=18),
-            CppAgent(autolib(), "SimpleAgent", seed=19),
-            
-        ]
-    # self-play & different #simulations
-    elif index == 2:
-        agent_list = [
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations}:{movetime}"),
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations+50}:{movetime}"),
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations+250}:{movetime}"),
-            CppAgent(autolib(), f"CrazyAraAgent:{model_path}:{state_size}:{simulations+500}:{movetime}"),
-            
-        ]
-    # Simple Agents only
+    # create a team env with a Crazy Ara agents and 3 opponents
     else:
         agent_list = [
-            CppAgent(autolib(), "SimpleAgent", seed=16),
-            CppAgent(autolib(), "SimpleAgent", seed=17),
-            CppAgent(autolib(), "SimpleAgent", seed=18),
-            CppAgent(autolib(), "SimpleAgent", seed=19),
+            create_agent('crazyara', inputs),
+            create_agent(inputs.opponent, port),
+            create_agent(inputs.opponent, port+1),
+            create_agent(inputs.opponent, port+2)
         ]
+
     return agent_list
 
+
+def parse_args():
+    """CLI parser
+
+    :return: parsed arguments
+    """
+
+    parser = argparse.ArgumentParser(description='PommerLearn RL Loop')
+
+    # RawNet/Crazy Ara Parameters
+    parser.add_argument('--model_dir', type=check_dir, help="Directory of the agent.")
+    parser.add_argument('--state_size', type=int, default=0, help='state size')
+    # Crazy Ara Parameters
+    parser.add_argument('--simulations', type=int, default=100, help='number of simulations')
+    parser.add_argument('--movetime', type=int, default=100, help='move time')
+    parser.add_argument('--virtual_step', default=False, action='store_true', help='use virtual step')
+    parser.add_argument('--terminal', default=False, action='store_true', help='use mctsSolver')
+    # Opponents
+    parser.add_argument('-o', '--opponent', type=str, default="simple", help='name of the opponent agent possible [crazyara, rawnet,  simple, dypm, hazoj, gorog, skynet, navocado]')
+
+    # Evaluation Parameters
+    parser.add_argument('--eval_path', type=str, help='path to folder that will be created for storing the evaluation results. If not specified a new folder will be created in ./eval_plotting/')
+    parser.add_argument('--lib', type=str, default="./build/libPommerLearnPy.so", help='libpath')
+    parser.add_argument('-g', '--games', type=int, default=10, help='number of games')
+    parser.add_argument('-e', '--env', type=str, default="team", help='game mode: [ffa, ffa_random, team]')
+
+    parser.add_argument('--use_true_state', default=False, action='store_true', help='Whether to use the true state instead of (partial) observations')
+
+    parsed_args = parser.parse_args()
+    return parsed_args
+
+
 def main():
-    state_size=0
-    simulations=100
-    movetime=100
-    games = 10
+    """ run evaluation and save results """
+    inputs = parse_args()
+
+    if inputs.model_dir is None: 
+        raise ValueError('inputs.model_dir must be set to the agents model directory')
 
     # path to save results (if none -> creates folder and saves under PommerLearn/eval_plotting/"Pomme_e_{games}")
-    eval_path = None
+    eval_path = inputs.eval_path
 
     # Automatically copy the library to allow instantiating multiple cpp agents
-    autolib = AutoCopy(lib_path, "./libpomcpp_tmp")
+    autolib = AutoCopy(inputs.lib, "./libpomcpp_tmp")
 
-    agent_list = get_agent_list(1, autolib, state_size, simulations, movetime)
+    # create Agents
 
-    # Make the "Free-For-All" environment using the agent list
-    env_type='PommeTeamCompetition-v0'
-    env = pommerman.make(env_type, agent_list)  #PommeRandomPositon(agent_list) - for ffa version with random starting positions
+    agent_list = get_agent_list(autolib, inputs)
 
-    use_env_state = False
+    # Make the environment using the agent list
+    if inputs.env == 'team':
+        env_type ='PommeRadio-v2'
+        env = pommerman.make(env_type, agent_list)
+    elif inputs.env == 'ffa':
+        env_type ='PommeFFACompetition-v0'
+        env = pommerman.make(env_type, agent_list)  #PommeRandomPositon(agent_list) - for ffa version with random starting positions
+    elif inputs.env == 'ffa_random':
+        env_type ='PommeFFACompetition-v0'
+        env = PommeRandomPositon(agent_list) # for ffa version with random starting positions
 
-    if use_env_state:
+    if inputs.use_true_state:
         for a in agent_list:
             if isinstance(a, CppAgent):
                 a.use_env_state(env)
 
     try:
-        eval_path = None#"./eval_plotting/gorog0"
-        evaluate(env, games, verbose=True, visualize=False, stop=False, individual_plots=True, plot_agents_alive=False, eval_save_path=eval_path, log_json=True, env_type=env_type)
+        evaluate(env, inputs.games, verbose=True, visualize=False, stop=False, individual_plots=True, plot_agents_alive=False, eval_save_path=eval_path, log_json=True, env_type=env_type)
     finally:
         autolib.delete_copies()
 
