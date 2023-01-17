@@ -62,7 +62,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
 }
 
 void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize,
-             PlanningAgentType planningAgentType, const std::string& firstOpponentType, const std::string& secondOpponentType,
+             PlanningAgentType planningAgentType, PlanningAgentType planningAgentTeamType, const std::string& firstOpponentType, const std::string& secondOpponentType,
              SearchSettings searchSettings, SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
 {
     srand(config.seed);
@@ -78,15 +78,12 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
     else {
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
+        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->set_planning_agents(planningAgentType, planningAgentTeamType, switchDepth);
     }
 
     // for now, just use the same observation parameters for opponents
     bboard::ObservationParameters opponentObsParams = config.observationParameters;
     crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, config.useVirtualStep);
-
-    if (!useRawNet) {
-        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
-    }
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents;
     
@@ -210,6 +207,8 @@ int main(int argc, char **argv) {
             ("1st-opponent-type-probability", po::value<float>()->default_value(1.0), "Probability of occurence of the first opponent type. The second type will use the counter-probability.")
             ("planning-agents", po::value<std::string>()->default_value("SimpleUnbiasedAgent"), "Agent type used during planning. "
                                                                                                 "Available options [None, SimpleUnbiasedAgent, SimpleAgent, LazyAgent, RawNetAgent]")
+            ("planning-agents-team", po::value<std::string>()->default_value(""), "Agent type used for team mates during planning, can differ from --planning-agents."
+                                                                                                "For available options, see --planning-agents. An empty string indicates that team mates use the same planning agent type.")
             ("switch-depth", po::value<int>()->default_value(-1), "Depth at which planning agents switch to SimpleUnbiasedAgents (-1 to disable switching).")
             ("with-state", "Whether to use the true state instead of (partial) observations for mcts.")
             // direct passthrough of search settings
@@ -287,33 +286,14 @@ int main(int argc, char **argv) {
         bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
         std::string modelDir = configVals["model-dir"].as<std::string>();
 
-        PlanningAgentType planningAgentType;
         std::string planningAgentStr = configVals["planning-agents"].as<std::string>();
-        if (planningAgentStr == "None")
-        {
-            planningAgentType = PlanningAgentType::None;
+        std::string planningAgentTeamStr = configVals["planning-agents-team"].as<std::string>();
+        if (planningAgentTeamStr == "") {
+            planningAgentTeamStr = planningAgentStr;
         }
-        else if (planningAgentStr == "SimpleUnbiasedAgent")
-        {
-            planningAgentType = PlanningAgentType::SimpleUnbiasedAgent;
-        }
-        else if (planningAgentStr == "SimpleAgent")
-        {
-            planningAgentType = PlanningAgentType::SimpleAgent;
-        }
-        else if (planningAgentStr == "LazyAgent")
-        {
-            planningAgentType = PlanningAgentType::LazyAgent;
-        }
-        else if (planningAgentStr == "RawNetAgent")
-        {
-            planningAgentType = PlanningAgentType::RawNetworkAgent;
-        }
-        else
-        {
-            std::cerr << "Unknown planning agent type: " << planningAgentStr << std::endl;
-            return 1;
-        }
+
+        PlanningAgentType pAgentType = planning_agent_type_from_string(planningAgentStr);
+        PlanningAgentType pAgentTypeTeam = planning_agent_type_from_string(planningAgentTeamStr);
 
         std::string firstOpponentType = configVals["1st-opponent-type"].as<std::string>();
         std::string secondOpponentType = configVals["2nd-opponent-type"].as<std::string>();
@@ -331,7 +311,7 @@ int main(int argc, char **argv) {
         else {
             setDefaultTeamConfig(config);
         }
-        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), planningAgentType, firstOpponentType, secondOpponentType,
+        tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), pAgentType, pAgentTypeTeam, firstOpponentType, secondOpponentType,
                 searchSettings, searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
     }
     else {
