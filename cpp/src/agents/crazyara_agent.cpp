@@ -22,7 +22,7 @@ PlanningAgentType planning_agent_type_from_string(std::string str)
     {
         return PlanningAgentType::LazyAgent;
     }
-    else if (str == "RawNetAgent")
+    else if (str == "RawNetAgent" || str == "RawNetworkAgent")
     {
         return PlanningAgentType::RawNetworkAgent;
     }

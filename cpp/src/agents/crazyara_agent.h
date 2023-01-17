@@ -193,9 +193,15 @@ private:
     SearchSettings searchSettings;
     const std::string modelDirectory;
     const int deviceID;
+    int previousAgentID = -1;
     PlanningAgentType planningAgentType = PlanningAgentType::None;
     PlanningAgentType planningAgentTeamType = PlanningAgentType::None;
     int switchDepth = -1;
+
+    /**
+     * @brief Updates the planning agents according to the stored types.
+     */
+    void update_planning_agents();
 
 public:
     MCTSCrazyAraAgent(const std::string& modelDirectory, const int deviceID, PlaySettings playSettings, SearchSettings searchSettings, SearchLimits searchLimits);
@@ -204,18 +210,21 @@ public:
     static SearchSettings get_default_search_settings(const bool selfPlay);
 
     /**
-     * @brief Initializes the planning agents (note that the state has to be initialized first).
+     * @brief Sets the planning agent types that will be used in the following episodes.
      *
      * @param planningAgentType The (primary) planning agent type
      * @param planningAgentTeamType The planning agent type for the team mate (id 1)
      * @param switchDepth Switch from planningAgentType to SimpleUnbiasedAgents at switchDepth if >= 0
      */
-    void init_planning_agents(PlanningAgentType planningAgentType, PlanningAgentType planningAgentTeamType, int switchDepth=-1);
+    void set_planning_agents(PlanningAgentType planningAgentType, PlanningAgentType planningAgentTeamType, int switchDepth=-1);
 
     // CrazyAraAgent
     bool has_stateful_model() override;
     crazyara::Agent* get_acting_agent() override;
     NeuralNetAPI* get_acting_net() override;
+
+    // bboard::Agent
+    void reset() override;
 
     // Clonable
     bboard::Agent* get() override;

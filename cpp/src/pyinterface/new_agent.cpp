@@ -21,6 +21,7 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
         searchSettings.mctsSolver = mctsSolver;
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
+        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->set_planning_agents(PlanningAgentType::SimpleUnbiasedAgent, PlanningAgentType::SimpleUnbiasedAgent);
     }
 
     // partial observability
@@ -40,11 +41,6 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
     } 
     else {
         crazyAraAgent->init_state(bboard::GameMode::TwoTeams, obsParams, obsParams, virtualStep);
-    }
-
-    if(!rawNetAgent)
-    {
-        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(PlanningAgentType::SimpleAgent);
     }
 
     return crazyAraAgent;

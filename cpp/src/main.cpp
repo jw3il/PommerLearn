@@ -62,7 +62,7 @@ bboard::Agent* create_agent_by_name(const std::string& firstOpponentType, CrazyA
 }
 
 void tourney(const std::string& modelDir, const int deviceID, RunnerConfig config, bool useRawNet, uint stateSize,
-             PlanningAgentType planningAgentType, PlanningAgentType planningAgentTypeTeam, const std::string& firstOpponentType, const std::string& secondOpponentType,
+             PlanningAgentType planningAgentType, PlanningAgentType planningAgentTeamType, const std::string& firstOpponentType, const std::string& secondOpponentType,
              SearchSettings searchSettings, SearchLimits searchLimits, int switchDepth, float firstOpponentTypeProbability, int agentID)
 {
     srand(config.seed);
@@ -78,15 +78,12 @@ void tourney(const std::string& modelDir, const int deviceID, RunnerConfig confi
     else {
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
+        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->set_planning_agents(planningAgentType, planningAgentTeamType, switchDepth);
     }
 
     // for now, just use the same observation parameters for opponents
     bboard::ObservationParameters opponentObsParams = config.observationParameters;
     crazyAraAgent->init_state(config.gameMode, config.observationParameters, opponentObsParams, config.useVirtualStep);
-
-    if (!useRawNet) {
-        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->init_planning_agents(planningAgentType, switchDepth);
-    }
 
     std::array<bboard::Agent*, bboard::AGENT_COUNT> agents;
     
