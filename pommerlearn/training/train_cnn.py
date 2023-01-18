@@ -130,7 +130,8 @@ def train_cnn(train_config):
     global_step_end = run_training(model, int(train_config["nb_epochs"]), optimizer, lr_schedule, momentum_schedule,
                                    value_loss, policy_loss, train_config["value_loss_ratio"],
                                    train_loader, val_loader, device, log_dir, global_step=global_step_start,
-                                   batches_until_eval=train_config["batches_until_eval"])
+                                   batches_until_eval=train_config["batches_until_eval"],
+                                   train_ratio=train_config["train_ratio"])
 
     base_dir = Path(train_config["output_dir"])
     batch_sizes = train_config["model_batch_sizes"]
@@ -322,7 +323,7 @@ def export_as_script_module(model, batch_size, dummy_input, dir) -> None:
 
 def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum_schedule, value_loss, policy_loss,
                  value_loss_ratio, train_loader, val_loader, device, log_dir, global_step=0,
-                 batches_until_eval: Optional[int] = 100):
+                 batches_until_eval: Optional[int] = 100, train_ratio: Optional[float] = None):
     """
     Trains a given model for a number of epochs
 
@@ -341,6 +342,7 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
     :param global_step: The global step used for logging
     :param batches_until_eval: Number of batches between evaluations of the current model. The model will also be
                                evaluated at the end.
+    :param train_ratio: If given, training for each epoch stops after reading train_ratio of all batches
     :return: global_step after training
     """
 
@@ -352,7 +354,13 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
         writer_val = SummaryWriter(log_dir=log_dir + "-val")
 
     # TODO: Nested progress bars would be ideal
-    progress = tqdm(total=len(train_loader) * nb_epochs, smoothing=0)
+    if train_ratio is None:
+        total_len = len(train_loader) * nb_epochs
+    else:
+        assert 0 <= train_ratio <= 1, f"Invalid train ratio {train_ratio}."
+        total_len = int(train_ratio * len(train_loader)) * nb_epochs
+
+    progress = tqdm(total=total_len, smoothing=0)
 
     for epoch in range(nb_epochs):
         # training
@@ -430,6 +438,10 @@ def run_training(model: PommerModel, nb_epochs, optimizer, lr_schedule, momentum
             global_step += 1
             local_step += 1
             progress.update(1)
+
+            if train_ratio is not None:
+                if batch_idx >= len(train_loader) * train_ratio:
+                    break
 
     progress.close()
 
@@ -621,6 +633,7 @@ def fill_default_config(train_config):
         "batch_size_test": 1024,
         "random_state":  42,
         "nb_epochs":  5,
+        "train_ratio": None,  # factor in [0, 1] allows for partial epochs (early stops)
         "model": "risev3",  # "a0", "risev3", "lstm"
         "sequence_length": 8,  # only used when model is stateful
         "use_downsampling": True,
