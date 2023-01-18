@@ -2,26 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from paper.util import get_label
+
 plt.rcParams['text.usetex'] = True
 
 df = pd.read_csv("20221231_103020_pommer_log.csv")
-
-
-def get_label(search_mode, model_name, terminal_solver):
-    tex_label = ""
-    if search_mode == "OnePlayer":
-        tex_label += "$\\texttt{MCTS}_1$"
-    elif search_mode == "TwoPlayer":
-        tex_label += "$\\texttt{MCTS}_2$"
-
-    if model_name != "dummy":
-        tex_label += f" $\\texttt{{{model_name.upper()}}}$"
-
-    if terminal_solver:
-        tex_label += " $\\texttt{T}$"
-
-    return tex_label
-
 
 for i, search_mode in enumerate(["OnePlayer", "TwoPlayer"]):
     for j, model_name in enumerate(["dummy", "sl"]):
