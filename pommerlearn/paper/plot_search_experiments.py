@@ -4,7 +4,9 @@ import pandas as pd
 
 from paper.util import get_label
 
-plt.rcParams['text.usetex'] = True
+from matplotlib_settings import set_matplotlib_font_size
+
+set_matplotlib_font_size(14, 16, 18)
 
 df = pd.read_csv("20221231_103020_pommer_log.csv")
 

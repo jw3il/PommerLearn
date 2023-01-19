@@ -7,8 +7,9 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 from paper.util import get_label
 
-plt.rcParams['text.usetex'] = True
+from matplotlib_settings import set_matplotlib_font_size
 
+set_matplotlib_font_size(12, 14, 16)
 
 def find_dirs(base_dir, endswith_list):
     endswith_list = endswith_list.copy()
@@ -60,20 +61,21 @@ def aggregate(xy_list, label):
     plt.plot(common_x, y_array.mean(axis=0), label=label)
 
 
-runs = find_dirs("runs", [f"dummy_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
-aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "dummy", None))
-
-runs = find_dirs("runs", [f"sl_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
-aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "sl", None))
-
 runs = find_dirs("runs", [f"dummy_250s_2false_short_noterm_noDiscount_{i}" for i in range(1, 6)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("OnePlayer", "dummy", None))
 
 runs = find_dirs("runs", [f"sl_250s_2false_short_noterm_noDiscount_{i}" for i in range(1, 6)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("OnePlayer", "sl", None))
 
-plt.ylim(0, 1.0)
+runs = find_dirs("runs", [f"dummy_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
+aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "dummy", None))
+
+runs = find_dirs("runs", [f"sl_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
+aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "sl", None))
+
+# plt.ylim(0, 1.0)
 plt.xlabel("Iterations")
 plt.ylabel("Win rate against $\\texttt{Simple}_\\texttt{C}$ opponents", labelpad=8)
 plt.legend()
+plt.savefig("ffa_rl.pdf", bbox_inches="tight")
 plt.show()
