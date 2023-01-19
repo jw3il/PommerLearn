@@ -282,7 +282,13 @@ int main(int argc, char **argv) {
         setDefaultTeamConfig(config);
         Runner::run_simple_unbiased_agents(config);
     }
-    else if ((mode == "ffa_mcts") || (mode == "team_mcts")) {
+    else if (mode == "team_full_sl") {
+        setDefaultTeamConfig(config);
+        // like team but with full view on map
+        config.observationParameters.agentPartialMapView = false;
+        Runner::run_simple_unbiased_agents(config);
+    }
+    else if ((mode == "ffa_mcts") || (mode == "team_mcts") || (mode == "team_full_mcts")) {
         bool useRawNetAgent = configVals.count("raw-net-agent") > 0;
         std::string modelDir = configVals["model-dir"].as<std::string>();
 
@@ -308,8 +314,12 @@ int main(int argc, char **argv) {
         if (mode == "ffa_mcts"){
             setDefaultFFAConfig(config);
         }
+        else if (mode == "team_mcts") {
+            setDefaultTeamConfig(config);
+        }
         else {
             setDefaultTeamConfig(config);
+            config.observationParameters.agentPartialMapView = false;
         }
         tourney(modelDir, deviceID, config, useRawNetAgent, configVals["state-size"].as<uint>(), pAgentType, pAgentTypeTeam, firstOpponentType, secondOpponentType,
                 searchSettings, searchLimits, switchDepth, configVals["1st-opponent-type-probability"].as<float>(), configVals["agent-id"].as<int>());
