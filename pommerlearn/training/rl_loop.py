@@ -538,7 +538,7 @@ def main():
     train_config = training.train_cnn.fill_default_config(train_config)
 
     dataset_args = [
-        "--mode=ffa_mcts",
+        f"--mode={get_and_remove(parsed_exec_args, 'mode', 'ffa_mcts')}",
         f"--env-gen-seed-eps={get_and_remove(parsed_exec_args, 'env-gen-seed-eps', '2')}",
         "--max-games=-1",
         f"--targeted-samples={get_and_remove(parsed_exec_args, 'targeted-samples', '50000')}",
