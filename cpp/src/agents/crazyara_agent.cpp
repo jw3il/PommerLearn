@@ -144,6 +144,9 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     #endif
 
     add_results_to_buffer(net, bestAction);
+    eval_time_ms.update(std::chrono::duration_cast<std::chrono::milliseconds>(evalInfo.end - evalInfo.start).count());
+    eval_depth.update(evalInfo.depth);
+    eval_nodes.update(evalInfo.nodes);
     return bestAction;
 }
 

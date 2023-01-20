@@ -10,6 +10,7 @@
 #include "safe_ptr_queue.h"
 #include "rawnetagent.h"
 #include "mctsagent.h"
+#include "aggregate.h"
 
 #ifdef TENSORRT
 #include "nn/tensorrtapi.h"
@@ -56,6 +57,10 @@ protected:
     bboard::Environment* env = nullptr;
 
 public:
+    OnlineAggregate eval_time_ms;
+    OnlineAggregate eval_depth;
+    OnlineAggregate eval_nodes;
+
     /**
      * @brief Initializes the Pommermanstate.
      * 
