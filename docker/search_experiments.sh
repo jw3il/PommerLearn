@@ -17,7 +17,7 @@ GPUS="0,0,1,1,2,2,3,3"
 
 # model paths within the docker containers
 declare -a MODEL_NAME_PATH_PAIRS=(
-    "sl /data/model-sl/onnx"
+    "sl-g1 /data/model-sl-g1/onnx"
     "dummy /data/model-dummy/onnx"
 )
 
@@ -58,7 +58,7 @@ for tsolver in ${TERMINAL_SOLVER}; do
     # main command
     CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --model=${model_path} ${SIM_PARAM} --max-games=${GAMES} --mctsSolver=${tsolver}"
     # get stats from last line and append stats with run configuration to logfile
-    echo "$CMD | tail -n 1 | xargs printf \"${search},${tsolver},${model_name},${model_path},${sim},%s\n\" >> ${LOGFILE}";
+    echo "$CMD | tail -n 1 | xargs -d \"\n\" printf \"${search},${tsolver},${model_name},${model_path},${sim},%s\n\" >> ${LOGFILE}";
 done
 done
 done
