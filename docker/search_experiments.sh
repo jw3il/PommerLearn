@@ -30,7 +30,7 @@ TERMINAL_SOLVER="true false"
 LOGFILE="${POMMER_DATA_DIR}/$(date +%Y%m%d_%H%M%S)_pommer_log.csv"
 
 # create logfile and write column headers
-echo "SearchMode,TerminalSolver,ModelName,ModelPath,Simulations,Episodes,TotalSteps,Wins0,Alive0,Wins1,Alive1,Wins2,Alive2,Wins3,Alive3,Draws,NotDone,Time" > "${LOGFILE}"
+echo "SearchMode,TerminalSolver,ModelName,ModelPath,Simulations,Episodes,TotalSteps,Wins0,Alive0,Wins1,Alive1,Wins2,Alive2,Wins3,Alive3,Draws,NotDone,Time,EvalInfo" > "${LOGFILE}"
 
 # TODO: Add terminal solver option
 
