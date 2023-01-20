@@ -23,7 +23,7 @@ def get_agent_list(autolib: AutoCopy, inputs):
     def create_agent(name, port=15000):
         """Create an agent given its name and the cli inputs"""
         if name == 'crazyara':
-            if inputs.env == 'team':
+            if 'team' in inputs.env:
                 agent_name = f"CrazyAraAgentTeam:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}"
             else:
                agent_name = f"CrazyAraAgent:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}" 
@@ -53,7 +53,7 @@ def get_agent_list(autolib: AutoCopy, inputs):
 
     port = 13_000
     # create a team env with 2 Crazy Ara agents and 2 opponents
-    if inputs.env == 'team':
+    if 'team' in inputs.env:
         agent_list = [
             create_agent('crazyara'),
             create_agent(inputs.opponent, port),
@@ -108,7 +108,10 @@ def main():
     inputs = parse_args()
 
     if inputs.model_dir is None: 
-        raise ValueError('inputs.model_dir must be set to the agents model directory')
+        MODEL_PATH = "model_sl/onnx"
+        inputs.model_dir = MODEL_PATH
+        if MODEL_PATH is None:
+            raise ValueError('inputs.model_dir must be set to the agents model directory')
 
     # path to save results (if none -> creates folder and saves under PommerLearn/eval_plotting/"Pomme_e_{games}")
     eval_path = inputs.eval_path
@@ -123,6 +126,12 @@ def main():
     # Make the environment using the agent list
     if inputs.env == 'team':
         env_type ='PommeRadio-v2'
+        env = pommerman.make(env_type, agent_list)
+    elif inputs.env == 'team-fullstate':
+        env_type ='PommeRadio-v3'
+        env = pommerman.make(env_type, agent_list)
+    elif inputs.env == 'team-normal':
+        env_type ='PommeTeamCompetition-v0'
         env = pommerman.make(env_type, agent_list)
     elif inputs.env == 'ffa':
         env_type ='PommeFFACompetition-v0'
