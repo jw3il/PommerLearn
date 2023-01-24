@@ -39,9 +39,12 @@ def get_agent_list(autolib: AutoCopy, inputs):
                 agent_name += ':virtualStep'
             agent = CppAgent(autolib(), agent_name)   
 
-        elif name == 'simple':
+        elif name == 'simplecpp':
             agent = CppAgent(autolib(), "SimpleAgent", seed=17)
-
+        elif name == 'sub':
+            agent = CppAgent(autolib(), "SimpleUnbiasedAgent", seed=17)
+        elif name == 'simple':
+            agent = agents.SimpleAgent()
         elif name in docker_img.keys():
             agent = agents.DockerAgent(docker_image=docker_img[name], port=port)
 
@@ -52,23 +55,28 @@ def get_agent_list(autolib: AutoCopy, inputs):
         return agent
 
     port = 13_000
-    # create a team env with 2 Crazy Ara agents and 2 opponents
-    if 'team' in inputs.env:
-        agent_list = [
-            create_agent('crazyara'),
-            create_agent(inputs.opponent, port),
-            create_agent('crazyara'),
-            create_agent(inputs.opponent, port+1)
-        ]
-    # create a team env with a Crazy Ara agents and 3 opponents
+    if inputs.players is None:
+        # create a team env with 2 Crazy Ara agents and 2 opponents
+        if 'team' in inputs.env:
+            agent_list = [
+                create_agent('crazyara'),
+                create_agent(inputs.opponent, port),
+                create_agent('crazyara'),
+                create_agent(inputs.opponent, port+1)
+            ]
+        # create a team env with a Crazy Ara agents and 3 opponents
+        else:
+            agent_list = [
+                create_agent('crazyara', inputs),
+                create_agent(inputs.opponent, port+1),
+                create_agent(inputs.opponent, port+2),
+                create_agent(inputs.opponent, port+3)
+            ]
     else:
-        agent_list = [
-            create_agent('crazyara', inputs),
-            create_agent(inputs.opponent, port),
-            create_agent(inputs.opponent, port+1),
-            create_agent(inputs.opponent, port+2)
-        ]
-
+        print(f"Creating agent list for: {inputs.players}")
+        agent_list = [create_agent(player, port+i) for i,player in enumerate(inputs.players)]
+    
+    assert len(agent_list) == 4
     return agent_list
 
 
@@ -83,6 +91,8 @@ def parse_args():
     # RawNet/Crazy Ara Parameters
     parser.add_argument('--model_dir', type=check_dir, help="Directory of the agent.")
     parser.add_argument('--state_size', type=int, default=0, help='state size')
+    # Option to pass multiple agents
+    parser.add_argument('-p', '--players', nargs='+', type=str, help='pass all 4 agent types (for example: --players simple simple sub sub)')
     # Crazy Ara Parameters
     parser.add_argument('--simulations', type=int, default=100, help='number of simulations')
     parser.add_argument('--movetime', type=int, default=100, help='move time')
