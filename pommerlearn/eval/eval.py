@@ -26,7 +26,7 @@ def get_agent_list(autolib: AutoCopy, inputs):
             if 'team' in inputs.env:
                 agent_name = f"CrazyAraAgentTeam:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}"
             else:
-               agent_name = f"CrazyAraAgent:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}" 
+               agent_name = f"CrazyAraAgent:{inputs.model_dir}:{inputs.state_size}:{inputs.simulations}:{inputs.movetime}:planning{inputs.planning_type}" 
             if inputs.virtual_step:
                 agent_name += ':virtualStep'
             if inputs.terminal:
@@ -98,6 +98,8 @@ def parse_args():
     parser.add_argument('--movetime', type=int, default=100, help='move time')
     parser.add_argument('--virtual_step', default=False, action='store_true', help='use virtual step')
     parser.add_argument('--terminal', default=False, action='store_true', help='use mctsSolver')
+    parser.add_argument('--planning_type', type=str, default="SimpleUnbiasedAgent", help='type of opponent for 1v1 planning (None, SimpleAgent, SimpleUnbiasedAgent, LazyAgent, RawNetAgent)')
+
     # Opponents
     parser.add_argument('-o', '--opponent', type=str, default="simple", help='name of the opponent agent possible [crazyara, rawnet,  simple, dypm, hazoj, gorog, skynet, navocado]')
 
