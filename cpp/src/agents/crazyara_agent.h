@@ -59,6 +59,7 @@ protected:
 public:
     OnlineAggregate eval_time_ms;
     OnlineAggregate eval_depth;
+    OnlineAggregate eval_depth_sel;
     OnlineAggregate eval_nodes;
 
     /**
