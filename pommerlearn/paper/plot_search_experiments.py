@@ -16,7 +16,7 @@ df["RelativeWin0"] = df.Wins0 / df.Episodes
 df_agg = df.groupby(["SearchMode", "Supervised", "Simulations"]).agg({'RelativeWin0': ['mean', 'std']}).reset_index()
 
 for i, search_mode in enumerate(["OnePlayer", "TwoPlayer"]):
-    for j, supervised in enumerate([True, False]):
+    for j, supervised in enumerate([False, True]):
         color = plt.cm.tab10.colors[i * 2 + j]
         filtered = df_agg[(df_agg.SearchMode == search_mode) & (df_agg.Supervised == supervised)]
         model_name = "sl" if supervised else ""
