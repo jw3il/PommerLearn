@@ -83,7 +83,7 @@ void _print_stats(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, std::c
         if (crazyAraAgent) {
             std::ostringstream stream;
             stream << std::fixed << std::setprecision(2);
-            stream << " t: " << crazyAraAgent->eval_time_ms.get_mean() << " ms, n: " << crazyAraAgent->eval_nodes.get_mean() << ", d: " << crazyAraAgent->eval_depth.get_mean();
+            stream << " t: " << crazyAraAgent->eval_time_ms.get_mean() << " ms, n: " << crazyAraAgent->eval_nodes.get_mean() << ", d: " << crazyAraAgent->eval_depth.get_mean() << ", sd: " << crazyAraAgent->eval_depth_sel.get_mean();
             std::cout << stream.str();
         }
         std::cout << std::endl;
@@ -109,7 +109,7 @@ void _print_stats(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, std::c
                     evalString += "|";
                 }
                 // print all stats
-                evalString += crazyAraAgent->eval_time_ms.get_csv() + ":" + crazyAraAgent->eval_nodes.get_csv() + ":" + crazyAraAgent->eval_depth.get_csv();
+                evalString += crazyAraAgent->eval_time_ms.get_csv() + ":" + crazyAraAgent->eval_nodes.get_csv() + ":" + crazyAraAgent->eval_depth.get_csv() + ":" + crazyAraAgent->eval_depth_sel.get_csv();
             }
         }
         std::cout << "," << nbDraws << "," << nbNotDone << "," << elapsedSeconds << ",\"" << evalString << "\"" << std::endl;

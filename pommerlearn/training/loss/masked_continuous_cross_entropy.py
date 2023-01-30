@@ -1,3 +1,6 @@
+from typing import Union
+
+import numpy as np
 import torch
 from torch.nn.modules.loss import _Loss
 from torch import Tensor
@@ -16,13 +19,17 @@ class MaskedContinuousCrossEntropyLoss(_Loss):
         >>> output = loss(input, target)
         >>> output.backward()
     """
-    def __init__(self, argmax_target: bool = False) -> None:
+    def __init__(self, argmax_target: Union[float, bool] = False) -> None:
         """
         :param argmax_target: Along dim -1 of the target, whether to set the target entry with the highest probability
             to 1 and all the others to 0 instead of using the actual continuous target distribution.
         """
         super(MaskedContinuousCrossEntropyLoss, self).__init__()
-        self.argmax_target = argmax_target
+        # float(True) = 1, float(False) = 0
+        self.argmax_target = float(argmax_target)
+        if not 0 <= self.argmax_target <= 1:
+            self.argmax_target = float(np.clip(self.argmax_target, 0.0, 1.0))
+            print(f"Warning: clipped argmax_target to {self.argmax_target}")
 
     def forward(self, log_input: Tensor, target: Tensor, mask: Tensor = None) -> Tensor:
         """
@@ -33,10 +40,11 @@ class MaskedContinuousCrossEntropyLoss(_Loss):
         :param mask: allows to mask samples in sequences
         :return:
         """
-        if self.argmax_target:
+        if self.argmax_target > 0:
             max_indices = torch.max(target, dim=-1)[1].unsqueeze(-1)
-            target = torch.zeros_like(target, device=target.device)
-            target.scatter_(-1, max_indices, 1.0)
+            target_argmax = torch.zeros_like(target, device=target.device)
+            target_argmax.scatter_(-1, max_indices, 1.0)
+            target = (1 - self.argmax_target) * target + self.argmax_target * target_argmax
 
         if mask is None:
             return -(target * F.log_softmax(log_input, dim=-1)).sum(dim=-1).mean()

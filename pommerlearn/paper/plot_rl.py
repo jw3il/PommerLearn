@@ -7,9 +7,11 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 from paper.util import get_label
 
-from matplotlib_settings import set_matplotlib_font_size
+from matplotlib_settings import set_matplotlib_font_size, init_plt
 
-set_matplotlib_font_size(12, 14, 16)
+init_plt()
+set_matplotlib_font_size(14, 16, 18)
+plt.rcParams['figure.figsize'] = [6.5, 5]
 
 def find_dirs(base_dir, endswith_list):
     endswith_list = endswith_list.copy()
@@ -73,9 +75,10 @@ aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "dummy"
 runs = find_dirs("runs", [f"sl_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "sl", None))
 
-# plt.ylim(0, 1.0)
-plt.xlabel("Iterations")
+plt.ylim(0, 1.0)
+plt.xlabel("Training iterations")
 plt.ylabel("Win rate against $\\texttt{Simple}_\\texttt{C}$ opponents", labelpad=8)
-plt.legend()
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=2)
+plt.tight_layout()
 plt.savefig("ffa_rl.pdf", bbox_inches="tight")
 plt.show()
