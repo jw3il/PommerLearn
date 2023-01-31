@@ -4,9 +4,9 @@ import os
 def get_label(search_mode, model_name, terminal_solver):
     tex_label = ""
     if search_mode == "OnePlayer":
-        tex_label += "$\\texttt{MCTS}_1$"
+        tex_label += "$\\texttt{SP-MCTS}$"
     elif search_mode == "TwoPlayer":
-        tex_label += "$\\texttt{MCTS}_2$"
+        tex_label += "$\\texttt{TP-MCTS}$"
 
     if model_name != "dummy":
         tex_label += f" $\\texttt{{{model_name.upper()}}}$"

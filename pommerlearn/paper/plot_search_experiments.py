@@ -10,7 +10,7 @@ init_plt()
 set_matplotlib_font_size(14, 16, 18)
 plt.rcParams['figure.figsize'] = [6.5, 5]
 
-df = pd.read_csv("20230127_162747_pommer_log.csv")
+df = pd.read_csv("20230130_132317_pommer_log.csv")
 df["Supervised"] = df.ModelName.str.startswith("sl")
 df["RelativeWin0"] = df.Wins0 / df.Episodes
 df_agg = df.groupby(["SearchMode", "Supervised", "Simulations"]).agg({'RelativeWin0': ['mean', 'std']}).reset_index()
@@ -32,5 +32,5 @@ plt.yticks(y_ticks, y_ticks)
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=2)
 
 plt.tight_layout()
-# plt.show()
 plt.savefig("search_experiments.pdf", bbox_inches='tight')
+plt.show()
