@@ -110,6 +110,7 @@ public:
     const bool statefulModel;
     const uint maxTimeStep;
     bool useVirtualStep;
+    bool trackStats;
 #ifndef MCTS_SINGLE_PLAYER
     int simulatedOpponentID;
     bool myTurn;
@@ -152,6 +153,7 @@ public:
     void set_opponent_observation_params(const bboard::ObservationParameters params);
     void set_agent_id(const int id);
     void set_virtual_step(bool useVirtualStep);
+    void set_track_stats(bool trackStats);
 
     // planning agent methods
 

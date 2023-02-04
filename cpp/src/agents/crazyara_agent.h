@@ -68,9 +68,10 @@ public:
      * @param gameMode The gamemode
      * @param obsParams How this agent observes the state
      * @param opponentObsParams How opponents observe the state (only relevant for MCTS)
-     * @param useVirtualStep If the agent reconstructs previously seen information
+     * @param useVirtualStep If the agent reconstructs previously seen board information (excluding agent stats)
+     * @param trackStats If the agent tracks stats of visible agents and bomb ownership
      */
-    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, bool useVirtualStep);
+    void init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, bool useVirtualStep, bool trackStats);
 
     /**
      * @brief Use the true state of the given environment instead of the observation in the act method.

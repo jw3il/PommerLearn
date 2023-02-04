@@ -23,9 +23,14 @@ struct RunnerConfig
     bboard::ObservationParameters observationParameters;
 
     /**
-     * @brief useVirtualStep Parameter defining wetherto recreate information from previous observations
+     * @brief useVirtualStep Parameter defining whether to recreate board information from previous observations
      */
     bool useVirtualStep = false;
+
+        /**
+     * @brief trackStats Parameter defining whether to track agent stats and bomb ownership
+     */
+    bool trackStats = false;
 
     /**
      * @brief maxEpisodeSteps The maximum number of steps per episode.

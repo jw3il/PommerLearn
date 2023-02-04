@@ -89,6 +89,11 @@ void PommermanState::set_virtual_step(bool useVirtualStep)
     this->useVirtualStep = useVirtualStep;
 }
 
+void PommermanState::set_track_stats(bool trackStats)
+{
+    this->trackStats = trackStats;
+}
+
 void PommermanState::set_state(const bboard::State* state)
 {
     // copy the state
@@ -100,13 +105,36 @@ void PommermanState::set_state(const bboard::State* state)
 
 void PommermanState::set_observation(const bboard::Observation* obs)
 {
+    auto obsCopy = *obs;
 
-    if (this->useVirtualStep && obs->timeStep>0){
-        obs->VirtualStep(this->state, true, true, nullptr);
-    } else {
-        // reset state object
-        this->state = bboard::State();
-        obs->ToState(this->state);
+    // initialize state
+    if (obsCopy.timeStep == 0) {
+        state = bboard::State();
+
+        if (!this->trackStats) {
+            // assume worst case
+            for (int i = 0; i < bboard::AGENT_COUNT; i++) {
+                bboard::AgentInfo& info = state.agents[i];
+                info.bombCount = 0;
+                info.bombStrength = bboard::BOARD_SIZE;
+                info.canKick = true;
+                info.maxBombCount = bboard::MAX_BOMBS_PER_AGENT;
+            }
+        }
+    }
+
+    if (obsCopy.timeStep > 0 && this->trackStats) {
+        // track agent stats from previous step
+        obsCopy.TrackStats(state);
+    }
+    
+    if (this->useVirtualStep){
+        // perform virtual step
+        obsCopy.VirtualStep(this->state, true, true, nullptr);
+    } 
+    else {
+        // convert the observation to a state
+        obsCopy.ToState(state);
     }
     this->hasTrueState = false;
 
@@ -620,6 +648,7 @@ PommermanState* PommermanState::clone() const
     clone->agentObsParams = agentObsParams;
     clone->opponentObsParams = opponentObsParams;
     clone->useVirtualStep = useVirtualStep;
+    clone->trackStats = trackStats;
     if (hasPlanningAgents) {
         // clone all relevant agents
         for (size_t i = 0; i < planningAgents.size(); i++) {
