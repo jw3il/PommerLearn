@@ -27,7 +27,7 @@ for model in "dummy" "sl"; do
 for rep in {0..4}; do
 RUN_NAME="${model}_${SIMULATIONS}s_2${twoplayersearch}_exploit_${rep}"
 cat << EndOfMessage
-POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --model="/data/model-${model}-${rep}/" --name-initials=JW --comment="${RUN_NAME}" --it 50 --exec-args="--mode=ffa_mcts --simulations=${SIMULATIONS} --mctsSolver=false --targeted-samples=100000 --chunk-count=101" --train-args="--discount_factor=1 --mcts_val_weight=None --policy_loss_argmax_target=0.5" --num-latest=4 --num-recent=0 > "${DIRNAME}/${RUN_NAME}.log" 2>&1
+POMMER_1VS1=${twoplayersearch} bash run.sh --gpu \$CUDA_VISIBLE_DEVICES --model="/data/model-${model}-${rep}/" --name-initials=JW --comment="${RUN_NAME}" --it 50 --exec-args="--mode=ffa_mcts --simulations=${SIMULATIONS} --mctsSolver=false --targeted-samples=100000 --chunk-count=101 --track-stats" --train-args="--discount_factor=1 --mcts_val_weight=None --policy_loss_argmax_target=0.5" --num-latest=4 --num-recent=0 > "${DIRNAME}/${RUN_NAME}.log" 2>&1
 EndOfMessage
 done
 done
