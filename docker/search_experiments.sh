@@ -43,6 +43,7 @@ echo "SearchMode,TerminalSolver,ModelName,ModelPath,Simulations,Episodes,TotalSt
 # TODO: Add terminal solver option
 
 # run experiments
+time (
 for sim in ${SIMULATIONS}; do
 for pair in "${MODEL_NAME_PATH_PAIRS[@]}"; do
 for search in ${SEARCH_MODES}; do
@@ -71,3 +72,4 @@ done
 done
 done
 done | simple_gpu_scheduler --gpus $GPUS
+)
