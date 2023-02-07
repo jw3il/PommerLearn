@@ -7,7 +7,7 @@ torch>=1.9.0
 zarr
 numcodecs
 tqdm
-sklearn
+scikit-learn
 tensorboard
 rtpt
 onnx
