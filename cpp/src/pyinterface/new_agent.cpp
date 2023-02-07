@@ -134,7 +134,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep, mctsSolver, searchLimits=searchLimits);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep, mctsSolver, trackStats, planningAgentType, searchLimits=searchLimits);
     }
 
     return nullptr;
