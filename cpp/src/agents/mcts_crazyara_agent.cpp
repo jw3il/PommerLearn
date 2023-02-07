@@ -43,7 +43,6 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
 {
     SearchSettings searchSettings;
 
-    searchSettings.virtualLoss = 1;
     searchSettings.batchSize = 8;
     searchSettings.threads = 4;
     searchSettings.useMCGS = false;
@@ -58,14 +57,8 @@ SearchSettings MCTSCrazyAraAgent::get_default_search_settings(const bool selfPla
         searchSettings.dirichletEpsilon = 0;
         searchSettings.nodePolicyTemperature = 1.7f;
     }
-    searchSettings.dirichletAlpha = 0.2f;
-    searchSettings.epsilonGreedyCounter = 0;
-    searchSettings.epsilonChecksCounter = 0;
-    searchSettings.qVetoDelta = 0.4;
-    searchSettings.qValueWeight = 1.0f;
     searchSettings.reuseTree = false;
-    searchSettings.mctsSolver = true;
-
+    searchSettings.mctsSolver = false;
     return searchSettings;
 }
 
@@ -152,7 +145,7 @@ void MCTSCrazyAraAgent::update_planning_agents()
         {
             std::unique_ptr<RawCrazyAraAgent> crazyAraAgent = std::make_unique<RawCrazyAraAgent>(rawNetAgentQueue);
             crazyAraAgent->id = i;
-            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams, pommermanState->useVirtualStep);
+            crazyAraAgent->init_state(pommermanState->gameMode, pommermanState->opponentObsParams, pommermanState->opponentObsParams, pommermanState->useVirtualStep, pommermanState->trackStats);
             agent = std::move(crazyAraAgent);
             break;
         }

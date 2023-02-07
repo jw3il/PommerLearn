@@ -614,8 +614,8 @@ def fill_default_config(train_config):
         "output_dir": "./model-sl",
         "model_batch_sizes": [1, 8],
         # hyperparameters
-        "discount_factor": 0.99,
-        "mcts_val_weight": 0.0,  # None or in [0, 1]
+        "discount_factor": 1.0,
+        "mcts_val_weight": None,  # None or in [0, 1]
         "train_sampling_mode": "complete",  # "complete", "weighted_steps_to_end", "weighted_actions"
         "policy_loss_argmax_target": False,
         "optimizer": "adamw",

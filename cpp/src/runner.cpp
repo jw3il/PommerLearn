@@ -65,7 +65,7 @@ EpisodeInfo Runner::run_env_episode(bboard::Environment& env, int maxSteps, bool
     return info;
 }
 
-void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins, std::array<int, bboard::AGENT_COUNT> nbAlive, bool csv)
+void _print_stats(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, std::chrono::steady_clock::time_point begin, int episode, long totalEpisodeSteps, int nbNotDone, int nbDraws, std::array<int, bboard::AGENT_COUNT> nbWins, std::array<int, bboard::AGENT_COUNT> nbAlive, bool csv)
 {
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     double elapsedSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
@@ -78,7 +78,15 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
     for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
         int wins = nbWins[agentIdx];
         int alive = nbAlive[agentIdx];
-        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%) | " << alive << " (" << (float)alive * 100 / episode << "%)" << std::endl;
+        std::cout << "- Agent " << agentIdx << ": " << wins << " (" << (float)wins * 100 / episode << "%) | " << alive << " (" << (float)alive * 100 / episode << "%)"; 
+        CrazyAraAgent* crazyAraAgent = dynamic_cast<CrazyAraAgent*>(agents[agentIdx]);
+        if (crazyAraAgent) {
+            std::ostringstream stream;
+            stream << std::fixed << std::setprecision(2);
+            stream << " t: " << crazyAraAgent->eval_time_ms.get_mean() << " ms, n: " << crazyAraAgent->eval_nodes.get_mean() << ", d: " << crazyAraAgent->eval_depth.get_mean() << ", sd: " << crazyAraAgent->eval_depth_sel.get_mean();
+            std::cout << stream.str();
+        }
+        std::cout << std::endl;
     }
 
     std::cout << "Draws: " << nbDraws << " (" << (float)nbDraws * 100 / episode << "%)" << std::endl;
@@ -89,12 +97,22 @@ void _print_stats(std::chrono::steady_clock::time_point begin, int episode, long
     if (csv) {
         // print stats in machine-readable format
         std::cout << episode << "," << totalEpisodeSteps;
+        std::string evalString = "";
         for (size_t agentIdx = 0; agentIdx < bboard::AGENT_COUNT; ++agentIdx) {
             int wins = nbWins[agentIdx];
             int alive = nbAlive[agentIdx];
             std::cout << "," << wins << "," << alive;
+            CrazyAraAgent* crazyAraAgent = dynamic_cast<CrazyAraAgent*>(agents[agentIdx]);
+            if (crazyAraAgent) {
+                if (evalString != "") {
+                    // agent separator
+                    evalString += "|";
+                }
+                // print all stats
+                evalString += crazyAraAgent->eval_time_ms.get_csv() + ":" + crazyAraAgent->eval_nodes.get_csv() + ":" + crazyAraAgent->eval_depth.get_csv() + ":" + crazyAraAgent->eval_depth_sel.get_csv();
+            }
         }
-        std::cout << "," << nbDraws << "," << nbNotDone << "," << elapsedSeconds << std::endl;
+        std::cout << "," << nbDraws << "," << nbNotDone << "," << elapsedSeconds << ",\"" << evalString << "\"" << std::endl;
     }
 }
 
@@ -231,12 +249,12 @@ void Runner::run(std::array<bboard::Agent*, bboard::AGENT_COUNT> agents, RunnerC
 
         if ((episode + 1) % 20 == 0)
         {
-            _print_stats(begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive, false);
+            _print_stats(agents, begin, episode + 1, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive, false);
         }
     }
 
     // display aggregated statistics
-    _print_stats(begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive, true);
+    _print_stats(agents, begin, episode, totalEpisodeSteps, nbNotDone, nbDraws, nbWins, nbAlive, true);
 }
 
 void Runner::run_simple_unbiased_agents(RunnerConfig config) {

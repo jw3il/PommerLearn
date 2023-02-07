@@ -31,6 +31,8 @@ def get_agent_list(autolib: AutoCopy, inputs):
                 agent_name += ':virtualStep'
             if inputs.terminal:
                 agent_name += ':mctsSolver'
+            if inputs.track_stats:
+                agent_name += ':trackStats'
             agent = CppAgent(autolib(), agent_name, 42, False)
 
         elif name == 'rawnet':
@@ -97,6 +99,7 @@ def parse_args():
     parser.add_argument('--simulations', type=int, default=100, help='number of simulations')
     parser.add_argument('--movetime', type=int, default=100, help='move time')
     parser.add_argument('--virtual_step', default=False, action='store_true', help='use virtual step')
+    parser.add_argument('--track-stats', default=False, action='store_true', help='track stats')
     parser.add_argument('--terminal', default=False, action='store_true', help='use mctsSolver')
     parser.add_argument('--planning_type', type=str, default="SimpleUnbiasedAgent", help='type of opponent for 1v1 planning (None, SimpleAgent, SimpleUnbiasedAgent, LazyAgent, RawNetAgent)')
 

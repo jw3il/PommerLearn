@@ -30,12 +30,13 @@ PlanningAgentType planning_agent_type_from_string(std::string str)
     throw std::runtime_error(std::string("Unknown planning agent type: ") + str);
 }
 
-void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, bool useVirtualStep)
+void CrazyAraAgent::init_state(bboard::GameMode gameMode, bboard::ObservationParameters obsParams, bboard::ObservationParameters opponentObsParams, bool useVirtualStep, bool trackStats)
 {
     pommermanState = std::make_unique<PommermanState>(gameMode, has_stateful_model(), 800);
     pommermanState->set_agent_observation_params(obsParams);
     pommermanState->set_opponent_observation_params(opponentObsParams);
     pommermanState->set_virtual_step(useVirtualStep);
+    pommermanState->set_track_stats(trackStats);
 }
 
 void CrazyAraAgent::use_environment_state(bboard::Environment* env) 
@@ -144,6 +145,10 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
     #endif
 
     add_results_to_buffer(net, bestAction);
+    eval_time_ms.update(std::chrono::duration_cast<std::chrono::milliseconds>(evalInfo.end - evalInfo.start).count());
+    eval_depth.update(evalInfo.depth);
+    eval_depth_sel.update(evalInfo.selDepth);
+    eval_nodes.update(evalInfo.nodes);
     return bestAction;
 }
 

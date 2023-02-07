@@ -5,26 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator, ScalarEvent
 
-from paper.util import get_label
+from paper.util import get_label, find_dirs
 
-from matplotlib_settings import set_matplotlib_font_size
+from matplotlib_settings import set_matplotlib_font_size, init_plt
 
-set_matplotlib_font_size(12, 14, 16)
-
-def find_dirs(base_dir, endswith_list):
-    endswith_list = endswith_list.copy()
-    found_paths = []
-    for file in os.listdir(base_dir):
-        for i in reversed(range(0, len(endswith_list))):
-            endswith = endswith_list[i]
-            if file.endswith(endswith):
-                found_paths.append(os.path.join(base_dir, file))
-                del endswith_list[i]
-
-    if len(endswith_list) > 0:
-        print(f"Warning: did not find {endswith_list}.")
-
-    return found_paths
+init_plt()
+set_matplotlib_font_size(14, 16, 18)
+plt.rcParams['figure.figsize'] = [6.5, 5]
 
 
 def scalars_to_xy(tb_scalar_event_list: List[ScalarEvent]):
@@ -61,21 +48,22 @@ def aggregate(xy_list, label):
     plt.plot(common_x, y_array.mean(axis=0), label=label)
 
 
-runs = find_dirs("runs", [f"dummy_250s_2false_short_noterm_noDiscount_{i}" for i in range(1, 6)])
+runs = find_dirs("runs", [f"dummy_250s_2false__short_05argmax_2e_{i}" for i in range(0, 3)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("OnePlayer", "dummy", None))
 
-runs = find_dirs("runs", [f"sl_250s_2false_short_noterm_noDiscount_{i}" for i in range(1, 6)])
+runs = find_dirs("runs", [f"sl_250s_2false__short_05argmax_2e_{i}" for i in range(0, 3)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("OnePlayer", "sl", None))
 
-runs = find_dirs("runs", [f"dummy_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
+runs = find_dirs("runs", [f"dummy_250s_2true__short_05argmax_2e_{i}" for i in range(0, 3)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "dummy", None))
 
-runs = find_dirs("runs", [f"sl_250s_2true_short_noterm_noDiscount_{i}" for i in range(1, 6)])
+runs = find_dirs("runs", [f"sl_250s_2true__short_05argmax_2e_{i}" for i in range(0, 3)])
 aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "sl", None))
 
-# plt.ylim(0, 1.0)
-plt.xlabel("Iterations")
+plt.ylim(0, 1.0)
+plt.xlabel("Training iterations")
 plt.ylabel("Win rate against $\\texttt{Simple}_\\texttt{C}$ opponents", labelpad=8)
-plt.legend()
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=2)
+plt.tight_layout()
 plt.savefig("ffa_rl.pdf", bbox_inches="tight")
 plt.show()

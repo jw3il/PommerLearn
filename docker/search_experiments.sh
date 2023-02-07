@@ -17,24 +17,33 @@ GPUS="0,0,1,1,2,2,3,3"
 
 # model paths within the docker containers
 declare -a MODEL_NAME_PATH_PAIRS=(
-    "sl /data/model-sl/onnx"
-    "dummy /data/model-dummy/onnx"
+    "sl-0 /data/model-sl-0/onnx"
+    "sl-1 /data/model-sl-1/onnx"
+    "sl-2 /data/model-sl-2/onnx"
+    "sl-3 /data/model-sl-3/onnx"
+    "sl-4 /data/model-sl-4/onnx"
+    "dummy-0 /data/model-dummy-0/onnx"
+    "dummy-1 /data/model-dummy-1/onnx"
+    "dummy-2 /data/model-dummy-2/onnx"
+    "dummy-3 /data/model-dummy-3/onnx"
+    "dummy-4 /data/model-dummy-4/onnx"
 )
 
 GAMES=1000
 SIMULATIONS="0 50 100 250 500 1000"
 SEARCH_MODES="OnePlayer TwoPlayer"
-TERMINAL_SOLVER="true false"
+TERMINAL_SOLVER="false"
 
 # logfile path on host machine
 LOGFILE="${POMMER_DATA_DIR}/$(date +%Y%m%d_%H%M%S)_pommer_log.csv"
 
 # create logfile and write column headers
-echo "SearchMode,TerminalSolver,ModelName,ModelPath,Simulations,Episodes,TotalSteps,Wins0,Alive0,Wins1,Alive1,Wins2,Alive2,Wins3,Alive3,Draws,NotDone,Time" > "${LOGFILE}"
+echo "SearchMode,TerminalSolver,ModelName,ModelPath,Simulations,Episodes,TotalSteps,Wins0,Alive0,Wins1,Alive1,Wins2,Alive2,Wins3,Alive3,Draws,NotDone,Time,EvalInfo" > "${LOGFILE}"
 
 # TODO: Add terminal solver option
 
 # run experiments
+time (
 for sim in ${SIMULATIONS}; do
 for pair in "${MODEL_NAME_PATH_PAIRS[@]}"; do
 for search in ${SEARCH_MODES}; do
@@ -56,10 +65,11 @@ for tsolver in ${TERMINAL_SOLVER}; do
     fi
 
     # main command
-    CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --model=${model_path} ${SIM_PARAM} --max-games=${GAMES} --mctsSolver=${tsolver}"
+    CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --model=${model_path} ${SIM_PARAM} --max-games=${GAMES} --mctsSolver=${tsolver} --track-stats"
     # get stats from last line and append stats with run configuration to logfile
-    echo "$CMD | tail -n 1 | xargs printf \"${search},${tsolver},${model_name},${model_path},${sim},%s\n\" >> ${LOGFILE}";
+    echo "$CMD | tail -n 1 | xargs -d \"\n\" printf \"${search},${tsolver},${model_name},${model_path},${sim},%s\n\" >> ${LOGFILE}";
 done
 done
 done
 done | simple_gpu_scheduler --gpus $GPUS
+)
