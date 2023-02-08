@@ -5,7 +5,7 @@
 #include <iostream>
 #include "string.h"
 
-std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, bool virtualStep, bool mctsSolver, bool trackStats, SearchLimits searchLimits=SearchLimits())
+std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int deviceID, uint stateSize, bool rawNetAgent, bool ffa, bool virtualStep, bool mctsSolver, bool trackStats, PlanningAgentType planningAgentType, SearchLimits searchLimits=SearchLimits())
 {
     StateConstants::init(false);
     StateConstantsPommerman::set_auxiliary_outputs(stateSize);
@@ -21,7 +21,7 @@ std::unique_ptr<CrazyAraAgent> create_crazyara_agent(std::string modelDir, int d
         searchSettings.mctsSolver = mctsSolver;
         PlaySettings playSettings;
         crazyAraAgent = std::make_unique<MCTSCrazyAraAgent>(modelDir, deviceID, playSettings, searchSettings, searchLimits);
-        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->set_planning_agents(PlanningAgentType::SimpleUnbiasedAgent, PlanningAgentType::SimpleUnbiasedAgent);
+        ((MCTSCrazyAraAgent*)crazyAraAgent.get())->set_planning_agents(planningAgentType, PlanningAgentType::SimpleUnbiasedAgent);
     }
 
     // during planning, our agent (and planning agents) only have access to limited information
@@ -82,7 +82,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
 
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA, virtualStep, false, true);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), true, isFFA, virtualStep, false, true, PlanningAgentType::SimpleUnbiasedAgent);
     }
     else if(agentName.find("CrazyAraAgent") == 0)
     {
@@ -106,6 +106,16 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         
         bool isFFA = !(agentName.find("CrazyAraAgentTeam") == 0);
 
+        PlanningAgentType planningAgentType = PlanningAgentType::None;
+        std::string pAgent = "None";
+
+        if ((tmp.second.find("planning") != std::string::npos) && (tmp.second.find("Agent")!= std::string::npos)){
+            int start = tmp.second.find("planning") + 8;
+            int end = tmp.second.find("Agent") + 5;
+            pAgent = tmp.second.substr(start, end-start);
+            planningAgentType = planning_agent_type_from_string(pAgent);
+        }
+
         std::cout << "Creating CrazyAraAgent with " << std::endl
                   << "> Model dir: " << modelDir << std::endl
                   << "> State size: " << stateSize << std::endl
@@ -114,6 +124,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
                   << "> FFA: " << isFFA << std::endl
                   << "> VirtualStep: " << virtualStep << std::endl
                   << "> mctsSolver: " << mctsSolver << std::endl
+                  << "> planning Agent Type: " << pAgent << std::endl
                   << "> trackStats: " << trackStats << std::endl;
 
         SearchLimits searchLimits;
@@ -123,7 +134,7 @@ std::unique_ptr<bboard::Agent> PyInterface::new_agent(std::string agentName, lon
         
         // always use device with id 0
         int deviceID = 0;
-        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep, mctsSolver, trackStats, searchLimits=searchLimits);
+        return create_crazyara_agent(modelDir, deviceID, std::stoi(stateSize), false, isFFA, virtualStep, mctsSolver, trackStats, planningAgentType, searchLimits=searchLimits);
     }
 
     return nullptr;
