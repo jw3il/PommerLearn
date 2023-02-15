@@ -42,17 +42,24 @@ def load_multi_action_probs(paths, iteration):
     return action_probs
 
 
-def generate_plot(dir_list, filename="action_dist.pdf", iterations=(0, 25, 50), show_legend=True):
+def generate_plot(dir_list, filename="action_dist.pdf", iterations=(0, 25, 50), show_legend=True, colors=None):
     # skip some colors
-    for a in range(7):
+    for a in range(10 - len(iterations)):
         plt.bar([], [])
+
+    if colors is not None:
+        assert len(colors) >= 1
 
     patterns = ["", "/" ,  "o", "\\" , "|" , "-" , "+" , "x", "O", ".", "*" ]
     width = 0.8 / len(iterations)
     for k, iteration in enumerate(iterations):
         offset = width * (1 - len(iterations)) / 2 + k * width
         action_probs = load_multi_action_probs(dir_list, iteration)
-        plt.bar(np.arange(6) + offset, action_probs.mean(axis=0), width=width, yerr=action_probs.std(axis=0), capsize=width * 20, label=f"Iteration {iteration}")  # , hatch=patterns[k])
+        kwargs = {}
+        if colors is not None:
+            kwargs["color"] = colors[k % len(colors)]
+
+        plt.bar(np.arange(6) + offset, action_probs.mean(axis=0), width=width, yerr=action_probs.std(axis=0), capsize=width * 20, label=f"Iteration {iteration}", **kwargs)  # , hatch=patterns[k])
 
     plt.ylabel("Proportion")
     plt.xticks(np.arange(6), ["Idle", "Up", "Down", "Left", "Right", "Bomb"])
@@ -66,12 +73,15 @@ def generate_plot(dir_list, filename="action_dist.pdf", iterations=(0, 25, 50), 
 
 generate_plot(
     find_dirs("runs", [f"sl_250s_2false_2ep_{i}" for i in range(0, 5)]),
-    "action_dist_rl_regular.pdf"
+    "action_dist_rl_regular.pdf",
+    iterations=(0, 15, 25, 50)
 )
 
 generate_plot(
     find_dirs("runs", [f"sl_250s_2false_2ep_05argmax_{i}" for i in range(0, 5)]),
-    "action_dist_rl_exploit.pdf"
+    "action_dist_rl_exploit.pdf",
+    iterations=(0, 15, 25, 50),
+    # colors=["tab:brown", "tab:gray", "tab:olive", "tab:cyan"]
 )
 
 generate_plot(
