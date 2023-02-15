@@ -1,5 +1,6 @@
 import os
 from typing import List
+from collections import OrderedDict
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -48,22 +49,30 @@ def aggregate(xy_list, label):
     plt.plot(common_x, y_array.mean(axis=0), label=label)
 
 
-runs = find_dirs("runs", [f"dummy_250s_2false__short_05argmax_2e_{i}" for i in range(0, 3)])
-aggregate([load_win_rate(p) for p in runs], label=get_label("OnePlayer", "dummy", None))
+def generate_plot(label_to_paths_dict: OrderedDict, filename="ffa_rl.pdf"):
+    for label in label_to_paths_dict:
+        paths = label_to_paths_dict[label]
+        aggregate([load_win_rate(p) for p in paths], label=label)
 
-runs = find_dirs("runs", [f"sl_250s_2false__short_05argmax_2e_{i}" for i in range(0, 3)])
-aggregate([load_win_rate(p) for p in runs], label=get_label("OnePlayer", "sl", None))
+    plt.ylim(0, 1.0)
+    plt.xlabel("Training iterations")
+    plt.ylabel("Win rate against $\\texttt{Simple}_\\texttt{C}$ opponents", labelpad=8)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=2)
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight")
+    plt.show()
 
-runs = find_dirs("runs", [f"dummy_250s_2true__short_05argmax_2e_{i}" for i in range(0, 3)])
-aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "dummy", None))
 
-runs = find_dirs("runs", [f"sl_250s_2true__short_05argmax_2e_{i}" for i in range(0, 3)])
-aggregate([load_win_rate(p) for p in runs], label=get_label("TwoPlayer", "sl", None))
+generate_plot(OrderedDict([
+    (get_label("OnePlayer", "dummy", None), find_dirs("runs", [f"dummy_250s_2false_2ep_{i}" for i in range(0, 5)])),
+    (get_label("OnePlayer", "sl", None), find_dirs("runs", [f"sl_250s_2false_2ep_{i}" for i in range(0, 5)])),
+    (get_label("TwoPlayer", "dummy", None), find_dirs("runs", [f"dummy_250s_2true_2ep_{i}" for i in range(0, 5)])),
+    (get_label("TwoPlayer", "sl", None), find_dirs("runs", [f"sl_250s_2true_2ep_{i}" for i in range(0, 5)]))
+]), filename="ffa_rl_regular.pdf")
 
-plt.ylim(0, 1.0)
-plt.xlabel("Training iterations")
-plt.ylabel("Win rate against $\\texttt{Simple}_\\texttt{C}$ opponents", labelpad=8)
-plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=2)
-plt.tight_layout()
-plt.savefig("ffa_rl.pdf", bbox_inches="tight")
-plt.show()
+generate_plot(OrderedDict([
+    (get_label("OnePlayer", "dummy", None), find_dirs("runs", [f"dummy_250s_2false_2ep_05argmax_{i}" for i in range(0, 5)])),
+    (get_label("OnePlayer", "sl", None), find_dirs("runs", [f"sl_250s_2false_2ep_05argmax_{i}" for i in range(0, 5)])),
+    (get_label("TwoPlayer", "dummy", None), find_dirs("runs", [f"dummy_250s_2true_2ep_05argmax_{i}" for i in range(0, 5)])),
+    (get_label("TwoPlayer", "sl", None), find_dirs("runs", [f"sl_250s_2true_2ep_05argmax_{i}" for i in range(0, 5)]))
+]), filename="ffa_rl_exploit.pdf")

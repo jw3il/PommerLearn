@@ -42,24 +42,41 @@ def load_multi_action_probs(paths, iteration):
     return action_probs
 
 
-runs = find_dirs("runs", [f"sl_250s_2false__short_05argmax_2e_{i}" for i in range(0, 3)])
+def generate_plot(dir_list, filename="action_dist.pdf", iterations=(0, 25, 50), show_legend=True):
+    # skip some colors
+    for a in range(7):
+        plt.bar([], [])
 
-# skip some colors
-for a in range(7):
-    plt.bar([], [])
+    patterns = ["", "/" ,  "o", "\\" , "|" , "-" , "+" , "x", "O", ".", "*" ]
+    width = 0.8 / len(iterations)
+    for k, iteration in enumerate(iterations):
+        offset = width * (1 - len(iterations)) / 2 + k * width
+        action_probs = load_multi_action_probs(dir_list, iteration)
+        plt.bar(np.arange(6) + offset, action_probs.mean(axis=0), width=width, yerr=action_probs.std(axis=0), capsize=width * 20, label=f"Iteration {iteration}")  # , hatch=patterns[k])
 
-patterns = ["", "/" ,  "o", "\\" , "|" , "-" , "+" , "x", "O", ".", "*" ]
-iteration_list = [0, 24, 49]
-width = 0.8 / len(iteration_list)
-for k, iteration in enumerate(iteration_list):
-    offset = width * (1 - len(iteration_list)) / 2 + k * width
-    action_probs = load_multi_action_probs(runs, iteration)
-    plt.bar(np.arange(6) + offset, action_probs.mean(axis=0), width=width, yerr=action_probs.std(axis=0), capsize=width * 20, label=f"Iteration {iteration + 1}")  # , hatch=patterns[k])
+    plt.ylabel("Proportion")
+    plt.xticks(np.arange(6), ["Idle", "Up", "Down", "Left", "Right", "Bomb"])
+    plt.xlabel("Action")
+    plt.tight_layout()
+    if show_legend:
+        plt.legend()
+    plt.savefig(filename, bbox_inches='tight')
+    plt.show()
 
-plt.ylabel("Proportion")
-plt.xticks(np.arange(6), ["Idle", "Up", "Down", "Left", "Right", "Bomb"])
-plt.xlabel("Action")
-plt.tight_layout()
-plt.legend()
-# plt.show()
-plt.savefig("action_dist.pdf", bbox_inches='tight')
+
+generate_plot(
+    find_dirs("runs", [f"sl_250s_2false_2ep_{i}" for i in range(0, 5)]),
+    "action_dist_rl_regular.pdf"
+)
+
+generate_plot(
+    find_dirs("runs", [f"sl_250s_2false_2ep_05argmax_{i}" for i in range(0, 5)]),
+    "action_dist_rl_exploit.pdf"
+)
+
+generate_plot(
+    find_dirs("runs", [f"sl_250s_2false_2ep_{i}" for i in range(0, 5)]),
+    "action_dist_rl_regular_first10.pdf",
+    iterations=list(range(11)),
+    show_legend=False
+)
