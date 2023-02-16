@@ -1,11 +1,13 @@
 import argparse
 import pommerman
 import pommerman.agents as agents
+from  pathlib import Path
 from pypomcpp.autocopy import AutoCopy
 from pypomcpp.cppagent import CppAgent
-from pypomcpp.util import evaluate
+from pypomcpp.util import evaluate, get_stats
 from env.env_rand_positions import PommeRandomPositon
-from training.util_argparse import check_dir, check_file
+from training.util_argparse import check_dir
+from datetime import datetime
 
 def get_agent_list(autolib: AutoCopy, inputs):
     """Provides different exemplary agent configurations"""
@@ -113,10 +115,30 @@ def parse_args():
     parser.add_argument('-e', '--env', type=str, default="team", help='game mode: [ffa, ffa_random, team]')
 
     parser.add_argument('--use_true_state', default=False, action='store_true', help='Whether to use the true state instead of (partial) observations')
+    # Evaluation Logging Parameters
+    parser.add_argument('--result_file', type=str, help='path to a file that will just hold the game results (will be appended if already existing)')
+    parser.add_argument('--two', default=False, action='store_true', help='flag for evaluateion wether 2 player search is used')
 
     parsed_args = parser.parse_args()
     return parsed_args
 
+def results_to_csv(results, inputs):
+    """Saves eval results to a file specified in cli inputs (--result_file else --eval_path)"""
+    wins, ties = get_stats(results, inputs.games)
+    # result string generation
+    head = 'time,model,planning,opponent,simulations,1v1,track-stats,use_true_state,a1,a2,a3,a4,ties'
+    model = inputs.model_dir.split('/')[-2]
+    stats = f'\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{model},{inputs.planning_type},{inputs.opponent},{inputs.simulations},{inputs.two},{inputs.track_stats},{inputs.use_true_state},{",".join([str(w) for w in wins])},{ties}'
+    
+    # write results to experiment folder
+    paths = [Path(inputs.eval_path) / 'results.csv']
+    if inputs.result_file is not None:
+        # additionally append results to specified file
+        paths.append(Path(inputs.result_file))
+    for result_path in paths:
+        line = stats if result_path.exists() else head+stats
+        with result_path.open('a', encoding='utf-8') as f:
+            f.write(line)
 
 def main():
     """ run evaluation and save results """
@@ -161,7 +183,10 @@ def main():
                 a.use_env_state(env)
 
     try:
-        evaluate(env, inputs.games, verbose=True, visualize=False, stop=False, individual_plots=True, plot_agents_alive=False, eval_save_path=eval_path, log_json=True, env_type=env_type)
+        results = evaluate(env, inputs.games, verbose=True, visualize=False, stop=False, individual_plots=True, plot_agents_alive=False, eval_save_path=eval_path, log_json=True, env_type=env_type)
+        results_to_csv(results, inputs)
+        
+
     finally:
         autolib.delete_copies()
 
