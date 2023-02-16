@@ -54,7 +54,7 @@ echo_command_string () {
         EXEC="POMMER_1VS1=true MODE=exec bash run.sh"
     fi
 
-    CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --movetime=10000 --model=${MODEL_PATH} ${SIM_PARAM} --planning-agents=${OPPONENT_MODEL} --max-games=${GAMES} --mctsSolver=${TERMINAL_SOLVER}"
+    CMD="$EXEC --gpu \$CUDA_VISIBLE_DEVICES --mode=ffa_mcts --movetime=10000 --model=${MODEL_PATH} ${SIM_PARAM} --planning-agents=${OPPONENT_MODEL} --max-games=${GAMES} --mctsSolver=${TERMINAL_SOLVER} --track-stats"
     # get stats from last line and append stats with run configuration to logfile
     echo "$CMD | tail -n 1 | xargs -d \"\n\" printf \"${OPPONENT_MODEL},${SEARCH_MODE},${TERMINAL_SOLVER},${MODEL_NAME},${MODEL_PATH},${SIMULATIONS},%s\n\" >> ${LOGFILE}";
 }
