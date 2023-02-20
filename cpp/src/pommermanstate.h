@@ -111,6 +111,7 @@ public:
     const uint maxTimeStep;
     bool useVirtualStep;
     bool trackStats;
+    bool hasValidState;
 #ifndef MCTS_SINGLE_PLAYER
     int simulatedOpponentID;
     bool myTurn;

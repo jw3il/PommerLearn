@@ -20,7 +20,8 @@ PommermanState::PommermanState(bboard::GameMode gameMode, bool statefulModel, ui
     statefulModel(statefulModel),
     maxTimeStep(maxTimeStep),
     hasPlanningAgents(false),
-    hasBufferedActions(false)
+    hasBufferedActions(false),
+    hasValidState(false)
 {
 #ifndef MCTS_SINGLE_PLAYER
     simulatedOpponentID = -1;
@@ -99,6 +100,7 @@ void PommermanState::set_state(const bboard::State* state)
     // copy the state
     this->state = *state;
     this->hasTrueState = true;
+    this->hasValidState = true;
 
     _init_search(*this);
 }
@@ -107,8 +109,14 @@ void PommermanState::set_observation(const bboard::Observation* obs)
 {
     auto obsCopy = *obs;
 
+    if (this->hasValidState)
+    {
+        // check that the observation belongs to the next time step
+        this->hasValidState = obsCopy.timeStep == state.timeStep + 1;
+    }
+
     // initialize state
-    if (obsCopy.timeStep == 0) {
+    if (obsCopy.timeStep == 0 || !this->hasValidState) {
         state = bboard::State();
 
         if (!this->trackStats) {
@@ -122,20 +130,24 @@ void PommermanState::set_observation(const bboard::Observation* obs)
             }
         }
     }
-
-    if (obsCopy.timeStep > 0 && this->trackStats) {
+    else if (obsCopy.timeStep > 0 && this->trackStats) {
         // track agent stats from previous step
         obsCopy.TrackStats(state);
     }
     
-    if (this->useVirtualStep){
+    if (this->useVirtualStep && this->hasValidState && obsCopy.timeStep > 0){
         // perform virtual step
         obsCopy.VirtualStep(this->state, true, true, nullptr);
-    } 
+    }
     else {
         // convert the observation to a state
         obsCopy.ToState(state);
     }
+
+    // std::cout << "Reconstructed State t = " << state.timeStep << std::endl;
+    // state.Print();
+
+    this->hasValidState = true;
     this->hasTrueState = false;
 
     _init_search(*this);
@@ -640,6 +652,7 @@ PommermanState* PommermanState::clone() const
     PommermanState* clone = new PommermanState(gameMode, statefulModel, maxTimeStep);
     clone->state = state;
     clone->hasTrueState = hasTrueState;
+    clone->hasValidState = hasValidState;
     clone->agentID = agentID;
 #ifndef MCTS_SINGLE_PLAYER
     clone->simulatedOpponentID = simulatedOpponentID;
