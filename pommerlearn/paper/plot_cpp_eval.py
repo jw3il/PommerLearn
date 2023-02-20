@@ -6,7 +6,7 @@ from paper.util import get_label, expand_eval_info, add_wld_columns
 
 from matplotlib_settings import set_matplotlib_font_size, init_plt
 
-df = pd.read_csv("20230216_222725_cpp_eval.csv")
+df = pd.read_csv("20230216_222725_cpp_eval_combined.csv")
 
 print(df.columns)
 
