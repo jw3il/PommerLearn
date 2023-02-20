@@ -155,6 +155,8 @@ bboard::Move CrazyAraAgent::act(const bboard::Observation *obs)
 void CrazyAraAgent::reset() {
     // update ID of the agent of MCTS states
     pommermanState->set_agent_id(id);
+    // currently stored state is not valid anymore
+    pommermanState->hasValidState = false;
 }
 
 std::unique_ptr<NeuralNetAPI> CrazyAraAgent::load_network(const std::string& modelDirectory, const int deviceID)
