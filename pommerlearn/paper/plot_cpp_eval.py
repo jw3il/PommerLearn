@@ -25,37 +25,43 @@ print(df_mean.OpponentModel.unique())
 print(df_mean.SearchMode.unique())
 
 
-def eval_stat_string(mean_df, attribute_str):
-    assert len(mean_df) == 1
+def eval_stat_string(df_filter, attribute_str):
+    mean = df_mean[df_filter]
+    std = df_std[df_filter]
+    assert len(mean) == 1
     return (
-        f"{mean_df[attribute_str + '_mean'].item():.2f} +/- {mean_df[attribute_str + '_var'].map(lambda x: np.sqrt(x)).item():.2f}"
-        f" (min: {mean_df[attribute_str + '_min'].item():.2f}, max: {mean_df[attribute_str + '_max'].item():.2f})"
+        f"{mean[attribute_str + '_mean'].item():.2f} (+/- {std[attribute_str + '_mean'].item():.2f}) +/- {mean[attribute_str + '_var'].map(lambda x: np.sqrt(x)).item():.2f}"
+        f" (min: {mean[attribute_str + '_min'].item():.2f}, max: {mean[attribute_str + '_max'].item():.2f})"
     )
 
+
 def print_run_info(df_filter):
-    assert len(df_mean[df_filter]) == 1
+    mean = df_mean[df_filter]
+    std = df_std[df_filter]
+    count = df_count[df_filter]
+    assert len(mean) == 1
     print(
-        f"{df_count[df_filter].OpponentModel.item()}, {df_count[df_filter].SearchMode.item()}, {df_count[df_filter].ModelName.item()}"
-        f" ({df_count[df_filter].RelativeWin0.item()} results)"
+        f"{count.OpponentModel.item()}, {count.SearchMode.item()}, {count.ModelName.item()}"
+        f" ({count.RelativeWin0.item()} results)"
     )
-    depth_factor = 1.0 if df_count[df_filter].SearchMode.item() == "OnePlayer" else 0.5
+    depth_factor = 1.0 if count.SearchMode.item() == "OnePlayer" else 0.5
     print(
         "Win/Draw/Depth/Time/Steps for LaTeX table: \n"
-        f"${df_mean[df_filter]['RelativeWin0'].item():.2f} \pm {df_std[df_filter]['RelativeWin0'].item():.2f}$"
+        f"${mean['RelativeWin0'].item():.2f} \pm {std['RelativeWin0'].item():.2f}$"
         " & "
-        f"${df_mean[df_filter]['RelativeDraw0'].item():.2f} \pm {df_std[df_filter]['RelativeDraw0'].item():.2f}$"
+        f"${mean['RelativeDraw0'].item():.2f} \pm {std['RelativeDraw0'].item():.2f}$"
         " & "
-        f"${depth_factor * df_mean[df_filter]['eval_depth_mean'].item():.2f} \pm {df_mean[df_filter]['eval_depth_var'].map(lambda x: depth_factor * np.sqrt(x)).item():.2f}$"
+        f"${depth_factor * mean['eval_depth_mean'].item():.2f} \pm {mean['eval_depth_var'].map(lambda x: depth_factor * np.sqrt(x)).item():.2f}$"
         " & "
-        f"${df_mean[df_filter]['eval_time_mean'].item():.2f} \pm {df_mean[df_filter]['eval_time_var'].map(lambda x: np.sqrt(x)).item():.2f}$"
+        f"${mean['eval_time_mean'].item():.2f} \pm {mean['eval_time_var'].map(lambda x: np.sqrt(x)).item():.2f}$"
         " & "
-        f"${df_mean[df_filter]['EpisodeSteps'].item():.2f} \pm {df_std[df_filter]['EpisodeSteps'].item():.2f}$"
+        f"${mean['EpisodeSteps'].item():.2f} \pm {std['EpisodeSteps'].item():.2f}$"
     )
     print(
-        f"Eval nodes: {eval_stat_string(df_mean[df_filter], 'eval_nodes')} \n"
-        f"Eval time: {eval_stat_string(df_mean[df_filter], 'eval_time')} \n"
-        f"Eval depth: {eval_stat_string(df_mean[df_filter], 'eval_depth')} \n"
-        f"Eval seldepth: {eval_stat_string(df_mean[df_filter], 'eval_seldepth')}"
+        f"Eval nodes: {eval_stat_string(df_filter, 'eval_nodes')} \n"
+        f"Eval time: {eval_stat_string(df_filter, 'eval_time')} \n"
+        f"Eval depth: {eval_stat_string(df_filter, 'eval_depth')} \n"
+        f"Eval seldepth: {eval_stat_string(df_filter, 'eval_seldepth')}"
     )
 
 
