@@ -9,6 +9,7 @@ from env.env_rand_positions import PommeRandomPositon
 from training.util_argparse import check_dir
 from datetime import datetime
 
+
 def get_agent_list(autolib: AutoCopy, inputs):
     """Provides different exemplary agent configurations"""
     
@@ -122,6 +123,7 @@ def parse_args():
     parsed_args = parser.parse_args()
     return parsed_args
 
+
 def results_to_csv(results, inputs):
     """Saves eval results to a file specified in cli inputs (--result_file else --eval_path)"""
     wins, ties = get_stats(results, inputs.games)
@@ -129,9 +131,12 @@ def results_to_csv(results, inputs):
     head = 'time,model,planning,opponent,simulations,1v1,track-stats,use_true_state,a1,a2,a3,a4,ties'
     model = inputs.model_dir.split('/')[-2]
     stats = f'\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{model},{inputs.planning_type},{inputs.opponent},{inputs.simulations},{inputs.two},{inputs.track_stats},{inputs.use_true_state},{",".join([str(w) for w in wins])},{ties}'
-    
+
+    # experiments csv will get overwritten by subsequent runs if eval path is not provided
+    eval_path = inputs.eval_path if inputs.eval_path is not None else "./"
+
     # write results to experiment folder
-    paths = [Path(inputs.eval_path) / 'results.csv']
+    paths = [Path(eval_path) / 'results.csv']
     if inputs.result_file is not None:
         # additionally append results to specified file
         paths.append(Path(inputs.result_file))
@@ -139,6 +144,7 @@ def results_to_csv(results, inputs):
         line = stats if result_path.exists() else head+stats
         with result_path.open('a', encoding='utf-8') as f:
             f.write(line)
+
 
 def main():
     """ run evaluation and save results """
