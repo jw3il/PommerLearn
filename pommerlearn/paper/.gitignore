@@ -1,2 +1,5 @@
 *.pdf
 runs/
+*.png
+py-eval-nopickle
+*.zip
