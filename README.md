@@ -1,6 +1,8 @@
-# Pommer-Learn: Learning-based MCTS in the Pommerman Environment
+# PommerLearn: Learning-based MCTS in the Pommerman Environment
 
-Idea: Combine Multi-Agent Reinforcement Learning and Monte-Carlo Tree Search (MCTS).
+This repository provides an implementation of learning-based Monte-Carlo Tree Search variants in the Pommerman environment.
+Our approaches leverage opponent models (planning agents) to transform the multiplayer game into single- and two-player games depending on
+the provided settings.
 
 ## Docker
 
@@ -44,7 +46,7 @@ Additional notes:
 
 ## Experiments
 
-### Search
+### Search Approaches
 
 1. Generate an SL dataset with 1 million samples with
 
@@ -62,9 +64,11 @@ Additional notes:
     ```
     and save it as `$POMMER_DATA_DIR/model-sl`
 
+
 3. Generate a dummy model by running `pommerlearn/debug/create_dummy_model.py` and save it as `$POMMER_DATA_DIR/model-dummy`
 
-4. Navigate into the docker directory and run the search experiments with
+4. You can now perform search experiments with both models. Use `POMMER_1VS1=false MODE=exec bash run.sh` for the single-player search and `POMMER_1VS1=true MODE=exec bash run.sh` for the two-player search.
+5. To reproduce our results, you can generate 5 sl and dummy models labeled with the respective suffix `-0` to `-4`. Navigate into the docker directory and run the search experiments with
 
     ```
     ./docker $ bash search_experiments.sh
@@ -72,7 +76,7 @@ Additional notes:
 
     The results will be recorded in a single csv file.
 
-### Reinforcement Learning Runs
+### Reinforcement Learning
 
 Navigate into the docker directory and run the rl experiments with
 
@@ -85,29 +89,14 @@ You will find the results in your `$POMMER_DATA_DIR/archive` and the tensorboard
 
 ### Team Mode Experiments
 
-1. Similar to the FFA environment, we first create two SL datasets
+To perform experiments in the team mode, you can collect samples with the option `--mode=team_sl` and otherwise proceed like in the FFA mode, e.g. 
 
     ```
     $POMMER_EXEC --mode=team_sl --max-games=-1 --chunk-size=1000 --chunk-count=1000 --log --file-prefix=./1M_simple_team
-    $POMMER_EXEC --mode=team_sl --max-games=-1 --chunk-size=1000 --chunk-count=1000 --virtual-step --log --file-prefix=./1M_simple_team_virtual_step
-    ```
-2. Then we train the models: run `pommerlearn/training/train_cnn.py` with the following modified arguments (see bottom of the file)
-
-    ```
-    "dataset_path": "1M_simple_team_0.zr",
-    "test_size": 0.01,
-    "output_dir": "./model-team"
     ```
 
-    and
+You can then run `pommerlearn/training/train_cnn.py` on the generated data set, this will automatically use the value targets for the team mode due to the meta information in the data set.
 
-    ```
-    "dataset_path": "1M_simple_team_virtual_step_0.zr",
-    "test_size": 0.01,
-    "output_dir": "./model-team-virtual-step"
-    ```
-
-    and save the models in `$POMMER_DATA_DIR`
 ## Development
 
 ### Manual Installation of Dependencies
@@ -155,7 +144,7 @@ $ cd PommerLearn && \
 $ git submodule update --init
 ```
 
-### How to build
+### Build Instructions
 
 1. The current version requires you to set the env variables
 
@@ -172,7 +161,7 @@ $ git submodule update --init
 /PommerLearn/build $ make VERBOSE=1 all -j8
 ```
 
-### How to run
+### Run Instructions
 
 Optional: You can install PyTorch 1.9.0 with GPU support via
 
@@ -214,8 +203,7 @@ Running
 
 ### Performance Profiling
 
-Install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html):
-* https://github.com/jrfonseca/gprof2dot
+You can install the plotting utility for [gprof](https://ftp.gnu.org/old-gnu/Manuals/gprof-2.9.1/html_mono/gprof.html): https://github.com/jrfonseca/gprof2dot
 
 Activate the CMake option `USE_PROFILING` in `CMakeLists.txt` and rebuild.
 Run the executable and generate the plot:
