@@ -22,8 +22,10 @@ jobs:
       uses: conda-incubator/setup-miniconda@v2
       with:
         auto-update-conda: true
+        auto-activate-base: false
         activate-environment: pommer
         python-version: 3.7
+    - run: conda info
     - name: Install Requirements
       working-directory: ./deps
       run: |
