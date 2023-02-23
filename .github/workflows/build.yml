@@ -27,6 +27,7 @@ jobs:
         python-version: 3.7
     - run: conda info
     - name: Install Requirements
+      shell: bash -el {0}
       working-directory: ./deps
       run: |
         # install (some) dependencies via conda-forge
