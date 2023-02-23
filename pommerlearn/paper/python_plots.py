@@ -186,7 +186,7 @@ def plot_paper(experiments, num_games=500, format="png"):
 
 
 if __name__ == "__main__":
-    eval_path = Path('./py-eval-nopickle')
+    eval_path = Path('./20230220_py_eval_100')
     experiments = [x for x in eval_path.iterdir() if x.is_dir()]
 
     agents = ['sl2rl-', 'rl-', 'sl-'] # str to filter experiment folders
