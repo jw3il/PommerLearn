@@ -1,5 +1,7 @@
 # PommerLearn: Learning-based MCTS in the Pommerman Environment
 
+[![build](https://github.com/jw3il/PommerLearn/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/jw3il/PommerLearn/actions/workflows/build.yml)
+
 This repository provides an implementation of learning-based Monte-Carlo Tree Search variants in the Pommerman environment.
 Our approaches leverage opponent models (planning agents) to transform the multiplayer game into single- and two-player games depending on
 the provided settings.
@@ -67,7 +69,7 @@ Additional notes:
 
 3. Generate a dummy model by running `pommerlearn/debug/create_dummy_model.py` and save it as `$POMMER_DATA_DIR/model-dummy`
 
-4. You can now perform search experiments with both models. Use `POMMER_1VS1=false MODE=exec bash run.sh` for the single-player search and `POMMER_1VS1=true MODE=exec bash run.sh` for the two-player search.
+4. You can now perform search experiments with both models. Use `POMMER_1VS1=false MODE=exec bash run.sh` for the single-player search and `POMMER_1VS1=true MODE=exec bash run.sh`git  for the two-player search.
 5. To reproduce our results, you can generate 5 sl and dummy models labeled with the respective suffix `-0` to `-4`. Navigate into the docker directory and run the search experiments with
 
     ```
