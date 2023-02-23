@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches: [ master, feature/CI ]
+  pull_request:
+    branches: [ master, feature/CI ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Install apt packages
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: cmake libblas-dev liblapack-dev
+        version: 1.0
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        activate-environment: pommer
+        python-version: 3.7
+    - name: Install requirements
+      working-directory: ./deps
+      run: |
+        # install (some) dependencies via conda-forge
+        conda install -y -c conda-forge z5py xtensor boost nlohmann_json blosc
+        # now get libraries that are not in conda-forge
+        # install blaze (and its dependencies)
+        wget -nv https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz
+        tar -xf blaze-3.8.tar.gz 
+        # install PyTorch (CPU-only)
+        wget -nv https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.0%2Bcpu.zip -O libtorch.zip
+        unzip -q libtorch.zip
+        bash fix_pytorch.sh ./libtorch
+    - name: Build
+      run: |
+        # define environment variables
+        export BLAZE_PATH="$PWD/deps/blaze-3.8"
+        export CONDA_ENV_PATH="$CONDA/envs/pommer"
+        export Torch_DIR="$PWD/deps/libtorch"
+        # build
+        mkdir build
+        cd build
+        cmake -DUSE_TENSORRT=OFF -DUSE_TORCH=ON -DCMAKE_CXX_COMPILER="$(which g++)" ..
+        make VERBOSE=1 all
+    - name: Run
+      working-directory: ./build
+      run: ./PommerLearn
