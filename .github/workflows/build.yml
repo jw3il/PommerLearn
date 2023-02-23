@@ -24,7 +24,7 @@ jobs:
         auto-update-conda: true
         activate-environment: pommer
         python-version: 3.7
-    - name: Install requirements
+    - name: Install Requirements
       working-directory: ./deps
       run: |
         # install (some) dependencies via conda-forge
