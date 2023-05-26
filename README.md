@@ -213,3 +213,17 @@ Run the executable and generate the plot:
 ./PommerLearn --mode ffa_mcts --max_games 10
 gprof PommerLearn | gprof2dot | dot -Tpng -o profile.png
 ```
+
+## Publications
+
+If you find this repository helpful, please consider citing our paper
+
+```
+@inproceedings{weil2023knowYourEnemy,
+  author={Weil, Jannis and Czech, Johannes and Meuser, Tobias and Kersting, Kristian},
+  title={{Know your Enemy: Investigating Monte-Carlo Tree Search with Opponent Models in Pommerman}},
+  booktitle={Proceedings of the Adaptive and Learning Agents Workshop (ALA) at AAMAS 2023},
+  url={https://alaworkshop2023.github.io/},
+  year={2023}
+}
+```

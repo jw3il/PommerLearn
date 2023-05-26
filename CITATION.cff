@@ -1,0 +1,37 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  PommerLearn: Learning-based MCTS in the Pommerman
+  Environment
+message: >-
+  If you use this repository for your research, please cite
+  the following paper.
+type: software
+authors:
+  - given-names: Jannis
+    family-names: Weil
+  - given-names: Johannes
+    family-names: Czech
+  - given-names: Jonas
+    family-names: Ringsdorf
+license: GPL-3.0
+preferred-citation:
+    type: conference-paper
+    title: >-
+      Know your Enemy: Investigating Monte-Carlo Tree Search with Opponent
+      Models in Pommerman
+    authors:
+      - family-names: Weil
+        given-names: Jannis
+      - family-names: Czech
+        given-names: Johannes
+      - family-names: Meuser
+        given-names: Tobias
+      - family-names: Kersting
+        given-names: Kristian
+    collection-title: >-
+      Proceedings of the Adaptive and Learning Agents Workshop (ALA) at AAMAS
+      2023
+    year: 2023
