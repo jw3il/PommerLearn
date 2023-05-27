@@ -40,7 +40,7 @@ ENV CUDA_PATH="/usr/local/cuda"
 
 # clone repository
 WORKDIR /
-RUN git clone https://gitlab.com/jweil/PommerLearn.git
+RUN git clone https://github.com/jw3il/PommerLearn.git
 
 # initial submodule checkout (not recursive) + install python runtime dependencies
 WORKDIR /PommerLearn
