@@ -31,7 +31,7 @@ RUN wget -nv https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.
     # required for cpp build
     conda install -y z5py xtensor boost nlohmann_json blosc -c conda-forge && \
     # main runtime dependencies
-    pip install --no-input --no-cache-dir numpy matplotlib imageio zarr numcodecs tqdm sklearn tensorboard && \
+    pip install --no-input --no-cache-dir numpy matplotlib imageio zarr numcodecs tqdm scikit-learn tensorboard && \
     conda clean --all --yes
 
 # set environment variables from parent image
